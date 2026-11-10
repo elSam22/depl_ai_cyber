@@ -1,0 +1,17 @@
+# Autoscaling horizontal : ajoute des pods quand le CPU moyen dépasse 70 % (étape 5).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dss-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dss-api
+  minReplicas: 2
+  maxReplicas: 5                              # plafond de coût (crédits étudiants)
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 70}

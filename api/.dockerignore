@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+tests/
+deploy/
+export_model.py
+requirements-dev.txt
+README.md
+.pytest_cache/
+pytest.ini
+k8s/

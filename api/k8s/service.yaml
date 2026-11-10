@@ -1,0 +1,13 @@
+# Point d'entrée interne stable vers les pods (le load balancer passe par lui).
+apiVersion: v1
+kind: Service
+metadata:
+  name: dss-api
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: ClusterIP
+  selector: {app: dss-api}
+  ports:
+    - port: 80
+      targetPort: 8080

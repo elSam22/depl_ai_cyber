@@ -1,0 +1,46 @@
+# Déploiement de l'API : 2 copies (pods) minimum pour la redondance (failover).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dss-api
+  labels: {app: dss-api}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: dss-api}
+  template:
+    metadata:
+      labels: {app: dss-api}
+    spec:
+      securityContext:
+        runAsNonRoot: true                    # interdit l exécution en root
+        runAsUser: 1000                       # numéro de appuser dans l image
+      containers:
+        - name: api
+          image: IMAGE_URL                    # remplacé par deploy_gke.sh
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: API_KEY                   # clé lue dans un Secret Kubernetes, jamais dans le code
+              valueFrom:
+                secretKeyRef: {name: dss-api-key, key: API_KEY}
+          resources:                          # Autopilot facture ces ressources demandées
+            requests: {cpu: "2", memory: 4Gi}   # LAYA : 421 M de paramètres (BiLSTM/DistilBERT : 1 CPU, 2Gi)
+            limits: {cpu: "2", memory: 4Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          startupProbe:                       # laisse le temps de charger spaCy + le modèle
+            httpGet: {path: /health, port: 8080}
+            periodSeconds: 5
+            failureThreshold: 60              # jusqu'à 5 min pour charger LAYA
+          readinessProbe:                     # pas prêt -> retiré du load balancer
+            httpGet: {path: /health, port: 8080}
+            periodSeconds: 10
+          livenessProbe:                      # bloqué -> redémarré automatiquement
+            httpGet: {path: /health, port: 8080}
+            periodSeconds: 20
+            failureThreshold: 3

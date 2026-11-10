@@ -3,3 +3,8 @@
 data/anonymise/
 data/clean/
 models/
+api/model/*
+!api/model/.gitkeep
+.pytest_cache/
+__pycache__/
+*.pyc
