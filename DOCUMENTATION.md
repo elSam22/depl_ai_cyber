@@ -1,6 +1,6 @@
 # Anonymisation des commentaires — approche regex + NER spaCy
 
-Notebook : [anonyme_2.ipynb](anonyme_2.ipynb) · Entrées : `data/train.csv`, `data/test.csv` · Sorties : `data/train_anonyme_2.csv`, `data/test_anonyme_2.csv`
+Notebook : [anonyme_2.ipynb](anonyme_2.ipynb) · Entrées : `data/train.csv`, `data/test.csv` · Sorties : `data/anonymise/train_anonyme_2.csv`, `data/anonymise/test_anonyme_2.csv`
 
 Données : commentaires du *Toxic Comment Classification Dataset* (colonne `comment_text`, commentaires de pages de discussion Wikipédia). Seule `comment_text` est modifiée ; `id` et les colonnes de toxicité sont conservées.
 
@@ -29,7 +29,7 @@ Pour chaque commentaire :
 
 ### 2.2 Chiffres (fichiers complets)
 
-> **Run précédent (v1)** : ces chiffres datent d'une version où les lieux étaient masqués (`[LIEU]`) et où `[ADRESSE]` n'existait pas. Les fichiers `*_anonyme_2.csv` actuels correspondent à cette v1. Il faut relancer le notebook pour obtenir la version actuelle de la méthode et regénérer ce tableau.
+> **Run précédent (v1)** : ces chiffres datent d'une version où les lieux étaient masqués (`[LIEU]`) et où `[ADRESSE]` n'existait pas. Les fichiers `*_anonyme_2.csv` ont depuis été regénérés avec la méthode actuelle, mais **ce tableau n'a pas encore été mis à jour** avec les nouveaux comptages (à recopier depuis le bilan du notebook).
 
 | | `train` | `test` |
 |---|---|---|
@@ -101,7 +101,7 @@ Format inspiré de l'article 30 du RGPD. Les champs marqués **[À compléter]**
 | **Outils** | Python 3.12, spaCy 3.8 (`en_core_web_sm`), pandas, `ipaddress`, `tqdm` — dans un environnement virtuel local (`.venv`). |
 | **Destinataires** | Membres du groupe projet et enseignant via le dépôt GitHub. **Le dépôt est public** : toute publication des fichiers bruts ou anonymisés y est visible de tous. |
 | **Transferts hors UE** | Hébergement GitHub (États-Unis) du dépôt : [À compléter / valider]. Le traitement lui-même n'envoie rien à un tiers. |
-| **Fichiers produits** | `data/train_anonyme_2.csv`, `data/test_anonyme_2.csv` (versions modifiées) ; les fichiers d'origine restent inchangés. |
+| **Fichiers produits** | `data/anonymise/train_anonyme_2.csv`, `data/anonymise/test_anonyme_2.csv` (versions modifiées) ; les fichiers d'origine restent inchangés. |
 | **Durée de conservation** | [À compléter : ex. durée du module]. Les fichiers bruts ne devraient pas rester dans le dépôt public au-delà du nécessaire. |
 | **Mesures de sécurité / minimisation** | Remplacement des identifiants directs par des étiquettes ; traitement local ; fichiers d'origine non modifiés ; environnement virtuel isolé. |
 | **Risques résiduels** | Anonymisation incomplète (cf. 2.3) : IP restantes, pseudos sans préfixe, noms mal reconnus. Un auteur reste potentiellement ré-identifiable par recoupement avec Wikipédia (le texte original y est public). |
@@ -109,7 +109,7 @@ Format inspiré de l'article 30 du RGPD. Les champs marqués **[À compléter]**
 
 ## 5. Étape 2 : nettoyage des textes
 
-Notebook [clean_text.ipynb](clean_text.ipynb) (fonction `clean_text` + application), sur `train_anonyme_2.csv` et `test_anonyme_2.csv` → `data/train_clean.csv`, `data/test_clean.csv` :
+Notebook [clean_text.ipynb](clean_text.ipynb) (fonction `clean_text` + application), sur `data/anonymise/*_anonyme_2.csv` → `data/clean/train_clean.csv`, `data/clean/test_clean.csv` :
 
 1. minuscules ;
 2. suppression des emojis (plages Unicode) ;
