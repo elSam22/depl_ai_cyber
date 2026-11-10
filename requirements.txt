@@ -1,11 +1,10 @@
 # Environnement testé : Python 3.12 (venv), Mac M3. Installation : pip install -r requirements.txt
-spacy==3.8.18
+spacy==3.8.17
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-pandas==3.1.1
-numpy==2.5.4
-scikit-learn==1.9.1
-torch==2.15.0
-transformers==5.22.2
-laya==0.4.30
-tqdm==4.70.1
-ipykernel==7.4.0
+pandas>=2.0.0
+numpy>=1.26.0
+scikit-learn>=1.3.0
+torch>=2.0.0
+transformers>=4.40.0
+tqdm>=4.66.0
+ipykernel>=6.0.0

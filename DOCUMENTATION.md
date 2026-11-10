@@ -138,7 +138,41 @@ Notebook [clean_text.ipynb](notebooks/clean_text.ipynb) (fonction `clean_text` +
 
 Le notebook affiche 5 exemples avant/après et vérifie, ligne par ligne, que chaque balise apparaît le même nombre de fois avant et après. **Prérequis :** les CSV anonymisés doivent avoir été générés avec les nouvelles balises `*_tag` (relancer d'abord l'anonymisation).
 
-## 6. Reproduire
+## 6. Étape 2 : Entraînement des modèles
+
+Notebook [train.ipynb](notebooks/train.ipynb) · Données : `data/clean/train_clean.csv` · Split : 80 % entraînement / 20 % validation (graine 42) · Test officiel : `data/clean/test_clean.csv` + `data/test_labels.csv` (lignes à `-1` retirées).
+
+Trois modèles comparés, même seuil de décision (0,5), même split, même métrique (macro sur les 6 labels).
+
+### Tableau récapitulatif — validation (20 % de train)
+
+| Modèle | Entraînement (s) | Précision | Rappel | F1 | ROC-AUC | ms/commentaire |
+|---|---|---|---|---|---|---|
+| BiLSTM | 88 | 0.278 | 0.940 | 0.391 | 0.977 | 0.08 |
+| DistilBERT | 1 710 | 0.321 | 0.955 | 0.439 | 0.985 | 9.08 |
+| LAYA (zéro-shot) | 0 | 0.366 | 0.881 | 0.431 | 0.966 | 417 |
+
+### Tableau récapitulatif — test officiel Kaggle (sans lignes à -1)
+
+| Modèle | Précision | Rappel | F1 | ROC-AUC | ms/commentaire | Lignes évaluées |
+|---|---|---|---|---|---|---|
+| BiLSTM | 0.169 | 0.948 | 0.267 | 0.965 | 0.08 | 63 978 |
+| DistilBERT | 0.199 | 0.967 | 0.309 | 0.978 | 8.34 | 63 978 |
+| LAYA (zéro-shot) | 0.244 | 0.900 | 0.333 | 0.971 | 417 | 2 000 |
+
+### Analyse
+
+- **BiLSTM** : le plus rapide à l'inférence (0,08 ms/commentaire), entraîné en 88 s. Rappel très élevé (0,94) mais précision faible (0,28) : il sur-détecte la toxicité.
+- **DistilBERT** : meilleur F1 (0,44) et meilleur ROC-AUC (0,985) sur la validation. 28× plus lent que BiLSTM à l'inférence, entraînement ~30 min. Meilleur choix qualité/déploiement.
+- **LAYA (zéro-shot)** : meilleure précision parmi les trois (0,37) mais inférence très lente (417 ms/commentaire). Utilisable uniquement en mode asynchrone, non adapté à une API temps réel.
+
+### Choix pour le déploiement (Étape 3)
+
+**DistilBERT** est retenu pour l'API : meilleur compromis précision/rappel, inférence acceptable (< 10 ms), modèle sauvegardé dans `models/distilbert/`.
+
+---
+
+## 7. Reproduire
 
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate
