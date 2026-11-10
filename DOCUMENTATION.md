@@ -1,6 +1,6 @@
 # Anonymisation des commentaires — approche regex + NER spaCy
 
-Notebook : [anonyme_2.ipynb](anonyme_2.ipynb) · Entrées : `data/train.csv`, `data/test.csv` · Sorties : `data/anonymise/train_anonyme_2.csv`, `data/anonymise/test_anonyme_2.csv`
+Notebook : [anonyme_2.ipynb](notebooks/anonyme_2.ipynb) · Entrées : `data/train.csv`, `data/test.csv` · Sorties : `data/anonymise/train_anonyme_2.csv`, `data/anonymise/test_anonyme_2.csv`
 
 Données : commentaires du *Toxic Comment Classification Dataset* (colonne `comment_text`, commentaires de pages de discussion Wikipédia). Seule `comment_text` est modifiée ; `id` et les colonnes de toxicité sont conservées.
 
@@ -109,7 +109,7 @@ Format inspiré de l'article 30 du RGPD. Les champs marqués **[À compléter]**
 
 ## 5. Étape 2 : nettoyage des textes
 
-Notebook [clean_text.ipynb](clean_text.ipynb) (fonction `clean_text` + application), sur `data/anonymise/*_anonyme_2.csv` → `data/clean/train_clean.csv`, `data/clean/test_clean.csv` :
+Notebook [clean_text.ipynb](notebooks/clean_text.ipynb) (fonction `clean_text` + application), sur `data/anonymise/*_anonyme_2.csv` → `data/clean/train_clean.csv`, `data/clean/test_clean.csv` :
 
 1. minuscules ;
 2. suppression des emojis (plages Unicode) ;
@@ -124,5 +124,5 @@ Le notebook affiche 5 exemples avant/après et vérifie, ligne par ligne, que ch
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install spacy pandas ipykernel
 python -m spacy download en_core_web_sm
-# ouvrir anonyme_2.ipynb avec le kernel .venv puis exécuter toutes les cellules (~20 min)
+# ouvrir notebooks/anonyme_2.ipynb avec le kernel .venv puis exécuter toutes les cellules (~20 min)
 ```

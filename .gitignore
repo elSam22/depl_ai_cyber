@@ -2,3 +2,4 @@
 .venv/
 data/anonymise/
 data/clean/
+models/
