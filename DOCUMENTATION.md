@@ -58,6 +58,25 @@ Ces constats viennent de la lecture des sorties, pas d'une évaluation sur véri
 5. **Pseudos mal découpés** : la virgule finale est parfois incluse (`Physicq210,`), et un mot courant (`The`) a été pris pour un pseudo.
 6. **Personnalités publiques masquées** (`Hitler`, `Bush`, `Jesus`) : ce n'est pas une donnée personnelle au sens strict, c'est un effet du NER.
 
+### 2.4 Corrections apportées (v3)
+
+Après analyse des fichiers anonymisés, les filtres suivants ont été ajoutés dans `notebooks/anonyme_2.ipynb`. Chiffres mesurés avant relance complète : regex sur tout `train.csv`, NER sur un échantillon de 20 000 lignes.
+
+| Problème constaté | Correction | Effet mesuré |
+|---|---|---|
+| Insultes masquées comme personnes (`moron` ×202, `dick faggot`, `faggot!!!!…`) | Toute entité contenant un mot de la liste `MOTS_TOXIQUES` ou une racine toxique (`fuck`, `shit`, `nigg`…) n'est plus masquée. | 0 entité masquée contenant un mot toxique (échantillon). |
+| Jargon Wikipédia pris pour des organisations (`Wikipedia` ≈ 19 % des ORG, `UTC`, `POV`, `BLP`, `Wikipedia:Questions`) | Liste `JARGON_WIKI` + tout mot commençant par `wiki`, pour les ORG et les PERSON d'un seul mot de jargon (`Wiki`). | Plus aucun `Wikipedia`/`UTC`/`POV` dans les ORG masquées. |
+| Personnalités publiques masquées (`Mitt Romney`, `Hitler`, `Jesus`, `pro-Assad`) | Liste `PERSONNALITES_PUBLIQUES` : ce ne sont pas des données personnelles de commentateurs. | Plus masquées. |
+| Mots courants masqués (`hi` ×189, `admin`, `cheers`, `fyi`, `ffffff`) | Liste `MOTS_COURANTS`, règle « un seul mot tout en minuscules = erreur du NER », règle code couleur hexadécimal. | Plus masqués. |
+| IP non masquées après un point (`now.89.205.38.27`, ≈ 1 100) | Motif IPv4 corrigé (seules les suites plus longues type `1.2.3.4.5` sont exclues). | 26 IPv4 valides non masquées sur 11 232 dans `train` (collées à d'autres chiffres). |
+| Nom collé à une insulte resté en clair (`Stupid Bob Smith`) | Les mots toxiques sont retirés de l'entité et seul le reste est masqué, s'il ressemble à un nom (majuscule initiale) : `Stupid Fucking personne_tag`. Un texte crié (`DIE FAG DIE`) reste intact. | Comparaison avant/après sur 20 000 lignes : aucune insulte masquée par le NER. |
+| `::` seul masqué comme IPv6 ; ponctuation finale incluse dans les pseudos (`User:Physicq210,`) | IPv6 : au moins un chiffre hexadécimal exigé. Pseudos : ponctuation finale retirée du masque. | `::` conservé ; `User:pseudo_tag,`. |
+| Faux positifs d'adresse (`2008 The Way`, `20006 Annual`, `2012 MTC Drive`, `N00BS`, `D0D4FF`) | Types de voie ambigus retirés (`Way`, `Place`, `Court`, `Dr`), années 1900-2035 exclues, mots de campagne Wikipédia exclus, code postal français seul abandonné, État US valide obligatoire, espace obligatoire dans le code postal UK. | 104 adresses dans `train`, quasiment toutes de vraies adresses (`1600 Pennsylvania Avenue`, `CA 94709`, `E1 4AA`). |
+
+Résultat sur l'échantillon : 1,45 balise par commentaire (contre 1,93) et 51 % des commentaires avec au moins une balise (contre 61 %). Les vrais prénoms et noms (`John`, `Jessica Simpson`) et les vraies organisations (`Google`, `BBC`, `CIA`) restent masqués.
+
+**Limites restantes :** le NER `en_core_web_sm` laisse encore quelques faux positifs isolés en ORG (`time`, `never`, `template`, `introduction`). Les listes de filtrage sont faites à la main à partir des valeurs les plus fréquentes : elles ne couvrent pas tout. Les pseudos sans préfixe `User:` ou `@` ne sont toujours pas détectés.
+
 **Conséquence :** le résultat réduit fortement la présence de données personnelles mais **ne garantit pas une anonymisation complète**. Il doit être considéré comme une **pseudonymisation / minimisation** tant qu'un contrôle sur jeu annoté n'a pas été fait.
 
 ## 3. Justification de chaque choix
@@ -69,9 +88,10 @@ Ces constats viennent de la lecture des sorties, pas d'une évaluation sur véri
 | `en_core_web_sm` | Léger, rapide (≈ 3 ms/commentaire), suffisant pour traiter ≈ 310 000 lignes en ≈ 20 min sur un poste standard. | Moins précis que les modèles plus gros (`md`, `lg`, `trf`). |
 | Entités NER retenues : PERSON et ORG uniquement | Ce sont celles qui identifient directement une personne ou son employeur/groupe. | Les ORG sont la source principale de faux positifs. |
 | Villes, pays et continents (`GPE`, `LOC`) **non masqués** | Non identifiants seuls et utiles à la détection (un propos haineux peut viser un pays ou une région). Les masquer retirerait du signal. Ils étaient aussi une source de faux positifs (`POV`, `US`, `NPOV`…). | Risque résiduel faible : combinés à d'autres informations, ils peuvent aider à ré-identifier quelqu'un. |
-| Adresses précises → `[ADRESSE]` (rue + numéro, code postal FR/UK/US) | Une adresse précise identifie un foyer, contrairement à une ville. Motifs prudents : numéro + type de voie, nom de rue en majuscule initiale, code postal suivi d'une ville (FR). | Format anglo-saxon et français seulement ; un nombre à 5 chiffres suivi d'un mot capitalisé peut être pris à tort pour un code postal. |
+| Adresses précises → `[ADRESSE]` (rue + numéro, code postal FR/UK/US) | Une adresse précise identifie un foyer, contrairement à une ville. Motifs prudents : numéro + type de voie non ambigu, nom de rue en majuscule initiale, années exclues ; code postal UK avec espace, code postal US avec un sigle d'État valide (cf. 2.4). | Formats anglo-saxon et français seulement ; un code postal français seul n'est pas masqué (trop de faux positifs). |
 | ORG de moins de 3 caractères ignorées | Évite le bruit (« FA », « UN »…). | Peut laisser passer une vraie organisation très courte. |
-| `NORP` non masqué, mots toxiques non masqués | Les groupes ne sont pas identifiants ; les mots toxiques sont justement le signal à classer. | Un groupe très petit pourrait être identifiant (cas marginal). |
+| `NORP` non masqué, mots toxiques non masqués | Les groupes ne sont pas identifiants ; les mots toxiques sont justement le signal à classer. Les mots toxiques sont retirés des entités NER avant masquage. | Un groupe très petit pourrait être identifiant (cas marginal). Une insulte absente de la liste ou déformée (`m0ron`) peut encore être prise pour un nom. |
+| Jargon Wikipédia, personnalités publiques et mots courants non masqués | Ce ne sont pas des données personnelles ; les masquer ajoutait du bruit (cf. 2.4). | Listes faites à la main, non exhaustives. |
 | Regex prioritaire sur le NER | Plus précis sur les formats fixes (ex. un email contenant un nom). | — |
 | Un seul passage sur le texte original | Évite les décalages de positions entre deux remplacements successifs. | — |
 | Balises typées (`xxx_tag`) plutôt que suppression | Conserve la structure de la phrase et le type d'information pour la classification de toxicité. | Révèle qu'une entité existait à cet endroit. |
