@@ -122,7 +122,6 @@ Le notebook affiche 5 exemples avant/après et vérifie, ligne par ligne, que ch
 
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install spacy pandas ipykernel
-python -m spacy download en_core_web_sm
+pip install -r requirements.txt   # inclut le modèle spaCy en_core_web_sm
 # ouvrir notebooks/anonyme_2.ipynb avec le kernel .venv puis exécuter toutes les cellules (~20 min)
 ```
