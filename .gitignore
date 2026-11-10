@@ -3,3 +3,8 @@
 data/anonymise/
 data/clean/
 models/
+api/model/*.safetensors
+api/model/*.bin
+api/__pycache__/
+logs/
+__pycache__/

@@ -1,0 +1,14 @@
+{
+  "model_type": "distilbert",
+  "model_version": "distilbert-2026-11-10",
+  "preprocessing_version": "1.0",
+  "labels": [
+    "toxic",
+    "severe_toxic",
+    "obscene",
+    "threat",
+    "insult",
+    "identity_hate"
+  ],
+  "max_len": 128
+}

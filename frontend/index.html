@@ -1,0 +1,1103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digital Social Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+
+<style>
+[hidden] { display: none !important; }
+/* Layout: single-column centered workspace, card-based */
+:root {
+  --bg: #EEF4FA;
+  --surface: #FFFFFF;
+  --surface-2: #F4F8FD;
+  --border: #DDE5EF;
+  --fg: #0C1929;
+  --fg-muted: #5A7390;
+  --fg-subtle: #96AFC6;
+  --accent: #0D9488;
+  --accent-fg: #FFFFFF;
+  --accent-subtle: #CCFBF1;
+  --safe-bg: #DCFCE7; --safe-fg: #15803D;
+  --warn-bg: #FEF3C7; --warn-fg: #92400E;
+  --danger-bg: #FEE2E2; --danger-fg: #991B1B;
+  --safe-bar: #22C55E; --warn-bar: #F59E0B; --danger-bar: #EF4444;
+  --r: 14px; --r-sm: 9px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #060D1A;
+    --surface: #0C1828;
+    --surface-2: #122035;
+    --border: #1A2D45;
+    --fg: #DCE9F7;
+    --fg-muted: #7A9AB8;
+    --fg-subtle: #4D6880;
+    --accent: #2DD4BF;
+    --accent-fg: #052820;
+    --accent-subtle: #0D3530;
+    --safe-bg: rgba(74,222,128,.12); --safe-fg: #4ADE80;
+    --warn-bg: rgba(252,211,77,.12); --warn-fg: #FCD34D;
+    --danger-bg: rgba(248,113,113,.12); --danger-fg: #F87171;
+    --safe-bar: #4ADE80; --warn-bar: #FBBF24; --danger-bar: #F87171;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #060D1A; --surface: #0C1828; --surface-2: #122035;
+  --border: #1A2D45; --fg: #DCE9F7; --fg-muted: #7A9AB8; --fg-subtle: #4D6880;
+  --accent: #2DD4BF; --accent-fg: #052820; --accent-subtle: #0D3530;
+  --safe-bg: rgba(74,222,128,.12); --safe-fg: #4ADE80;
+  --warn-bg: rgba(252,211,77,.12); --warn-fg: #FCD34D;
+  --danger-bg: rgba(248,113,113,.12); --danger-fg: #F87171;
+  --safe-bar: #4ADE80; --warn-bar: #FBBF24; --danger-bar: #F87171;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px;
+}
+
+.wrap {
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.brand { display: flex; align-items: center; gap: 11px; }
+
+.brand-mark {
+  width: 40px; height: 40px;
+  background: var(--accent);
+  border-radius: 11px;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+
+.brand-mark svg { width: 22px; height: 22px; }
+
+.brand-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.brand-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.header-actions { display: flex; gap: 8px; }
+
+.icon-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  width: 36px; height: 36px;
+  cursor: pointer;
+  display: grid; place-items: center;
+  color: var(--fg-muted);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.icon-btn:hover { color: var(--fg); border-color: var(--accent); }
+
+/* Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+}
+
+.card-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 13px;
+}
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--fg-muted);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--fg-subtle);
+  flex-shrink: 0;
+  transition: background .3s, box-shadow .3s;
+}
+.status-dot.ok { background: #22C55E; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+.status-dot.demo { background: var(--warn-fg); box-shadow: 0 0 0 3px rgba(245,158,11,.18); }
+.status-dot.err { background: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,.18); }
+
+.status-label { font-weight: 500; }
+.status-url { font-family: monospace; font-size: 11px; color: var(--fg-subtle); margin-left: auto; }
+
+.demo-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--warn-bg); color: var(--warn-fg);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 6px;
+}
+
+/* Textarea */
+textarea {
+  width: 100%; min-height: 100px; resize: vertical;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 12px 14px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--fg);
+  line-height: 1.6; outline: none; transition: border-color .15s;
+}
+textarea:focus { border-color: var(--accent); }
+textarea::placeholder { color: var(--fg-subtle); }
+
+.input-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px; gap: 12px; flex-wrap: wrap;
+}
+
+.char-count { font-size: 12px; color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+
+.btn-analyze {
+  background: var(--accent); color: var(--accent-fg);
+  border: none; border-radius: var(--r-sm);
+  padding: 9px 22px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 8px;
+  transition: opacity .15s, transform .1s;
+}
+.btn-analyze:hover { opacity: .9; }
+.btn-analyze:active { transform: scale(.98); }
+.btn-analyze:disabled { opacity: .4; cursor: not-allowed; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 15px; height: 15px;
+  border: 2px solid rgba(0,0,0,.2); border-top-color: var(--accent-fg);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+
+/* Error */
+.error-box {
+  margin-top: 10px; padding: 10px 14px;
+  background: var(--danger-bg); color: var(--danger-fg);
+  border: 1px solid color-mix(in srgb, var(--danger-fg) 20%, transparent);
+  border-radius: var(--r-sm); font-size: 13px;
+}
+
+/* Result area */
+.result-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 24px; align-items: center;
+}
+@media (max-width: 520px) {
+  .result-layout { grid-template-columns: 1fr; justify-items: center; }
+}
+
+/* Gauge SVG */
+.gauge-wrap { position: relative; }
+#gauge-svg { display: block; overflow: visible; }
+
+/* Result info */
+.result-info { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.result-score-row { display: flex; align-items: baseline; gap: 6px; }
+.result-score-big {
+  font-family: 'Syne', sans-serif;
+  font-size: 48px; font-weight: 800;
+  letter-spacing: -0.04em; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition: color .4s;
+}
+.result-score-unit { font-size: 16px; color: var(--fg-muted); font-weight: 500; }
+
+.verdict-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 11px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.verdict-safe { background: var(--safe-bg); color: var(--safe-fg); }
+.verdict-warn { background: var(--warn-bg); color: var(--warn-fg); }
+.verdict-danger { background: var(--danger-bg); color: var(--danger-fg); }
+
+.result-desc { font-size: 13px; color: var(--fg-muted); line-height: 1.5; }
+
+/* Placeholder */
+.placeholder {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px;
+  padding: 36px 24px; color: var(--fg-subtle); text-align: center;
+}
+.placeholder p { font-size: 13px; margin: 0; max-width: 260px; line-height: 1.5; }
+
+/* Config fields */
+.config-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toggle-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--fg-muted); font-family: 'DM Sans', sans-serif;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px; padding: 0;
+  transition: color .15s;
+}
+.toggle-btn:hover { color: var(--fg); }
+.toggle-btn .chevron { transition: transform .22s; display: inline-block; }
+.toggle-btn.open .chevron { transform: rotate(90deg); }
+
+.config-fields {
+  display: none;
+  flex-direction: column; gap: 10px; margin-top: 14px;
+}
+.config-fields.visible { display: flex; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-muted); }
+.field input {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 8px 12px;
+  font-family: 'DM Sans', monospace; font-size: 13px; color: var(--fg);
+  outline: none; width: 100%; transition: border-color .15s;
+}
+.field input:focus { border-color: var(--accent); }
+
+.btn-save {
+  align-self: flex-start;
+  background: var(--accent-subtle); color: var(--accent);
+  border: none; border-radius: var(--r-sm); padding: 7px 18px;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: opacity .15s;
+}
+.btn-save:hover { opacity: .85; }
+
+/* History */
+.history-items { display: flex; flex-direction: column; gap: 6px; }
+
+.hist-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center; gap: 12px;
+  padding: 9px 12px;
+  background: var(--surface-2); border: 1px solid transparent;
+  border-radius: var(--r-sm); cursor: pointer;
+  transition: background .15s, border-color .15s;
+  min-width: 0;
+}
+.hist-item:hover { background: var(--border); border-color: var(--border); }
+
+.hist-text {
+  font-size: 13px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0; color: var(--fg-muted);
+}
+
+.hist-score {
+  font-family: 'Syne', monospace; font-size: 14px; font-weight: 700;
+  font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+
+.hist-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 2px 8px; border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.empty-hint { font-size: 13px; color: var(--fg-subtle); padding: 16px 0; text-align: center; }
+
+/* ── Animations ───────────────────────────────────────────────────── */
+
+/* Card entrance */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card, .status-bar, .header {
+  animation: fadeUp .45s cubic-bezier(.22,.68,0,1.2) both;
+}
+.header        { animation-delay: .05s; }
+.card:nth-child(2) { animation-delay: .12s; }
+.status-bar    { animation-delay: .18s; }
+.card:nth-child(4) { animation-delay: .24s; }
+.card:nth-child(5) { animation-delay: .30s; }
+.card:nth-child(6) { animation-delay: .36s; }
+
+/* Score counter pulse */
+@keyframes numPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  70%  { transform: scale(.94); }
+  100% { transform: scale(1); }
+}
+.num-pop { animation: numPop .5s cubic-bezier(.34,1.56,.64,1) forwards; }
+
+/* Preprocessing reveal */
+.preprocess-box {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.preprocess-header {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--fg-muted);
+}
+.preprocess-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); flex-shrink: 0;
+  animation: ppPulse 1s ease-in-out infinite;
+}
+@keyframes ppPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.preprocess-dot.done { animation: none; background: var(--safe-bar); }
+.preprocess-body {
+  padding: 10px 12px;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 12.5px; line-height: 1.6;
+  color: var(--fg);
+  min-height: 36px;
+  word-break: break-word;
+}
+.preprocess-cursor {
+  display: inline-block; width: 2px; height: 1em;
+  background: var(--accent); vertical-align: text-bottom;
+  animation: blink .7s step-end infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.pp-token {
+  display: inline-block;
+  background: var(--accent-subtle); color: var(--accent);
+  border-radius: 3px; padding: 0 4px; font-weight: 600;
+  font-size: 11px;
+}
+
+/* Label breakdown bars */
+.label-row { display: grid; grid-template-columns: 130px 1fr 38px; align-items: center; gap: 8px; }
+.label-name { font-size: 12px; font-weight: 500; color: var(--fg-muted); text-transform: capitalize; }
+.label-track { height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.label-fill  { height: 100%; border-radius: 99px; transition: width .7s cubic-bezier(.34,1.1,.64,1); }
+.label-pct   { font-size: 11px; font-weight: 600; color: var(--fg-muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Toxic alert glow on result card */
+@keyframes toxicPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  50%       { box-shadow: 0 0 24px 6px rgba(239,68,68,.22); }
+}
+.card-toxic { animation: toxicPulse 1.8s ease-in-out 3; border-color: rgba(239,68,68,.35) !important; }
+
+/* Safe glow */
+@keyframes safeGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+  50%       { box-shadow: 0 0 20px 4px rgba(34,197,94,.18); }
+}
+.card-safe { animation: safeGlow 1.4s ease-in-out 2; border-color: rgba(34,197,94,.3) !important; }
+
+/* Verdict pulse for toxic */
+@keyframes pillPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .6; }
+}
+.verdict-pulsing { animation: pillPulse .7s ease-in-out 4; }
+
+/* Shake for very toxic */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%  { transform: translateX(-5px) rotate(-1deg); }
+  30%  { transform: translateX(5px) rotate(1deg); }
+  45%  { transform: translateX(-4px); }
+  60%  { transform: translateX(4px); }
+  75%  { transform: translateX(-2px); }
+}
+.shake { animation: shake .55s cubic-bezier(.36,.07,.19,.97) forwards; }
+
+/* Analyzing ring on gauge */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes ringPulse {
+  0%, 100% { opacity: .2; }
+  50%       { opacity: .7; }
+}
+.gauge-scanning #gauge-ring { display: block !important; animation: spin 1.4s linear infinite, ringPulse 1.4s ease-in-out infinite; }
+
+/* Live textarea tint */
+textarea { transition: border-color .3s, box-shadow .4s; }
+textarea.live-safe   { border-color: rgba(34,197,94,.5);  box-shadow: 0 0 0 3px rgba(34,197,94,.08); }
+textarea.live-warn   { border-color: rgba(245,158,11,.5); box-shadow: 0 0 0 3px rgba(245,158,11,.08); }
+textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px rgba(239,68,68,.1); }
+
+/* Warning bar under textarea */
+.live-bar {
+  height: 3px; border-radius: 0 0 var(--r-sm) var(--r-sm);
+  margin-top: -1px; margin-left: -1px; margin-right: -1px;
+  transition: width .5s cubic-bezier(.4,0,.2,1), background .4s;
+  background: var(--safe-bar); width: 0%;
+}
+
+/* Stagger hist items */
+.hist-item { animation: fadeUp .3s cubic-bezier(.22,.68,0,1.2) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .bar-fill, #gauge-fill { transition-duration: 0s !important; animation: none !important; }
+}
+</style>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 22 22" fill="none" stroke="var(--accent-fg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="9"/>
+          <path d="M11 7v4l3 2"/>
+          <path d="M6 11h1M15 11h1M11 6v1M11 15v1"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Digital Social Score</div>
+        <div class="brand-sub">Analyse de toxicité</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-btn" title="Changer de thème" aria-label="Changer de thème">
+        <svg id="theme-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <circle cx="10" cy="10" r="4"/>
+          <line x1="10" y1="1" x2="10" y2="3"/>
+          <line x1="10" y1="17" x2="10" y2="19"/>
+          <line x1="1" y1="10" x2="3" y2="10"/>
+          <line x1="17" y1="10" x2="19" y2="10"/>
+          <line x1="3.5" y1="3.5" x2="5" y2="5"/>
+          <line x1="15" y1="15" x2="16.5" y2="16.5"/>
+          <line x1="3.5" y1="16.5" x2="5" y2="15"/>
+          <line x1="15" y1="5" x2="16.5" y2="3.5"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Config card -->
+  <div class="card">
+    <div class="config-row">
+      <span class="card-label" style="margin:0">Configuration API</span>
+      <button class="toggle-btn" id="config-toggle">
+        <span class="chevron">›</span> Paramètres
+      </button>
+    </div>
+    <div class="config-fields" id="config-fields">
+      <div class="field">
+        <label class="field-label" for="cfg-url">URL de l'API</label>
+        <input type="url" id="cfg-url" placeholder="http://localhost:8001">
+      </div>
+      <div class="field">
+        <label class="field-label" for="cfg-key">Clé API (X-API-Key)</label>
+        <input type="password" id="cfg-key" placeholder="cle-dev-changer-en-prod">
+      </div>
+      <button class="btn-save" id="btn-save-cfg">Enregistrer</button>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span class="status-dot" id="status-dot"></span>
+    <span class="status-label" id="status-label">Non vérifié</span>
+    <span id="demo-chip" hidden class="demo-chip">⚡ Mode démo</span>
+    <span class="status-url" id="status-url"></span>
+  </div>
+
+  <!-- Input card -->
+  <div class="card">
+    <div class="card-label">Texte à analyser</div>
+    <textarea id="text-input" placeholder="Entrez un commentaire, un message ou un texte à analyser…&#10;&#10;Ex: &quot;This is an amazing project, great work!&quot;"></textarea>
+    <div class="live-bar" id="live-bar"></div>
+    <div class="input-row">
+      <span class="char-count" id="char-count">0 caractères</span>
+      <button class="btn-analyze" id="btn-analyze" disabled>
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="7" cy="7" r="6"/>
+          <path d="M5 7h4M7 5l2 2-2 2"/>
+        </svg>
+        Analyser
+      </button>
+    </div>
+    <div class="error-box" id="error-box" hidden></div>
+  </div>
+
+  <!-- Result card -->
+  <div class="card" id="result-card">
+    <div class="card-label">Résultat</div>
+    <div class="placeholder" id="placeholder">
+      <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="52" height="52">
+        <circle cx="24" cy="24" r="20"/>
+        <path d="M14 24 A10 10 0 0 1 34 24" stroke-dasharray="4 2"/>
+        <circle cx="24" cy="24" r="3" fill="currentColor"/>
+      </svg>
+      <p>Entrez un texte et cliquez sur <strong>Analyser</strong> pour obtenir le score de toxicité.</p>
+    </div>
+    <div id="result-content" hidden>
+      <div class="result-layout">
+        <div class="gauge-wrap">
+          <svg id="gauge-svg" viewBox="0 0 170 100" width="170" height="100">
+            <!-- Background track -->
+            <path d="M15,90 A75,75 0 0,1 155,90"
+              fill="none" stroke="var(--border)" stroke-width="10" stroke-linecap="round"/>
+            <!-- Animated fill -->
+            <path id="gauge-fill" d="M15,90 A75,75 0 0,1 155,90"
+              fill="none" stroke="#22C55E" stroke-width="10" stroke-linecap="round"
+              stroke-dasharray="236" stroke-dashoffset="236"
+              style="transition: stroke-dashoffset .9s cubic-bezier(.34,1.1,.64,1), stroke .4s"/>
+            <!-- Scanning ring (hidden by default) -->
+            <circle id="gauge-ring" cx="85" cy="90" r="75" fill="none"
+              stroke="var(--accent)" stroke-width="2" stroke-dasharray="12 18"
+              stroke-linecap="round" display="none"
+              style="transform-origin:85px 90px"/>
+            <!-- Score number -->
+            <text id="gauge-num" x="85" y="78" text-anchor="middle"
+              font-family="Syne, sans-serif" font-weight="800" font-size="38"
+              fill="var(--fg)" style="transition: fill .4s; font-variant-numeric: tabular-nums">—</text>
+            <text x="85" y="96" text-anchor="middle"
+              font-family="DM Sans, sans-serif" font-size="10" font-weight="600"
+              letter-spacing="1.5" fill="var(--fg-muted)" text-transform="uppercase">SCORE / 100</text>
+          </svg>
+        </div>
+        <div class="result-info">
+          <div>
+            <div id="verdict-pill" class="verdict-pill verdict-safe" style="display:inline-flex">—</div>
+          </div>
+          <div id="result-desc" class="result-desc"></div>
+          <div id="result-meta" style="font-size:12px; color:var(--fg-subtle); font-variant-numeric:tabular-nums"></div>
+        </div>
+      </div>
+      <!-- Preprocessing reveal -->
+      <div id="preprocess-wrap" hidden class="preprocess-box" style="margin-top:14px">
+        <div class="preprocess-header">
+          <span id="pp-dot" class="preprocess-dot"></span>
+          <span id="pp-label">Traitement en cours…</span>
+        </div>
+        <div id="pp-body" class="preprocess-body"></div>
+      </div>
+      <!-- Label breakdown -->
+      <div id="labels-breakdown" hidden style="margin-top:18px; display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+  </div>
+
+  <!-- History card -->
+  <div class="card" id="history-card">
+    <div class="card-label">Historique</div>
+    <div class="history-items" id="history-list">
+      <div class="empty-hint">Aucune analyse pour l'instant.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  // ── State ──────────────────────────────────────────────────────────
+  const DEFAULT_CFG = { url: 'http://localhost:8001', key: '6b9652c7c4008aaed11572e247d47e8f8f45e62aac2bd7af0ae3be82937a9fed' };
+  let cfg = { ...DEFAULT_CFG };
+  let history = [];
+  let isDemoMode = false;
+
+  // ── Persist ────────────────────────────────────────────────────────
+  function load() {
+    try {
+      const c = localStorage.getItem('dss-cfg');
+      if (c) {
+        const stored = JSON.parse(c);
+        // Reset stale default key
+        if (stored.key === 'cle-dev-changer-en-prod') stored.key = DEFAULT_CFG.key;
+        cfg = { ...DEFAULT_CFG, ...stored };
+      }
+      const h = localStorage.getItem('dss-hist');
+      if (h) history = JSON.parse(h);
+    } catch {}
+  }
+
+  function save() {
+    try {
+      localStorage.setItem('dss-cfg', JSON.stringify(cfg));
+      localStorage.setItem('dss-hist', JSON.stringify(history.slice(0, 20)));
+    } catch {}
+  }
+
+  // ── Elements ───────────────────────────────────────────────────────
+  const $  = id => document.getElementById(id);
+  const textarea  = $('text-input');
+  const btnAnalyze = $('btn-analyze');
+  const charCount  = $('char-count');
+  const errorBox   = $('error-box');
+  const placeholder = $('placeholder');
+  const resultContent = $('result-content');
+  const gaugeFill = $('gauge-fill');
+  const gaugeNum  = $('gauge-num');
+  const gaugeWrap = document.querySelector('.gauge-wrap');
+  const verdictPill = $('verdict-pill');
+  const resultDesc  = $('result-desc');
+  const resultMeta  = $('result-meta');
+  const resultCard  = $('result-card');
+  const historyList = $('history-list');
+  const statusDot   = $('status-dot');
+  const statusLabel = $('status-label');
+  const statusUrl   = $('status-url');
+  const demoChip    = $('demo-chip');
+  const liveBar     = $('live-bar');
+
+  // ── Theme ──────────────────────────────────────────────────────────
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('dss-theme', t);
+  }
+
+  $('theme-btn').addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+
+  // ── Config toggle ──────────────────────────────────────────────────
+  const configToggle = $('config-toggle');
+  const configFields = $('config-fields');
+
+  configToggle.addEventListener('click', () => {
+    const open = configFields.classList.toggle('visible');
+    configToggle.classList.toggle('open', open);
+  });
+
+  $('btn-save-cfg').addEventListener('click', () => {
+    const url = $('cfg-url').value.trim() || DEFAULT_CFG.url;
+    const key = $('cfg-key').value.trim() || DEFAULT_CFG.key;
+    cfg = { url, key };
+    save();
+    updateStatus(null);
+    configFields.classList.remove('visible');
+    configToggle.classList.remove('open');
+  });
+
+  // ── Textarea ───────────────────────────────────────────────────────
+  textarea.addEventListener('input', () => {
+    const len = textarea.value.length;
+    charCount.textContent = `${len} caractère${len !== 1 ? 's' : ''}`;
+    btnAnalyze.disabled = len === 0;
+    errorBox.hidden = true;
+
+    // Live scoring preview (debounced 400ms)
+    clearTimeout(liveTimer);
+    if (len > 3) {
+      liveTimer = setTimeout(() => updateLive(textarea.value), 400);
+    } else {
+      textarea.className = '';
+      liveBar.style.width = '0%';
+    }
+  });
+
+  // ── Status ─────────────────────────────────────────────────────────
+  function updateStatus(state, url) {
+    statusUrl.textContent = cfg.url;
+    if (state === 'ok') {
+      statusDot.className = 'status-dot ok';
+      statusLabel.textContent = 'API connectée';
+      demoChip.hidden = true;
+    } else if (state === 'demo') {
+      statusDot.className = 'status-dot demo';
+      statusLabel.textContent = 'Non joignable';
+      demoChip.hidden = false;
+    } else if (state === 'err') {
+      statusDot.className = 'status-dot err';
+      statusLabel.textContent = 'Erreur API';
+      demoChip.hidden = true;
+    } else {
+      statusDot.className = 'status-dot';
+      statusLabel.textContent = cfg.url ? 'En attente' : 'Non configuré';
+      demoChip.hidden = true;
+    }
+  }
+
+  // ── Live typing feedback ───────────────────────────────────────────
+  let liveTimer = null;
+
+  function updateLive(text) {
+    if (!text.trim()) {
+      textarea.className = '';
+      liveBar.style.width = '0%';
+      return;
+    }
+    const { score } = mockAnalyze(text);
+    const level = score < 33 ? 'safe' : score < 67 ? 'warn' : 'danger';
+    const colors = { safe: 'var(--safe-bar)', warn: 'var(--warn-bar)', danger: 'var(--danger-bar)' };
+    textarea.className = `live-${level}`;
+    liveBar.style.width = score + '%';
+    liveBar.style.background = colors[level];
+  }
+
+  // ── Gauge animation ────────────────────────────────────────────────
+  // Track: M15,90 A75,75 0 0,1 155,90 → arc length ≈ π × 75 ≈ 235.6 → 236
+  const ARC = 236;
+
+  function animateCounter(from, to, duration, onTick, onDone) {
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+      onTick(Math.round(from + (to - from) * eased));
+      if (t < 1) requestAnimationFrame(step);
+      else onDone && onDone();
+    }
+    requestAnimationFrame(step);
+  }
+
+  function setGauge(score) {
+    const offset = ARC * (1 - score / 100);
+    const color = score < 33 ? '#22C55E' : score < 67 ? '#F59E0B' : '#EF4444';
+    gaugeFill.style.strokeDashoffset = offset;
+    gaugeFill.style.stroke = color;
+
+    const prev = parseInt(gaugeNum.textContent) || 0;
+    animateCounter(prev, Math.round(score), 700, v => {
+      gaugeNum.textContent = v;
+      gaugeNum.style.fill = color;
+    }, () => {
+      gaugeNum.classList.remove('num-pop');
+      void gaugeNum.offsetWidth;
+      gaugeNum.classList.add('num-pop');
+    });
+  }
+
+  function setScanningGauge(on) {
+    gaugeWrap.classList.toggle('gauge-scanning', on);
+    if (on) {
+      gaugeNum.textContent = '…';
+      gaugeNum.style.fill = 'var(--fg-muted)';
+      gaugeFill.style.strokeDashoffset = ARC;
+      // Show preprocess box in loading state
+      preprocessWrap.hidden = false;
+      ppDot.className = 'preprocess-dot';
+      ppLabelEl.textContent = 'Anonymisation et nettoyage…';
+      ppBody.innerHTML = '<span class="preprocess-cursor"></span>';
+    }
+  }
+
+  function setVerdict(score, toxic) {
+    const level = score < 33 ? 'safe' : score < 67 ? 'warn' : 'danger';
+    verdictPill.className = `verdict-pill verdict-${level}`;
+    const labels = { safe: '✓ Non toxique', warn: '⚠ Douteux', danger: '✕ Toxique' };
+    verdictPill.textContent = labels[level];
+
+    // Card glow
+    resultCard.classList.remove('card-toxic', 'card-safe');
+    void resultCard.offsetWidth;
+    if (level === 'danger') resultCard.classList.add('card-toxic');
+    else if (level === 'safe') resultCard.classList.add('card-safe');
+
+    // Verdict pill + shake for very toxic
+    if (level === 'danger') {
+      verdictPill.classList.remove('verdict-pulsing');
+      void verdictPill.offsetWidth;
+      verdictPill.classList.add('verdict-pulsing');
+      if (score > 75) {
+        gaugeWrap.classList.remove('shake');
+        void gaugeWrap.offsetWidth;
+        gaugeWrap.classList.add('shake');
+      }
+    }
+
+    const descs = {
+      safe: 'Ce texte ne présente pas de signal de toxicité significatif.',
+      warn: 'Ce texte contient des éléments potentiellement problématiques — à modérer.',
+      danger: 'Ce texte est classifié comme toxique. Un score élevé indique un contenu agressif ou haineux.',
+    };
+    resultDesc.textContent = descs[level];
+  }
+
+  // ── Mock scoring ───────────────────────────────────────────────────
+  function mockAnalyze(text) {
+    const t = text.toLowerCase();
+    let score = 6;
+    [
+      { words: ['fuck', 'shit', 'bitch', 'cunt', 'asshole', 'bastard', 'whore'], val: 30 },
+      { words: ['hate', 'kill', 'die', 'murder', 'destroy', 'attack', 'threat'], val: 22 },
+      { words: ['idiot', 'stupid', 'moron', 'loser', 'pathetic', 'worthless', 'ugly', 'dumb'], val: 16 },
+      { words: ['terrible', 'awful', 'disgusting', 'horrible', 'trash', 'scum'], val: 11 },
+    ].forEach(({ words, val }) => words.forEach(w => { if (t.includes(w)) score += val; }));
+    ['thank', 'please', 'great', 'love', 'wonderful', 'amazing', 'kind', 'good', 'nice', 'appreciate']
+      .forEach(w => { if (t.includes(w)) score -= 7; });
+    score = Math.max(2, Math.min(97, score));
+    return { score: parseFloat(score.toFixed(1)), toxic: score > 50, mock: true };
+  }
+
+  // ── API call ───────────────────────────────────────────────────────
+  async function callAPI(text) {
+    const res = await fetch(`${cfg.url}/score`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.key },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Erreur HTTP ${res.status}`);
+    }
+    return { ...(await res.json()), mock: false };
+  }
+
+  // ── Main analyze ───────────────────────────────────────────────────
+  async function analyze() {
+    const text = textarea.value.trim();
+    if (!text) return;
+
+    btnAnalyze.disabled = true;
+    btnAnalyze.innerHTML = '<span class="spinner"></span> Analyse…';
+    errorBox.hidden = true;
+
+    // Show scanning state
+    placeholder.hidden = true;
+    resultContent.hidden = false;
+    setScanningGauge(true);
+
+    let result;
+    try {
+      result = await callAPI(text);
+      isDemoMode = false;
+      updateStatus('ok');
+    } catch (e) {
+      if (e.name === 'TypeError' || e.name === 'AbortError') {
+        // Network/CORS error → fallback to mock
+        result = mockAnalyze(text);
+        isDemoMode = true;
+        updateStatus('demo');
+      } else {
+        setScanningGauge(false);
+        errorBox.textContent = e.message;
+        errorBox.hidden = false;
+        updateStatus('err');
+        btnAnalyze.disabled = false;
+        btnAnalyze.innerHTML = '<svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="6"/><path d="M5 7h4M7 5l2 2-2 2"/></svg> Analyser';
+        return;
+      }
+    }
+    setScanningGauge(false);
+
+    showResult(result, text);
+
+    // Add to history
+    history.unshift({ text, score: result.score, toxic: result.toxic, mock: result.mock, ts: Date.now() });
+    save();
+    renderHistory();
+
+    btnAnalyze.disabled = false;
+    btnAnalyze.innerHTML = '<svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="6"/><path d="M5 7h4M7 5l2 2-2 2"/></svg> Analyser';
+  }
+
+  const labelsBreakdown  = $('labels-breakdown');
+  const preprocessWrap  = $('preprocess-wrap');
+  const ppBody          = $('pp-body');
+  const ppDot           = $('pp-dot');
+  const ppLabelEl       = $('pp-label');
+
+  // Highlight anonymisation tokens like [EMAIL], [URL], [NOM]…
+  function highlightTokens(text) {
+    return text.replace(/\[(EMAIL|URL|IP|PHONE|PSEUDO|ADDRESS|NOM|PERSON|ORG|LOC)\]/g,
+      '<span class="pp-token">[$1]</span>');
+  }
+
+  let _ppTimer = null;
+  function typewritePreprocess(text, onDone) {
+    clearTimeout(_ppTimer);
+    ppBody.innerHTML = '';
+    preprocessWrap.hidden = false;
+    ppDot.className = 'preprocess-dot';
+    ppLabelEl.textContent = 'Traitement en cours…';
+
+    const cursor = document.createElement('span');
+    cursor.className = 'preprocess-cursor';
+
+    let i = 0;
+    const delay = Math.max(18, Math.min(45, 1200 / text.length));
+
+    function tick() {
+      if (i < text.length) {
+        i++;
+        const slice = text.slice(0, i);
+        ppBody.innerHTML = highlightTokens(slice);
+        ppBody.appendChild(cursor);
+        _ppTimer = setTimeout(tick, delay);
+      } else {
+        ppBody.innerHTML = highlightTokens(text);
+        ppDot.className = 'preprocess-dot done';
+        ppLabelEl.textContent = 'Texte prétraité (anonymisé + nettoyé)';
+        if (onDone) onDone();
+      }
+    }
+    tick();
+  }
+
+  const LABEL_NAMES = {
+    toxic:         'Toxique',
+    severe_toxic:  'Très toxique',
+    obscene:       'Obscène',
+    threat:        'Menace',
+    insult:        'Insulte',
+    identity_hate: 'Haine identitaire',
+  };
+
+  function labelColor(p) {
+    if (p >= 0.6) return 'var(--danger-bar)';
+    if (p >= 0.25) return 'var(--warn-bar)';
+    return 'var(--safe-bar)';
+  }
+
+  function showResult(result, text) {
+    placeholder.hidden = true;
+    resultContent.hidden = false;
+
+    // Animate gauge after a tick so transition fires
+    requestAnimationFrame(() => { requestAnimationFrame(() => { setGauge(result.score); }); });
+    // Verdict slightly delayed for drama
+    setTimeout(() => setVerdict(result.score, result.toxic), 200);
+
+    const src = result.mock ? '(Mode démo — API non joignable)' : `(via ${cfg.url})`;
+    resultMeta.textContent = `Score : ${result.score}/100 · ${src}`;
+
+    // Preprocessed text typewriter
+    if (result.preprocessed_text && !result.mock) {
+      typewritePreprocess(result.preprocessed_text);
+    } else {
+      preprocessWrap.hidden = true;
+    }
+
+    // Label breakdown
+    const lblData = result.labels;
+    if (lblData && Object.keys(lblData).length) {
+      labelsBreakdown.hidden = false;
+      labelsBreakdown.innerHTML = Object.entries(LABEL_NAMES).map(([key, name]) => {
+        const p = lblData[key] ?? 0;
+        const pct = Math.round(p * 100);
+        const color = labelColor(p);
+        return `<div class="label-row">
+          <span class="label-name">${name}</span>
+          <div class="label-track"><div class="label-fill" style="width:0%;background:${color}" data-pct="${pct}"></div></div>
+          <span class="label-pct">${pct}%</span>
+        </div>`;
+      }).join('');
+      // Animate bars after render
+      setTimeout(() => {
+        labelsBreakdown.querySelectorAll('.label-fill').forEach(el => {
+          el.style.width = el.dataset.pct + '%';
+        });
+      }, 80);
+    } else {
+      labelsBreakdown.hidden = true;
+    }
+  }
+
+  // ── History render ─────────────────────────────────────────────────
+  function scoreColor(s) {
+    return s < 33 ? 'var(--safe-fg)' : s < 67 ? 'var(--warn-fg)' : 'var(--danger-fg)';
+  }
+
+  function renderHistory() {
+    if (!history.length) {
+      historyList.innerHTML = '<div class="empty-hint">Aucune analyse pour l\'instant.</div>';
+      return;
+    }
+    historyList.innerHTML = history.slice(0, 10).map((h, i) => {
+      const level = h.score < 33 ? 'safe' : h.score < 67 ? 'warn' : 'danger';
+      return `
+        <div class="hist-item" data-idx="${i}" role="button" tabindex="0">
+          <span class="hist-text">${escHtml(h.text.slice(0, 100))}</span>
+          <span class="hist-score" style="color:${scoreColor(h.score)}">${Math.round(h.score)}</span>
+          <span class="hist-badge verdict-${level}">${level === 'safe' ? 'OK' : level === 'warn' ? '⚠' : '✕'}</span>
+        </div>`;
+    }).join('');
+
+    historyList.querySelectorAll('.hist-item').forEach((el, i) => {
+      el.style.animationDelay = (i * 0.05) + 's';
+      el.addEventListener('click', () => {
+        const idx = +el.dataset.idx;
+        const h = history[idx];
+        textarea.value = h.text;
+        textarea.dispatchEvent(new Event('input'));
+        showResult(h, h.text);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { setGauge(h.score); }); });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Analyze button ─────────────────────────────────────────────────
+  btnAnalyze.addEventListener('click', analyze);
+  textarea.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') analyze();
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────
+  load();
+
+  const savedTheme = localStorage.getItem('dss-theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+
+  // Populate config inputs
+  $('cfg-url').value = cfg.url;
+  $('cfg-key').value = cfg.key;
+  updateStatus(null);
+  renderHistory();
+
+  // Reload last result if available
+  if (history.length) {
+    const last = history[0];
+    textarea.value = last.text;
+    textarea.dispatchEvent(new Event('input'));
+    showResult(last, last.text);
+    requestAnimationFrame(() => { requestAnimationFrame(() => { setGauge(last.score); }); });
+  }
+})();
+</script>
