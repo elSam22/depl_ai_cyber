@@ -711,6 +711,27 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
     </div>
   </div>
 
+  <!-- Performances du modèle -->
+  <div class="card" id="metrics-card">
+    <div class="card-label">Performances du modèle</div>
+    <div style="padding:4px 0 16px; font-size:13px; color:var(--fg-muted);">
+      Évaluation sur 10 000 commentaires du jeu de test Jigsaw (échantillon stratifié, ~10 % de positifs)
+    </div>
+
+    <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-subtle); margin-bottom:10px;">
+      AUC-PR par label — DistilBERT (modèle déployé)
+    </div>
+    <div id="roc-bars" style="display:flex; flex-direction:column; gap:8px; margin-bottom:24px;"></div>
+
+    <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-subtle); margin-bottom:10px;">
+      Comparaison — AUC-PR global (test)
+    </div>
+    <div id="model-compare" style="display:flex; flex-direction:column; gap:8px;"></div>
+    <div style="margin-top:12px; font-size:11px; color:var(--fg-subtle); line-height:1.5;">
+      L'AUC-PR (aire sous la courbe précision-rappel) est plus adaptée aux données déséquilibrées. Elle pénalise les faux positifs, contrairement au ROC-AUC. 1.0 = parfait · valeur de référence ≈ prévalence du label.
+    </div>
+  </div>
+
   <!-- History card -->
   <div class="card" id="history-card">
     <div class="card-label">Historique</div>
@@ -1196,6 +1217,49 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
   textarea.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') analyze();
   });
+
+  // ── Métriques AUC-PR ───────────────────────────────────────────────
+  const AP_DISTILBERT = {
+    'Toxique':           0.7240,
+    'Très toxique':      0.3791,
+    'Obscène':           0.7699,
+    'Menace':            0.5022,
+    'Insulte':           0.6563,
+    'Haine identitaire': 0.5076,
+  };
+  const MODEL_COMPARE = [
+    { name: 'DistilBERT', ap: 0.5899, deployed: true  },
+    { name: 'BiLSTM',     ap: 0.3622, deployed: false },
+  ];
+
+  (function renderMetrics() {
+    const rocBars = document.getElementById('roc-bars');
+    rocBars.innerHTML = Object.entries(AP_DISTILBERT).map(([name, val]) => {
+      const pct = Math.round(val * 100 * 10) / 10;
+      return `<div class="label-row">
+        <span class="label-name">${name}</span>
+        <div class="label-track"><div class="label-fill" style="width:0%;background:var(--accent)" data-pct="${val * 100}"></div></div>
+        <span class="label-pct">${pct.toFixed(1)}%</span>
+      </div>`;
+    }).join('');
+
+    const modelCmp = document.getElementById('model-compare');
+    modelCmp.innerHTML = MODEL_COMPARE.map(m => {
+      const pct = (m.ap * 100).toFixed(1);
+      const badge = m.deployed ? `<span style="font-size:10px;background:var(--accent-subtle);color:var(--accent);padding:1px 7px;border-radius:20px;font-weight:600;margin-left:6px;">déployé</span>` : '';
+      return `<div class="label-row">
+        <span class="label-name">${m.name}${badge}</span>
+        <div class="label-track"><div class="label-fill" style="width:0%;background:var(--accent)" data-pct="${m.ap * 100}"></div></div>
+        <span class="label-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+
+    setTimeout(() => {
+      document.querySelectorAll('#metrics-card .label-fill').forEach(el => {
+        el.style.width = el.dataset.pct + '%';
+      });
+    }, 120);
+  })();
 
   // ── Init ───────────────────────────────────────────────────────────
   load();

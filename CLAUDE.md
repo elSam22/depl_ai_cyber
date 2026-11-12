@@ -38,6 +38,12 @@ Cette section est écrite automatiquement par la dernière cellule de `notebooks
 
 <!-- RESULTATS:DEBUT -->
 
-Pas encore de résultats : `notebooks/train.ipynb` n'a pas été exécuté.
+Macro-moyenne sur les 6 labels, seuil 0.5. **val** = 20 % de train (graine 42) ; **test** = test officiel Kaggle sans les lignes à -1.
+
+| modèle | entraînement (s) | précision (val) | rappel (val) | F1 (val) | ROC-AUC (val) | ms/commentaire (val) | lignes (val) | précision (test) | rappel (test) | F1 (test) | ROC-AUC (test) | ms/commentaire (test) | lignes (test) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| BiLSTM | 88.09 | 0.2785 | 0.9402 | 0.3909 | 0.9765 | 0.08272 | 3.192e+04 | 0.1692 | 0.9483 | 0.2668 | 0.9645 | 0.08398 | 6.398e+04 |
+| DistilBERT | 1710 | 0.3213 | 0.9545 | 0.4388 | 0.9853 | 9.081 | 3.192e+04 | 0.1989 | 0.9668 | 0.3095 | 0.9778 | 8.336 | 6.398e+04 |
+| LAYA (zéro-shot) | 0 | 0.3663 | 0.8811 | 0.4307 | 0.9661 | 416.9 | 2000 | 0.2436 | 0.8999 | 0.3325 | 0.9714 | 417.3 | 2000 |
 
 <!-- RESULTATS:FIN -->
