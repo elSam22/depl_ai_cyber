@@ -756,9 +756,8 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
       const c = localStorage.getItem('dss-cfg');
       if (c) {
         const stored = JSON.parse(c);
-        // Reset stale default key
-        if (stored.key === 'cle-dev-changer-en-prod') stored.key = '';
-        cfg = { ...DEFAULT_CFG, ...stored };
+        // La clé API n'est jamais persistée — on ne la recharge pas
+        cfg = { ...DEFAULT_CFG, url: stored.url || DEFAULT_CFG.url };
       }
       const h = localStorage.getItem('dss-hist');
       if (h) history = JSON.parse(h);
@@ -767,7 +766,8 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
 
   function save() {
     try {
-      localStorage.setItem('dss-cfg', JSON.stringify(cfg));
+      // On ne sauvegarde que l'URL, jamais la clé API
+      localStorage.setItem('dss-cfg', JSON.stringify({ url: cfg.url }));
       localStorage.setItem('dss-hist', JSON.stringify(history.slice(0, 20)));
     } catch {}
   }
@@ -816,8 +816,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
 
   $('btn-save-cfg').addEventListener('click', () => {
     const url = $('cfg-url').value.trim() || DEFAULT_CFG.url;
-    const key = $('cfg-key').value.trim() || DEFAULT_CFG.key;
-    cfg = { url, key };
+    cfg = { url, key: '' }; // la clé n'est pas persistée dans cfg
     save();
     updateStatus(null);
     configFields.classList.remove('visible');
@@ -1011,7 +1010,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
   async function callAPI(text) {
     const res = await fetch(`${cfg.url}/score`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.key },
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': $('cfg-key').value.trim() },
       body: JSON.stringify({ text }),
       signal: AbortSignal.timeout(8000),
     });
@@ -1269,7 +1268,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
 
   // Populate config inputs
   $('cfg-url').value = cfg.url;
-  $('cfg-key').value = cfg.key;
+  // cfg-key intentionnellement vide au démarrage : la clé n'est pas persistée
   updateStatus(null);
   renderHistory();
 
