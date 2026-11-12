@@ -376,6 +376,63 @@ textarea::placeholder { color: var(--fg-subtle); }
 }
 .num-pop { animation: numPop .5s cubic-bezier(.34,1.56,.64,1) forwards; }
 
+/* Pipeline steps */
+.pipeline {
+  display: flex; flex-direction: column; gap: 0;
+  margin-bottom: 18px;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.pipeline-step {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background .3s;
+}
+.pipeline-step:last-child { border-bottom: none; }
+.pipeline-step.ps-idle   { opacity: .45; }
+.pipeline-step.ps-active { background: var(--surface-2); opacity: 1; }
+.pipeline-step.ps-done   { opacity: 1; }
+
+.ps-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  background: var(--border); color: var(--fg-muted);
+  transition: background .3s, color .3s;
+  flex-shrink: 0;
+}
+.pipeline-step.ps-active .ps-num {
+  background: var(--accent); color: var(--accent-fg);
+  animation: pspin .6s linear infinite;
+}
+@keyframes pspin {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+  50%  { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.pipeline-step.ps-done .ps-num {
+  background: var(--safe-bar); color: #fff;
+}
+
+.ps-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ps-name { font-size: 13px; font-weight: 600; color: var(--fg); }
+.ps-desc { font-size: 11px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ps-status {
+  font-size: 11px; font-weight: 600; color: var(--fg-subtle);
+  white-space: nowrap;
+}
+.pipeline-step.ps-active .ps-status { color: var(--accent); }
+.pipeline-step.ps-done   .ps-status { color: var(--safe-bar); }
+
+.ps-check { display: none; }
+.pipeline-step.ps-done .ps-check { display: inline; }
+.pipeline-step.ps-done .ps-dots  { display: none; }
+.ps-dots { display: inline; }
+
 /* Preprocessing reveal */
 .preprocess-box {
   margin-top: 14px;
@@ -581,6 +638,33 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
       <p>Entrez un texte et cliquez sur <strong>Analyser</strong> pour obtenir le score de toxicité.</p>
     </div>
     <div id="result-content" hidden>
+      <!-- Pipeline -->
+      <div class="pipeline" id="pipeline" style="margin-bottom:18px">
+        <div class="pipeline-step ps-idle" id="ps-1">
+          <div class="ps-num">1</div>
+          <div class="ps-info">
+            <span class="ps-name">Anonymisation</span>
+            <span class="ps-desc">Masquage des données personnelles (NER + regex)</span>
+          </div>
+          <span class="ps-status"><span class="ps-dots">—</span><span class="ps-check">✓</span></span>
+        </div>
+        <div class="pipeline-step ps-idle" id="ps-2">
+          <div class="ps-num">2</div>
+          <div class="ps-info">
+            <span class="ps-name">Nettoyage du texte</span>
+            <span class="ps-desc">Minuscules · suppression emojis et ponctuation</span>
+          </div>
+          <span class="ps-status"><span class="ps-dots">—</span><span class="ps-check">✓</span></span>
+        </div>
+        <div class="pipeline-step ps-idle" id="ps-3">
+          <div class="ps-num">3</div>
+          <div class="ps-info">
+            <span class="ps-name">Inférence DistilBERT</span>
+            <span class="ps-desc">Tokenisation + classification multi-label (6 labels)</span>
+          </div>
+          <span class="ps-status"><span class="ps-dots">—</span><span class="ps-check">✓</span></span>
+        </div>
+      </div>
       <div class="result-layout">
         <div class="gauge-wrap">
           <svg id="gauge-svg" viewBox="0 0 170 100" width="170" height="100">
@@ -640,7 +724,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
 <script>
 (function () {
   // ── State ──────────────────────────────────────────────────────────
-  const DEFAULT_CFG = { url: 'http://localhost:8001', key: '6b9652c7c4008aaed11572e247d47e8f8f45e62aac2bd7af0ae3be82937a9fed' };
+  const DEFAULT_CFG = { url: 'http://localhost:8001', key: '' };
   let cfg = { ...DEFAULT_CFG };
   let history = [];
   let isDemoMode = false;
@@ -652,7 +736,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
       if (c) {
         const stored = JSON.parse(c);
         // Reset stale default key
-        if (stored.key === 'cle-dev-changer-en-prod') stored.key = DEFAULT_CFG.key;
+        if (stored.key === 'cle-dev-changer-en-prod') stored.key = '';
         cfg = { ...DEFAULT_CFG, ...stored };
       }
       const h = localStorage.getItem('dss-hist');
@@ -808,6 +892,37 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
     });
   }
 
+  // ── Pipeline animation ─────────────────────────────────────────────
+  const pSteps = [1, 2, 3].map(i => document.getElementById(`ps-${i}`));
+  let _pipeTimers = [];
+
+  function pipelineReset() {
+    _pipeTimers.forEach(clearTimeout); _pipeTimers = [];
+    pSteps.forEach(s => s.className = 'pipeline-step ps-idle');
+  }
+
+  function pipelineStart() {
+    pipelineReset();
+    const delays = [0, 700, 1500];
+    pSteps.forEach((s, i) => {
+      _pipeTimers.push(setTimeout(() => {
+        // Mark previous done
+        if (i > 0) pSteps[i - 1].className = 'pipeline-step ps-done';
+        s.className = 'pipeline-step ps-active';
+        s.querySelector('.ps-dots').textContent = '…';
+      }, delays[i]));
+    });
+  }
+
+  function pipelineDone() {
+    _pipeTimers.forEach(clearTimeout); _pipeTimers = [];
+    pSteps.forEach((s, i) => {
+      _pipeTimers.push(setTimeout(() => {
+        s.className = 'pipeline-step ps-done';
+      }, i * 120));
+    });
+  }
+
   function setScanningGauge(on) {
     gaugeWrap.classList.toggle('gauge-scanning', on);
     if (on) {
@@ -819,6 +934,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
       ppDot.className = 'preprocess-dot';
       ppLabelEl.textContent = 'Anonymisation et nettoyage…';
       ppBody.innerHTML = '<span class="preprocess-cursor"></span>';
+      pipelineStart();
     }
   }
 
@@ -912,6 +1028,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
         updateStatus('demo');
       } else {
         setScanningGauge(false);
+        pipelineReset();
         errorBox.textContent = e.message;
         errorBox.hidden = false;
         updateStatus('err');
@@ -1002,6 +1119,7 @@ textarea.live-danger { border-color: rgba(239,68,68,.5);  box-shadow: 0 0 0 3px 
 
     const src = result.mock ? '(Mode démo — API non joignable)' : `(via ${cfg.url})`;
     resultMeta.textContent = `Score : ${result.score}/100 · ${src}`;
+    pipelineDone();
 
     // Preprocessed text typewriter
     if (result.preprocessed_text && !result.mock) {
