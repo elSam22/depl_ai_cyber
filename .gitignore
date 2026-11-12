@@ -1,10 +1,33 @@
 .DS_Store
 .venv/
+
+# Données générées et modèles (voir CLAUDE.md)
 data/anonymise/
 data/clean/
 models/
-api/model/*.safetensors
-api/model/*.bin
-api/__pycache__/
-logs/
+
+# Python
 __pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Modèle copié pour le déploiement par api/export_model.py (poids lourds, régénérables)
+api/model/*
+!api/model/.gitkeep
+
+# Journaux de l'API (pseudonymisés, mais à ne pas publier : dépôt public)
+logs/
+
+# Archives envoyées à l'équipe (contiennent le modèle : plusieurs centaines de Mo)
+*.tar.gz
+envoi_collaborateur/
+
+# Secrets : une clé d'API ne doit jamais entrer dans le dépôt
+.env
+.env.*
+*.pem
+*.key
+
+# Test de charge : on garde les CSV et les images du rapport, pas la sortie console de Locust
+loadtest/results/*_console.txt

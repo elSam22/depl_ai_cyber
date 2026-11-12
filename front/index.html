@@ -1,0 +1,1231 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digital Social Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eceef2;
+    --card: #ffffff;
+    --ink: #15151c;
+    --muted: #5f6372;
+    --line: #e6e8ee;
+    --accent: #6a59e8;
+    --accent-soft: #ece9fd;
+    --accent-ink: #4a3dc4;
+    --ok: #22c55e;
+    --bad: #ef4444;
+    --radius: 24px;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 40px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; display: grid; gap: 20px; transition: max-width .3s; }
+  body.pipe main { max-width: 1240px; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 28px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: 13px; margin: 0 0 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .hidden { display: none !important; }
+
+  /* ---------- en-tête / choix de l'API / mode ---------- */
+  .head { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+  .tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .seg { display: inline-flex; background: #f1f2f6; border-radius: 999px; padding: 4px; gap: 2px; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label {
+    padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; cursor: pointer;
+    color: var(--muted); transition: all .2s; user-select: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .seg input:checked + label { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(20,20,40,.12); }
+  .seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .seg input:disabled + label { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+  .seg.mode input:checked + label { background: var(--ink); color: #fff; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #c4c7d0; display: inline-block; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 4px rgba(34,197,94,.18); }
+  .dot.off { background: var(--bad); box-shadow: 0 0 0 4px rgba(239,68,68,.15); }
+  .remote { display: none; grid-template-columns: 2fr 1.4fr; gap: 12px; margin-top: 18px; }
+  .remote.show { display: grid; animation: drop .25s ease; }
+  .modelbar { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .modelbar .field-label { margin: 0; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
+  @media (max-width: 560px) { .remote { grid-template-columns: 1fr; } .card { padding: 20px 18px; } }
+
+  input[type=text], input[type=password], input[type=url], textarea {
+    width: 100%; font: inherit; font-size: 15px; color: var(--ink);
+    border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; background: #fafbfc;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+  }
+  textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); background: #fff; }
+  .field-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; display: block; }
+
+  /* ---------- saisie (classique) ---------- */
+  .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 16px; }
+  .count { font-size: 12px; color: var(--muted); text-align: right; margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip { font: inherit; font-size: 13px; border: 1px solid var(--line); background: #fff; color: var(--muted);
+    padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: all .15s; }
+  .chip:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+  button.go {
+    font: inherit; font-weight: 600; font-size: 15px; color: #fff; background: var(--accent); border: 0;
+    padding: 13px 28px; border-radius: 14px; cursor: pointer; display: inline-flex; gap: 10px; align-items: center;
+    box-shadow: 0 2px 6px rgba(20,20,40,.18); transition: transform .15s, box-shadow .15s, opacity .2s;
+  }
+  button.go:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(20,20,40,.22); }
+  button.go:disabled { opacity: .6; cursor: progress; }
+  .spin { width: 16px; height: 16px; border: 2.5px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: rot .7s linear infinite; display: none; }
+  .busy .spin { display: inline-block; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .msg { margin-top: 14px; font-size: 14px; border-radius: 12px; padding: 10px 14px; display: none; }
+  .msg.show { display: block; }
+  .msg.err { background: #fff1f1; color: #b42323; }
+  .msg.info { background: var(--accent-soft); color: var(--accent-ink); }
+
+  /* ---------- prétraitement animé (partagé) ---------- */
+  .steps { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .step { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #6a6e7d; transition: color .3s; }
+  .step i { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #d7dae3; display: grid; place-items: center;
+    font-style: normal; font-size: 12px; font-weight: 700; transition: all .3s; }
+  .step.act { color: var(--accent-ink); }
+  .step.act i { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 0 4px var(--accent-soft); }
+  .step.done { color: var(--ink); }
+  .step.done i { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .bar-sep { flex: 0 0 22px; height: 1.5px; background: #d7dae3; }
+  .stage {
+    font-size: 17px; line-height: 2.1; background: #fafbfc; border: 1.5px dashed var(--line);
+    border-radius: 16px; padding: 18px 20px; min-height: 96px; word-break: break-word;
+  }
+  .w { display: inline-block; white-space: nowrap; }
+  .c { display: inline-block; white-space: pre; transition: opacity .45s, transform .45s, max-width .45s, color .3s, background .3s; max-width: 3em; }
+  .c.gone { opacity: 0; transform: scale(.2); max-width: 0; }
+  .c.flag { color: var(--bad); background: #ffe4e4; border-radius: 4px; }
+  .c.pop { color: var(--accent-ink); background: var(--accent-soft); border-radius: 4px; }
+  .m { display: inline-block; border-radius: 8px; padding: 0 6px; margin: 0 1px; transition: opacity .2s, transform .2s, background .3s, color .3s; }
+  .m.hl { background: #fff3c4; box-shadow: inset 0 -2px 0 #f2b705; }
+  .m.flip { opacity: 0; transform: scale(.75); }
+  .m.pill { background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; padding: 2px 10px; box-shadow: 0 2px 6px rgba(20,20,40,.2); }
+  .caption { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .final { margin-top: 14px; display: none; }
+  .final.show { display: block; animation: drop .4s ease; }
+  .final code { display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; background: #15151c; color: #d8d6ff;
+    border-radius: 14px; padding: 14px 16px; line-height: 1.6; word-break: break-word; }
+  .final code b { color: #fff; background: var(--accent); border-radius: 6px; padding: 1px 7px; font-weight: 600; }
+  button.link { font: inherit; font-size: 13px; background: none; border: 0; color: var(--accent-ink); cursor: pointer; padding: 0; font-weight: 600; }
+  button.link:hover { text-decoration: underline; }
+
+  /* ---------- jauge (partagée) ---------- */
+  .gauge-card { background: radial-gradient(120% 90% at 50% 0%, #efecff 0%, #fff 60%); text-align: center; }
+  .gauge { width: min(100%, 460px); margin: 0 auto; display: block; overflow: visible; }
+  .num { font-size: 58px; font-weight: 600; letter-spacing: -.03em; }
+  .verdict { font-size: 22px; font-weight: 600; margin-top: -6px; transition: color .3s; }
+  .detail { color: var(--muted); font-size: 14px; margin-top: 4px; min-height: 20px; }
+
+  /* ---------- barres des labels (partagées) ---------- */
+  .lbl { display: grid; grid-template-columns: 150px 1fr 74px; gap: 14px; align-items: center; padding: 9px 0; }
+  .lbl + .lbl { border-top: 1px solid var(--line); }
+  .lbl .name { font-weight: 600; font-size: 14px; }
+  .lbl .name small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .track { position: relative; height: 12px; border-radius: 999px; background: #eef0f5; }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px; background: #c9c5f3; }
+  .lbl.true .fill { background: linear-gradient(90deg, #9d8ff7, var(--accent)); }
+  .tick { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); border-radius: 2px; opacity: .55; }
+  .pct { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 15px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: 1px;
+    background: var(--ink); color: #fff; opacity: 0; transition: opacity .4s; }
+  .lbl.true.show .tag { opacity: 1; }
+  .legend { margin-top: 12px; font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+  .legend span::before { content: ""; display: inline-block; width: 2px; height: 11px; background: var(--ink); opacity: .55; margin-right: 6px; vertical-align: -1px; }
+  .meta { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .compact .lbl { grid-template-columns: 1fr 60px; gap: 6px 10px; padding: 7px 0; }
+  .compact .lbl .track { grid-column: 1 / -1; order: 3; }
+  .compact .lbl .name { font-size: 13px; }
+  .compact .lbl .name small { display: none; }
+  .compact .lbl .pct { font-size: 14px; }
+  @media (max-width: 560px) { .lbl { grid-template-columns: 1fr 64px; } .lbl .track { grid-column: 1 / -1; order: 3; } }
+
+  /* =================== MODE PIPELINE =================== */
+  .pipe-sec { padding: 0 4px; }   /* pas de carte englobante : les 4 stations sont les cartes */
+  .pipe-wrap { position: relative; }
+  .trail { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 18px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .trail span { padding: 6px 14px; border-radius: 999px; background: #f1f2f6; transition: all .3s; }
+  .trail span.act { background: var(--accent); color: #fff; }
+  .trail span.done { background: var(--ink); color: #fff; }
+  .trail .sp { margin-left: auto; display: flex; gap: 10px; }
+  .stations { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; position: relative; }
+  .st { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; border: 1px solid var(--line); }
+  .st h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .st h3 b { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-size: 12px; }
+  .st.live { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+  @media (max-width: 1100px) { .stations { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .stations { grid-template-columns: 1fr; } }
+
+  /* message */
+  .bulle { position: relative; border: 1.5px solid var(--line); background: #fafbfc; border-radius: 20px 20px 20px 6px; padding: 10px 10px 54px; transition: all .5s; }
+  .bulle textarea { border: 0; background: transparent; min-height: 150px; padding: 6px; box-shadow: none; transition: opacity .35s; }
+  .bulle textarea:focus { box-shadow: none; background: transparent; }
+  .bulle:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .bulle .parti { display: none; position: absolute; inset: 0; place-items: center; color: var(--muted); font-style: italic; font-size: 14px; }
+  .bulle.sent { border-style: dashed; background: transparent; box-shadow: none; }
+  .bulle.sent textarea { opacity: 0; pointer-events: none; }
+  .bulle.sent .parti { display: grid; }
+  .send { position: absolute; right: 10px; bottom: 10px; width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--accent); color: #fff;
+    cursor: pointer; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(20,20,40,.22); transition: transform .15s, opacity .2s; }
+  .send:hover:not(:disabled) { transform: scale(1.08); }
+  .send:disabled { opacity: .45; cursor: progress; }
+  .bulle.sent .send { opacity: 0; }
+  .send svg { width: 20px; height: 20px; }
+  .astuce { position: absolute; left: 14px; bottom: 18px; font-size: 11px; color: var(--muted); }
+  .bulle.sent .astuce { display: none; }
+
+  /* algorithme */
+  .ringbox { display: grid; place-items: center; padding: 4px 0; }
+  .ring { width: 96px; height: 96px; }
+  .ring .r1, .ring .r2 { transform-origin: 48px 48px; }
+  .busy-ring .r1 { animation: rot 2.4s linear infinite; }
+  .busy-ring .r2 { animation: rot 3.6s linear infinite reverse; }
+  .pips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .pip { font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px; background: #f1f2f6; color: var(--muted); transition: all .3s; }
+  .pip.act { background: var(--accent); color: #fff; }
+  .pip.done { background: var(--ink); color: #fff; }
+  .st .stage { font-size: 14px; line-height: 1.9; padding: 12px 14px; min-height: 90px; }
+  .st .stage .m.pill { font-size: 12px; }
+  .st .caption { margin-top: 0; font-size: 12px; }
+  .st .final { margin-top: 0; }
+  .st .final code { font-size: 12px; padding: 10px 12px; }
+  .st .final code b { padding: 0 5px; }
+
+  /* modèle (réseau de neurones) */
+  .modele-nom { align-self: flex-start; font-size: 13px; font-weight: 700; background: var(--accent-soft); color: var(--accent-ink); padding: 4px 12px; border-radius: 999px; }
+  .net { width: 100%; height: auto; display: block; overflow: visible; }
+  .net line { stroke: #d9dbe6; stroke-width: 1; transition: stroke .35s, stroke-width .35s; }
+  .net line.on { stroke: var(--accent); stroke-width: 1.6; }
+  .net circle { fill: #fff; stroke: #c3c6d4; stroke-width: 1.5; transition: fill .3s, stroke .3s, fill-opacity .6s; }
+  .net circle.on { fill: var(--accent-soft); stroke: var(--accent); }
+  .net circle.out { stroke: var(--accent); }
+  .net circle.true { stroke: var(--ink); stroke-width: 3; }
+  .net text { font-size: 9.5px; fill: var(--muted); font-family: inherit; }
+  .net text.true { fill: var(--ink); font-weight: 700; }
+
+  /* résultat */
+  .st .gauge-card { background: none; }
+  .st .num { font-size: 56px; }
+  .st .verdict { font-size: 19px; }
+
+  /* objet qui voyage entre les stations */
+  .fly { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; opacity: 0; will-change: transform; }
+  .fly svg.env { width: 84px; height: 60px; display: none; overflow: visible; filter: drop-shadow(0 4px 6px rgba(20,20,40,.18)); }
+  .fly.is-env svg.env { display: block; }
+  .env .eb { fill: #fff; stroke: #15151c; stroke-width: 2; }
+  .env .ev { fill: none; stroke: #15151c; stroke-width: 1.6; }
+  .env .flap { fill: #ece9fd; stroke: #15151c; stroke-width: 2; transform-origin: 42px 10px; transform: scaleY(-1); transition: transform .5s ease; }
+  .env.closed .flap { transform: scaleY(1); }
+  .env .seal { fill: var(--accent); opacity: 0; transition: opacity .3s .4s; }
+  .env.closed .seal { opacity: 1; }
+  .fly .ticket { display: none; width: 150px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; line-height: 1.4; box-shadow: 0 4px 10px rgba(20,20,40,.2); }
+  .fly .ticket::before { content: "TEXTE NETTOYÉ"; display: block; font-family: "DM Sans", sans-serif; font-size: 9px; font-weight: 700; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px; }
+  .fly.is-ticket .ticket { display: block; }
+
+  /* ---------- historique / exemples ---------- */
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+  .tab { font: inherit; font-size: 14px; font-weight: 600; border: 0; background: #f1f2f6; color: var(--muted); padding: 8px 16px; border-radius: 999px; cursor: pointer; }
+  .tab[aria-selected=true] { background: var(--ink); color: #fff; }
+  .tabs .link { margin-left: auto; }
+  .hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 340px; overflow: auto; }
+  .hist li { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; background: #fff;
+    transition: border-color .15s, background .15s; }
+  .hist li:hover, .hist li:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+  .hist .sc { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 15px; color: #fff; }
+  .hist .tx { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .hist .tx small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
+  .hist .mo { font-size: 12px; color: var(--muted); text-align: right; }
+  .vide { color: var(--muted); font-size: 14px; padding: 8px 2px; }
+  .note { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .ex-groupe { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 8px; }
+  .ex-groupe:first-child { margin-top: 0; }
+  .ex-liste { display: grid; gap: 8px; }
+  .ex { text-align: left; font: inherit; font-size: 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; cursor: pointer; color: var(--ink); transition: all .15s; }
+  .ex:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  /* stop, durées, fenêtre de détail */
+  button.stop { font: inherit; font-weight: 600; font-size: 15px; color: #b42323; background: #fff; border: 1.5px solid #f3c4c4; padding: 12px 20px; border-radius: 14px; cursor: pointer; }
+  button.stop:hover { background: #fff1f1; }
+  .durees { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+  .st .durees { justify-content: flex-start; }
+  .dur { font-size: 12px; color: var(--muted); background: #f1f2f6; border-radius: 999px; padding: 4px 11px; font-variant-numeric: tabular-nums; }
+  .dur b { color: var(--ink); font-weight: 700; }
+  .dur.tot { background: var(--ink); color: #cfd0d8; }
+  .dur.tot b { color: #fff; }
+  .step small { font-size: 12px; color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .modele-ligne { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  dialog { border: 0; border-radius: var(--radius); padding: 0; width: min(680px, calc(100% - 32px)); max-height: calc(100% - 40px); color: var(--ink); box-shadow: 0 24px 80px rgba(0,0,0,.3); }
+  dialog::backdrop { background: rgba(20,20,28,.5); }
+  .dlg { padding: 26px 28px; display: grid; gap: 16px; }
+  .dlg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .dlg-head h3 { margin: 0; font-size: 18px; }
+  .dlg-head .sub { margin-top: 2px; }
+  .dlg .x { font: inherit; font-size: 20px; line-height: 1; border: 0; background: #f1f2f6; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: var(--muted); }
+  .dlg .score-ligne { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .dlg .gros { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; font-weight: 700; color: #fff; }
+  .dlg code { display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; background: #15151c; color: #d8d6ff; border-radius: 12px; padding: 10px 14px; line-height: 1.6; word-break: break-word; }
+  .dlg code b { color: #fff; background: var(--accent); border-radius: 6px; padding: 0 6px; font-weight: 600; }
+  .dlg .actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+  button.sec { font: inherit; font-weight: 600; font-size: 14px; border: 1.5px solid var(--line); background: #fff; color: var(--ink); padding: 11px 18px; border-radius: 14px; cursor: pointer; }
+  button.sec:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- ===== En-tête : titre, mode, API, modèle ===== -->
+  <header class="card">
+    <div class="head">
+      <div>
+        <h1>Digital Social Score</h1>
+        <div class="sub">Détection de toxicité · anonymisation RGPD · score de 0 à 100</div>
+      </div>
+      <div class="tools">
+        <div class="seg mode" role="radiogroup" aria-label="Version de la page">
+          <input type="radio" name="mode" id="mode-classique" value="classique" checked><label for="mode-classique">Classique</label>
+          <input type="radio" name="mode" id="mode-pipeline" value="pipeline"><label for="mode-pipeline">Pipeline ✦</label>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Type d'API">
+          <input type="radio" name="api" id="api-local" value="local" checked>
+          <label for="api-local"><span class="dot" id="statut"></span>API locale</label>
+          <input type="radio" name="api" id="api-remote" value="remote">
+          <label for="api-remote">API distante</label>
+        </div>
+      </div>
+    </div>
+    <div class="remote" id="remote">
+      <div><label class="field-label" for="url">URL de l'API</label>
+        <input type="url" id="url" placeholder="https://mon-api.exemple.fr" autocomplete="off"></div>
+      <div><label class="field-label" for="cle">Clé d'API</label>
+        <input type="password" id="cle" placeholder="••••••••" autocomplete="off"></div>
+    </div>
+    <div class="modelbar">
+      <span class="field-label">Modèle</span>
+      <div class="seg" role="radiogroup" aria-label="Modèle">
+        <input type="radio" name="modele" id="m-bilstm" value="bilstm"><label for="m-bilstm">BiLSTM</label>
+        <input type="radio" name="modele" id="m-distilbert" value="distilbert" checked><label for="m-distilbert">DistilBERT</label>
+        <input type="radio" name="modele" id="m-laya" value="laya"><label for="m-laya">LAYA</label>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== VUE CLASSIQUE ===================== -->
+  <div id="vue-classique" style="display:contents">
+    <section class="card" id="saisie">
+      <h2>Commentaire à analyser</h2>
+      <textarea id="texte" maxlength="5000" placeholder="Écris ou colle un commentaire…"></textarea>
+      <div class="count"><span id="nb">0</span> / 5000</div>
+      <div class="chips" id="exemples"></div>
+      <div class="row">
+        <button class="stop hidden" id="stop" type="button">⏹ Stop</button>
+        <button class="go" id="analyser"><span class="spin"></span><span id="btn-txt">Analyser</span></button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </section>
+
+    <section class="card hidden" id="prep">
+      <h2>Prétraitement du texte</h2>
+      <div class="steps">
+        <span class="step" id="s1"><i>1</i>Original</span><span class="bar-sep"></span>
+        <span class="step" id="s2"><i>2</i>Anonymisation <small id="d2"></small></span><span class="bar-sep"></span>
+        <span class="step" id="s3"><i>3</i>Nettoyage <small id="d3"></small></span>
+      </div>
+      <div class="stage" id="stage" aria-live="polite"></div>
+      <div class="caption"><span id="caption"></span><button class="link" id="rejouer">↻ Rejouer l'animation</button></div>
+      <div class="final" id="final"><span class="field-label">Texte vu par le modèle</span><code id="final-txt"></code></div>
+    </section>
+
+    <section class="card gauge-card hidden" id="score">
+      <h2>Score de toxicité</h2>
+      <svg class="gauge" id="g1" role="img" aria-label="Jauge du score"></svg>
+      <div class="verdict" id="verdict">—</div>
+      <div class="detail" id="detail"></div>
+      <div class="durees" id="durees"></div>
+    </section>
+
+    <section class="card hidden" id="labels">
+      <h2>Probabilité par label</h2>
+      <div id="liste"></div>
+      <div class="legend"><span>seuil de décision du label (au-delà : « true »)</span></div>
+      <div class="meta" id="meta"></div>
+    </section>
+  </div>
+
+  <!-- ===================== VUE PIPELINE ===================== -->
+  <section class="pipe-sec hidden" id="vue-pipeline">
+    <h2>Pipeline de traitement</h2>
+    <div class="trail" id="trail">
+      <span>1 Envoi</span><span>2 Algorithme</span><span>3 Modèle</span><span>4 Résultat</span>
+      <div class="sp">
+        <button class="link hidden" id="p-stop">⏹ Stop</button>
+        <button class="link hidden" id="p-passer">⏭ Passer l'animation</button>
+        <button class="link hidden" id="p-rejouer">↻ Rejouer</button>
+      </div>
+    </div>
+    <div class="msg" id="p-msg"></div>
+
+    <div class="pipe-wrap" id="pipe-wrap">
+      <div class="stations">
+
+        <!-- 1. message -->
+        <div class="st" id="st1">
+          <h3><b>1</b>Message</h3>
+          <div class="bulle" id="p-bulle">
+            <textarea id="p-texte" maxlength="5000" placeholder="Écris ton commentaire…" aria-label="Commentaire"></textarea>
+            <div class="parti">✉ message parti…</div>
+            <span class="astuce">Ctrl/⌘ + Entrée</span>
+            <button class="send" id="p-send" aria-label="Envoyer le commentaire"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></button>
+          </div>
+          <div class="chips" id="p-exemples"></div>
+        </div>
+
+        <!-- 2. algorithme -->
+        <div class="st" id="st2">
+          <h3><b>2</b>Algorithme</h3>
+          <div class="ringbox" id="p-ringbox">
+            <svg class="ring" id="p-ring" viewBox="0 0 96 96" aria-hidden="true">
+              <circle cx="48" cy="48" r="44" fill="none" stroke="#e6e8ee" stroke-width="2"/>
+              <circle class="r1" cx="48" cy="48" r="44" fill="none" stroke="#6a59e8" stroke-width="3" stroke-dasharray="40 24 8 24" stroke-linecap="round"/>
+              <circle class="r2" cx="48" cy="48" r="32" fill="none" stroke="#15151c" stroke-width="2" stroke-dasharray="3 9" stroke-linecap="round"/>
+              <text x="48" y="53" text-anchor="middle" font-size="15" font-weight="700" fill="#15151c" font-family="DM Sans, sans-serif">ALGO</text>
+            </svg>
+          </div>
+          <div class="pips"><span class="pip" id="pp1">Anonymisation</span><span class="pip" id="pp2">Nettoyage</span></div>
+          <div class="stage" id="p-stage" aria-live="polite"></div>
+          <div class="caption"><span id="p-caption"></span></div>
+          <div class="final" id="p-final"><span class="field-label">Texte vu par le modèle</span><code id="p-final-txt"></code></div>
+        </div>
+
+        <!-- 3. modèle -->
+        <div class="st" id="st3">
+          <h3><b>3</b>Modèle</h3>
+          <div class="modele-ligne"><span class="modele-nom" id="p-modele-nom">DistilBERT</span><span class="dur" id="p-duree-modele">Réflexion : <b>—</b></span></div>
+          <svg class="net" id="p-net" viewBox="0 0 300 210" role="img" aria-label="Réseau de neurones"></svg>
+          <div class="caption"><span id="p-net-cap">En attente du texte nettoyé.</span></div>
+        </div>
+
+        <!-- 4. résultat -->
+        <div class="st" id="st4">
+          <h3><b>4</b>Résultat</h3>
+          <div class="gauge-card">
+            <svg class="gauge" id="g2" role="img" aria-label="Jauge du score"></svg>
+            <div class="verdict" id="p-verdict">—</div>
+            <div class="detail" id="p-detail"></div>
+          </div>
+          <div class="durees" id="p-durees"></div>
+          <div class="compact" id="p-liste"></div>
+          <div class="meta" id="p-meta"></div>
+        </div>
+
+      </div>
+
+      <!-- objet qui voyage d'une station à l'autre -->
+      <div class="fly" id="fly" aria-hidden="true">
+        <svg class="env" id="fly-env" viewBox="0 0 84 60">
+          <rect class="eb" x="2" y="10" width="80" height="48" rx="6"/>
+          <polyline class="ev" points="2,56 32,34"/><polyline class="ev" points="82,56 52,34"/>
+          <polygon class="flap" points="2,10 82,10 42,38"/>
+          <circle class="seal" cx="42" cy="38" r="7"/>
+        </svg>
+        <div class="ticket" id="fly-ticket"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== HISTORIQUE / EXEMPLES ===================== -->
+  <section class="card" id="bas">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-hist" aria-selected="true">Historique</button>
+      <button class="tab" role="tab" id="tab-ex" aria-selected="false">Commentaires à tester</button>
+      <button class="link" id="vider">Vider l'historique</button>
+    </div>
+    <div id="pan-hist">
+      <ul class="hist" id="hist"></ul>
+      <div class="note">Pour le RGPD, seule la version <b>anonymisée</b> du texte est conservée, uniquement dans cet onglet (effacée à sa fermeture). Clique sur une ligne pour revoir tout le détail du traitement, modifier le commentaire et le ré-analyser.</div>
+    </div>
+    <div id="pan-ex" class="hidden"></div>
+  </section>
+
+</main>
+
+<!-- détail d'une analyse de l'historique -->
+<dialog id="dlg" aria-labelledby="dlg-titre">
+  <div class="dlg">
+    <div class="dlg-head">
+      <div><h3 id="dlg-titre">Analyse</h3><div class="sub" id="dlg-sous"></div></div>
+      <button class="x" id="dlg-x" aria-label="Fermer">×</button>
+    </div>
+    <div class="score-ligne"><div class="gros" id="dlg-score">0</div><div><div class="verdict" id="dlg-verdict" style="margin:0"></div><div class="detail" id="dlg-detail"></div></div></div>
+    <div class="durees" id="dlg-durees" style="justify-content:flex-start;margin:0"></div>
+    <div><span class="field-label">Texte anonymisé (stocké)</span><code id="dlg-anon"></code></div>
+    <div><span class="field-label">Texte nettoyé (vu par le modèle)</span><code id="dlg-clean"></code></div>
+    <div id="dlg-liste" class="compact"></div>
+    <div>
+      <label class="field-label" for="dlg-edit">Modifier le commentaire pour améliorer le résultat</label>
+      <textarea id="dlg-edit" maxlength="5000" style="min-height:90px"></textarea>
+      <div class="note">Le texte original n'est pas conservé (RGPD) : tu modifies la version anonymisée.</div>
+    </div>
+    <div class="actions">
+      <button class="sec" id="dlg-fermer" type="button">Fermer</button>
+      <button class="go" id="dlg-relancer" type="button">Ré-analyser ce texte</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const LABELS = {
+  toxic: "Toxique", severe_toxic: "Très toxique", obscene: "Obscène",
+  threat: "Menace", insult: "Insulte", identity_hate: "Haine identitaire",
+};
+const COURT = { toxic: "toxic", severe_toxic: "severe", obscene: "obscene", threat: "threat", insult: "insult", identity_hate: "identity" };
+const NOMS_MODELE = { bilstm: "BiLSTM", distilbert: "DistilBERT", laya: "LAYA" };
+
+const EXEMPLES = [
+  ["Gentils", [
+    "Thanks a lot for your help, this article is really well written!",
+    "Great job on the new section, it is clear and well sourced.",
+  ]],
+  ["Insultes", [
+    "You are a pathetic idiot and nobody wants you here.",
+    "What a stupid, worthless moron you are.",
+  ]],
+  ["Menaces", [
+    "I know where you live, I will find you and you will regret this.",
+    "Stop it now or I will hurt you.",
+  ]],
+  ["Haine", [
+    "All people from that country are vermin and should be thrown out.",
+  ]],
+  ["Obscène", [
+    "This is fucking garbage, what the hell is wrong with you?",
+  ]],
+  ["Données personnelles (anonymisation)", [
+    "Hi, I'm John Smith from Google, mail me at john.smith@gmail.com or call 06 12 34 56 78 — this is NONSENSE!!!",
+    "Contact me at marie.dupont@gmail.com, I live at 12 rue de la Paix, Paris. 😡😡",
+  ]],
+  ["Cas pièges (faux positifs possibles)", [
+    "I will kill this boss level tonight, it is so hard!",
+    "You are not stupid, you just made a small mistake.",
+  ]],
+];
+const CHIPS = [["Gentil", EXEMPLES[0][1][0]], ["Insulte", EXEMPLES[1][1][0]], ["Menace", EXEMPLES[2][1][0]], ["Données perso", EXEMPLES[5][1][0]]];
+
+/* ---------- utilitaires ---------- */
+const reduit = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+let rapide = false;                       // « Passer l'animation » : toutes les attentes deviennent instantanées
+let run = 0;                              // numéro de l'analyse en cours : permet d'interrompre une animation périmée
+const sleep = (ms) => (rapide ? Promise.resolve() : new Promise((r) => setTimeout(r, ms)));
+const frame = () => (rapide ? Promise.resolve() : new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 80); }));   // le délai évite de bloquer si l'onglet est en arrière-plan
+const fr = (x, d = 1) => x.toFixed(d).replace(".", ",");
+const ease = (t) => 1 - Math.pow(1 - t, 3);
+const lerp = (a, b, t) => a + (b - a) * t;
+const dms = (x) => (x >= 1000 ? fr(x / 1000, 2) + " s" : x >= 10 ? Math.round(x) + " ms" : fr(x, x < 1 ? 2 : 1) + " ms");
+function dessinerDurees(box, t) {
+  box.replaceChildren();
+  [["Prétraitement", t.pre, ""], ["Réflexion du modèle", t.mod, ""], ["Total", t.total, " tot"]].forEach(([nom, v, cls]) => {
+    const s = document.createElement("span"); s.className = "dur" + cls;
+    s.append(nom + " : "); const b = document.createElement("b"); b.textContent = dms(v); s.appendChild(b);
+    box.appendChild(s);
+  });
+}
+const tempsDe = (d) => ({ pre: d.temps_pretraitement_ms, mod: d.temps_modele_ms, total: d.temps_ms,
+  ano: d.etapes.temps_anonymisation_ms, net: d.etapes.temps_nettoyage_ms });
+
+function animer(duree, f, id) {
+  return new Promise((ok) => {
+    if (rapide) { f(1); return ok(); }
+    const t0 = performance.now();
+    const tick = (t) => {
+      if (id !== run) return ok();
+      if (rapide) { f(1); return ok(); }
+      const p = Math.min((t - t0) / duree, 1);
+      f(ease(p));
+      p < 1 ? requestAnimationFrame(tick) : ok();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+function stockage(cle, val) {            // le stockage du navigateur peut être indisponible : on ne plante jamais
+  try { if (val === undefined) return sessionStorage.getItem(cle); sessionStorage.setItem(cle, val); } catch { return null; }
+}
+
+/* ---------- choix de l'API ---------- */
+const apiMode = () => document.querySelector("input[name=api]:checked").value;
+const modele = () => document.querySelector("input[name=modele]:checked").value;
+function base() {
+  if (apiMode() === "remote") return $("url").value.trim().replace(/\/+$/, "");
+  return location.protocol.startsWith("http") ? "" : "http://127.0.0.1:8000";   // page ouverte en fichier : API locale par défaut
+}
+function entetes() {
+  const h = { "Content-Type": "application/json" };
+  const cle = $("cle").value.trim();
+  if (apiMode() === "remote" && cle) h["X-API-Key"] = cle;   // la clé n'est jamais stockée
+  return h;
+}
+let tSante;
+async function verifierSante() {
+  const pastille = $("statut");
+  pastille.className = "dot";
+  if (apiMode() === "remote" && !$("url").value.trim()) return;
+  try {
+    const r = await fetch(base() + "/sante", { headers: entetes() });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    pastille.className = "dot on";
+    for (const [nom, present] of Object.entries(d.modeles_disponibles || {})) {
+      const radio = $("m-" + nom);
+      if (!radio) continue;
+      radio.disabled = !present;
+      if (!present && radio.checked) { const autre = document.querySelector("input[name=modele]:not(:disabled)"); if (autre) autre.checked = true; }
+    }
+    $("p-modele-nom").textContent = NOMS_MODELE[modele()];
+  } catch { pastille.className = "dot off"; }
+}
+document.querySelectorAll("input[name=api]").forEach((r) => r.addEventListener("change", () => {
+  $("remote").classList.toggle("show", apiMode() === "remote");
+  verifierSante();
+}));
+["url", "cle"].forEach((id) => $(id).addEventListener("input", () => { clearTimeout(tSante); tSante = setTimeout(verifierSante, 500); }));
+
+/* ---------- appel à l'API (commun aux deux modes) ---------- */
+let ctrl = null;                          // permet d'interrompre la requête en cours (bouton Stop)
+async function appeler(texte, mod) {
+  let r;
+  ctrl = new AbortController();
+  try {
+    r = await fetch(base() + "/predire", { method: "POST", headers: entetes(), body: JSON.stringify({ texte, modele: mod, anonymiser: true }), signal: ctrl.signal });
+  } catch { throw new Error("API injoignable. Vérifie qu'elle est lancée" + (apiMode() === "remote" ? " et que l'URL est correcte." : " (uvicorn api.main:app).")); }
+  if (!r.ok) {
+    let detail = "";
+    try { const j = await r.json(); detail = typeof j.detail === "string" ? j.detail : ""; } catch {}
+    if (r.status === 401 || r.status === 403) throw new Error("Clé d'API refusée.");
+    if (r.status === 422) throw new Error("Texte invalide : il doit faire entre 1 et 5 000 caractères.");
+    if (r.status === 503) throw new Error(detail || "Ce modèle est indisponible (fichiers manquants).");
+    throw new Error(detail || "Erreur de l'API (" + r.status + ").");
+  }
+  return r.json();
+}
+function verifierEntree(texte) {
+  if (!texte.trim()) return "Écris d'abord un commentaire à analyser.";
+  if (apiMode() === "remote" && !$("url").value.trim()) return "Renseigne l'URL de l'API distante.";
+  return "";
+}
+function afficherMessage(el_, type, txt) {
+  el_.className = "msg" + (txt ? " show " + type : "");
+  el_.textContent = txt || "";
+}
+
+/* ---------- bascule Classique / Pipeline ---------- */
+const vue = () => document.querySelector("input[name=mode]:checked").value;
+function appliquerVue(v) {
+  const pipe = v === "pipeline";
+  document.body.classList.toggle("pipe", pipe);
+  $("vue-classique").classList.toggle("hidden", pipe);
+  $("vue-pipeline").classList.toggle("hidden", !pipe);
+  $("mode-" + v).checked = true;
+  stockage("mode", v);
+  try { history.replaceState(null, "", pipe ? "#pipeline" : location.pathname + location.search); } catch {}
+  $("p-modele-nom").textContent = NOMS_MODELE[modele()];
+  if (pipe) $("p-texte").value = $("texte").value; else $("texte").value = $("p-texte").value;
+  $("nb").textContent = $("texte").value.length;
+}
+document.querySelectorAll("input[name=mode]").forEach((r) => r.addEventListener("change", () => { arreter(false); appliquerVue(vue()); }));
+document.querySelectorAll("input[name=modele]").forEach((r) => r.addEventListener("change", () => { $("p-modele-nom").textContent = NOMS_MODELE[modele()]; }));
+
+/* ---------- saisie ---------- */
+function poserTexte(t) {
+  $("texte").value = t; $("p-texte").value = t; $("nb").textContent = t.length;
+  (vue() === "pipeline" ? $("p-texte") : $("texte")).focus();
+}
+$("texte").addEventListener("input", () => { $("nb").textContent = $("texte").value.length; });
+CHIPS.forEach(([nom, txt]) => {
+  [$("exemples"), $("p-exemples")].forEach((c) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = nom;
+    b.onclick = () => poserTexte(txt);
+    c.appendChild(b);
+  });
+});
+
+/* =================== Prétraitement animé (partagé) =================== */
+const RE_PONCT = /[^\p{L}\p{N}_\s]/u;
+function construireScene(et, stage) {
+  // éléments : caractères du texte original, ou un bloc « masque » (donnée personnelle remplacée par une balise)
+  const items = [];
+  let cur = 0;
+  for (const m of et.masques) {
+    for (const ch of et.original.slice(cur, m.debut)) items.push({ ch });
+    items.push({ masque: et.original.slice(m.debut, m.fin), balise: m.balise });
+    cur = m.fin;
+  }
+  for (const ch of et.original.slice(cur)) items.push({ ch });
+
+  stage.replaceChildren();
+  const els = { masques: [], chars: [] };
+  let mot = null;
+  const nouveauMot = () => { mot = document.createElement("span"); mot.className = "w"; stage.appendChild(mot); };
+  for (const it of items) {
+    if (it.masque !== undefined) {
+      if (!mot) nouveauMot();
+      const s = document.createElement("span");
+      s.className = "m"; s.textContent = it.masque; s.dataset.balise = it.balise;
+      mot.appendChild(s); els.masques.push(s);
+      els.chars.push({ el: s, ch: "x", ws: false, pill: true });
+    } else if (/\s/.test(it.ch)) {
+      mot = null;
+      const s = document.createElement("span");
+      s.className = "c"; s.textContent = " ";
+      stage.appendChild(s);
+      els.chars.push({ el: s, ch: it.ch, ws: true });
+    } else {
+      if (!mot) nouveauMot();
+      const s = document.createElement("span");
+      s.className = "c"; s.textContent = it.ch;
+      mot.appendChild(s);
+      els.chars.push({ el: s, ch: it.ch, ws: false });
+    }
+  }
+  return els;
+}
+function afficherFinal(code, texte) {
+  code.replaceChildren();
+  texte.split(/(\b[a-z]+_tag\b)/).forEach((morceau) => {
+    if (/^[a-z]+_tag$/.test(morceau)) { const b = document.createElement("b"); b.textContent = morceau; code.appendChild(b); }
+    else code.appendChild(document.createTextNode(morceau));
+  });
+}
+/* ui = { stage, cap, etape(n), v } : v = facteur de vitesse (1 = normal, < 1 = plus rapide) */
+async function jouerNettoyage(et, id, ui) {
+  const T = (ms) => sleep(ms * ui.v);
+  const els = construireScene(et, ui.stage);
+  const cap = ui.cap;
+
+  ui.etape(1);
+  cap.textContent = "Texte reçu, tel quel.";
+  await T(700); if (id !== run) return;
+
+  ui.etape(2);
+  const n = els.masques.length;
+  cap.textContent = n ? "Détection des données personnelles (regex + NER spaCy)…" : "Aucune donnée personnelle détectée : rien à masquer.";
+  els.masques.forEach((m) => m.classList.add("hl"));
+  await T(n ? 900 : 700); if (id !== run) return;
+  for (const m of els.masques) {
+    m.classList.add("flip");
+    await T(200); if (id !== run) return;
+    m.textContent = m.dataset.balise;
+    m.classList.remove("hl", "flip");
+    m.classList.add("pill");
+    await T(250); if (id !== run) return;
+  }
+  if (n) cap.textContent = n + (n > 1 ? " éléments remplacés par des balises." : " élément remplacé par une balise.");
+  await T(600); if (id !== run) return;
+
+  ui.etape(3);
+  cap.textContent = "Minuscules…";
+  const majs = els.chars.filter((c) => !c.ws && !c.pill && c.ch !== c.ch.toLowerCase());
+  majs.forEach((c) => c.el.classList.add("pop"));
+  await T(350);
+  majs.forEach((c) => { c.el.textContent = c.ch.toLowerCase(); });
+  await T(500); if (id !== run) return;
+  majs.forEach((c) => c.el.classList.remove("pop"));
+
+  cap.textContent = "Suppression de la ponctuation et des emojis…";
+  const ponct = els.chars.filter((c) => !c.ws && !c.pill && (RE_PONCT.test(c.ch) || /\p{Extended_Pictographic}/u.test(c.ch)));
+  ponct.forEach((c) => c.el.classList.add("flag"));
+  await T(550); if (id !== run) return;
+  ponct.forEach((c) => c.el.classList.add("gone"));
+  await T(550); if (id !== run) return;
+
+  cap.textContent = "Espaces normalisés.";
+  const visibles = els.chars.filter((c) => !ponct.includes(c));
+  let prevEspace = true;
+  const dernierMot = visibles.map((c) => c.ws).lastIndexOf(false);
+  visibles.forEach((c, i) => {
+    if (c.ws && (prevEspace || i > dernierMot)) c.el.classList.add("gone");
+    prevEspace = c.ws;
+  });
+  await T(700); if (id !== run) return;
+  ui.etape(4);
+  cap.textContent = "Prétraitement terminé.";
+}
+
+/* =================== Jauge (partagée) =================== */
+const ARRET = [[0, [34, 197, 94]], [28, [34, 197, 94]], [34, [245, 158, 11]], [56, [245, 158, 11]], [62, [239, 68, 68]], [100, [239, 68, 68]]];
+function couleur(v) {
+  for (let i = 1; i < ARRET.length; i++) {
+    if (v <= ARRET[i][0]) {
+      const [a, ca] = ARRET[i - 1], [b, cb] = ARRET[i];
+      const t = b === a ? 1 : (v - a) / (b - a);
+      return "rgb(" + ca.map((x, k) => Math.round(lerp(x, cb[k], t))).join(",") + ")";
+    }
+  }
+  return "rgb(239,68,68)";
+}
+const verdict = (v) => (v < 30 ? "Sain" : v < 60 ? "À surveiller" : "Toxique");
+const NS = "http://www.w3.org/2000/svg";
+function el(nom, attrs, parent) {
+  const e = document.createElementNS(NS, nom);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function creerJauge(svg) {
+  svg.setAttribute("viewBox", "0 0 300 170");
+  svg.replaceChildren();
+  const arc = "M40 150 A110 110 0 0 1 260 150";
+  el("path", { d: arc, pathLength: 100, fill: "none", stroke: "#eceef4", "stroke-width": 24, "stroke-linecap": "round" }, svg);
+  const val = el("path", { d: arc, pathLength: 100, fill: "none", stroke: "#22c55e", "stroke-width": 24, "stroke-linecap": "round", "stroke-dasharray": "0 100" }, svg);
+  const g = el("g", { stroke: "#c9ccd6", "stroke-linecap": "round" }, svg);
+  for (let i = 0; i <= 20; i++) {
+    const a = Math.PI * (1 - i / 20), long = i % 5 === 0, r1 = 84, r2 = long ? 94 : 89;
+    el("line", { x1: 150 + r1 * Math.cos(a), y1: 150 - r1 * Math.sin(a), x2: 150 + r2 * Math.cos(a), y2: 150 - r2 * Math.sin(a), "stroke-width": long ? 2 : 1.4 }, g);
+  }
+  const aig = el("line", { stroke: "#15151c", "stroke-width": 3.5, "stroke-linecap": "round" }, svg);
+  const num = el("text", { class: "num", x: 150, y: 138, "text-anchor": "middle", fill: "#15151c" }, svg);
+  num.textContent = "0";
+  return {
+    pose(v, verdictEl) {
+      const c = couleur(v);
+      val.setAttribute("stroke-dasharray", v + " 100"); val.setAttribute("stroke", c);
+      const a = Math.PI * (1 - v / 100);
+      aig.setAttribute("x1", 150 + 96 * Math.cos(a)); aig.setAttribute("y1", 150 - 96 * Math.sin(a));
+      aig.setAttribute("x2", 150 + 127 * Math.cos(a)); aig.setAttribute("y2", 150 - 127 * Math.sin(a));
+      num.textContent = Math.round(v);
+      if (verdictEl) { verdictEl.textContent = verdict(v); verdictEl.style.color = c; }
+    },
+  };
+}
+const jauge1 = creerJauge($("g1")), jauge2 = creerJauge($("g2"));
+jauge1.pose(0, $("verdict")); jauge2.pose(0, $("p-verdict"));
+
+function resumeDetail(d) {
+  const vrais = Object.entries(d.labels).filter(([, v]) => v.detecte).map(([k]) => LABELS[k].toLowerCase());
+  return vrais.length
+    ? vrais.length + (vrais.length > 1 ? " labels détectés : " : " label détecté : ") + vrais.join(", ")
+    : "Aucun label au-dessus de son seuil : score du label « toxique ».";
+}
+
+/* =================== Barres des labels (partagées) =================== */
+function construireLabels(d, liste, meta) {
+  liste.replaceChildren();
+  const lignes = {};
+  for (const [k, v] of Object.entries(d.labels)) {
+    const li = document.createElement("div");
+    li.className = "lbl" + (v.detecte ? " true" : "");
+    li.innerHTML = '<div class="name"></div><div class="track"><div class="fill"></div><div class="tick"></div></div><div class="pct">0,0 %</div>';
+    li.querySelector(".name").innerHTML = LABELS[k] + '<span class="tag">true</span><small>' + k + "</small>";
+    li.querySelector(".tick").style.left = v.seuil * 100 + "%";
+    liste.appendChild(li);
+    lignes[k] = li;
+  }
+  const t = d.temps_ms >= 1000 ? fr(d.temps_ms / 1000, 2) + " s" : Math.round(d.temps_ms) + " ms";
+  meta.textContent = "Modèle : " + (NOMS_MODELE[d.modele] || d.modele) + " · analysé en " + t + (d.avertissement ? " · ⚠ " + d.avertissement : "");
+  return lignes;
+}
+async function animerBarres(d, id, lignes) {
+  await Promise.all(Object.entries(d.labels).map(async ([k, v], i) => {
+    await sleep(i * 90);
+    if (id !== run) return;
+    const li = lignes[k];
+    li.classList.add("show");
+    const p = v.probabilite * 100;
+    await animer(1100, (t) => {
+      li.querySelector(".fill").style.width = p * t + "%";
+      li.querySelector(".pct").textContent = fr(p * t) + " %";
+    }, id);
+  }));
+}
+
+/* =================== MODE CLASSIQUE =================== */
+function etapeClassique(n) {
+  [1, 2, 3].forEach((i) => { const s = $("s" + i); s.classList.toggle("act", i === n); s.classList.toggle("done", i < n); });
+}
+let derniere = null;
+$("analyser").addEventListener("click", async () => {
+  const texte = $("texte").value;
+  const e = verifierEntree(texte);
+  if (e) return afficherMessage($("msg"), "err", e);
+  const mod = modele(), id = ++run;
+  rapide = reduit;
+  afficherMessage($("msg"), "", "");
+  const bouton = $("analyser");
+  bouton.disabled = true; bouton.classList.add("busy"); $("stop").classList.remove("hidden");
+  $("btn-txt").textContent = "Analyse…";
+  if (mod === "laya") afficherMessage($("msg"), "info", "LAYA est lent : le premier chargement peut prendre environ 1 minute.");
+  ["prep", "score", "labels"].forEach((s) => $(s).classList.add("hidden"));
+  $("durees").replaceChildren(); $("d2").textContent = ""; $("d3").textContent = "";
+  try {
+    const d = await appeler(texte, mod);
+    if (id !== run) return;
+    derniere = d;
+    ajouterHistorique(d);
+    afficherMessage($("msg"), "", "");
+    await lectureClassique(d, id);
+  } catch (err) {
+    if (id === run) afficherMessage($("msg"), "err", err.message);
+  } finally {
+    if (id === run) { bouton.disabled = false; bouton.classList.remove("busy"); $("stop").classList.add("hidden"); $("btn-txt").textContent = "Analyser"; }
+  }
+});
+$("rejouer").addEventListener("click", async () => { if (derniere) { const id = ++run; rapide = reduit; await lectureClassique(derniere, id); } });
+
+async function lectureClassique(d, id) {
+  const et = d.etapes;
+  $("prep").classList.remove("hidden");
+  $("final").classList.remove("show");
+  $("prep").scrollIntoView({ behavior: "smooth", block: "center" });
+  const t = tempsDe(d);
+  await jouerNettoyage(et, id, { stage: $("stage"), cap: $("caption"), v: 1, etape: (n) => {
+    etapeClassique(n);
+    if (n >= 3) $("d2").textContent = "· " + dms(t.ano);
+    if (n >= 4) $("d3").textContent = "· " + dms(t.net);
+  } });
+  if (id !== run) return;
+  afficherFinal($("final-txt"), et.nettoye);
+  $("final").classList.add("show");
+  $("caption").textContent = "Prétraitement terminé en " + dms(t.ano + t.net) + ".";
+  etapeClassique(4);
+  await sleep(500); if (id !== run) return;
+
+  ["score", "labels"].forEach((s) => $(s).classList.remove("hidden"));
+  jauge1.pose(0, $("verdict"));
+  $("detail").textContent = "";
+  const lignes = construireLabels(d, $("liste"), $("meta"));
+  $("score").scrollIntoView({ behavior: "smooth", block: "center" });
+  await sleep(250);
+  const barres = animerBarres(d, id, lignes);
+  await animer(1600, (t) => jauge1.pose(d.score_global * t, $("verdict")), id);
+  if (id !== run) return;
+  jauge1.pose(d.score_global, $("verdict"));
+  $("detail").textContent = resumeDetail(d);
+  dessinerDurees($("durees"), t);
+  await barres;
+}
+
+/* =================== MODE PIPELINE =================== */
+// --- réseau de neurones ---
+const COUCHES = [4, 5, 5, 6], XS = [26, 92, 158, 222], SORTIE = COUCHES.length - 1;
+const ys = (n) => Array.from({ length: n }, (_, i) => 24 + (i * 162) / (n - 1));
+const reseau = { noeuds: [], aretes: [], cercles: [], etiquettes: [] };
+(function construireReseau() {
+  const svg = $("p-net");
+  const gA = el("g", {}, svg), gN = el("g", {}, svg);
+  COUCHES.forEach((n, l) => reseau.noeuds.push(ys(n).map((y) => ({ x: XS[l], y }))));
+  for (let l = 0; l < SORTIE; l++) {
+    const aretes = [];
+    for (const a of reseau.noeuds[l]) for (const b of reseau.noeuds[l + 1]) aretes.push(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y }, gA));
+    reseau.aretes.push(aretes);
+  }
+  reseau.cercles = reseau.noeuds.map((couche, l) => couche.map((p) => el("circle", { cx: p.x, cy: p.y, r: l === SORTIE ? 9 : 6.5 }, gN)));
+  Object.keys(LABELS).forEach((k, i) => {
+    const p = reseau.noeuds[SORTIE][i];
+    const t = el("text", { x: p.x + 14, y: p.y + 3.5 }, svg);
+    t.textContent = COURT[k];
+    reseau.etiquettes.push(t);
+  });
+})();
+function razReseau() {
+  reseau.cercles.flat().forEach((c) => { c.classList.remove("on", "out", "true"); c.style.fillOpacity = ""; c.style.fill = ""; });
+  reseau.aretes.flat().forEach((a) => a.classList.remove("on"));
+  reseau.etiquettes.forEach((t) => t.classList.remove("true"));
+}
+async function impulsions(d, id, t) {
+  $("p-net-cap").textContent = "Le texte traverse le réseau, couche par couche…";
+  // compteur de « réflexion » : monte jusqu'à la durée réelle mesurée par l'API
+  animer(1700, (x) => { $("p-duree-modele").innerHTML = "Réflexion : <b>" + dms(t.mod * x) + "</b>"; }, id);
+  for (let l = 0; l <= SORTIE; l++) {
+    reseau.cercles[l].forEach((c) => c.classList.add("on"));
+    if (l < SORTIE) reseau.aretes[l].forEach((a) => a.classList.add("on"));
+    await sleep(420); if (id !== run) return;
+  }
+  // neurones de sortie : intensité = probabilité du label ; les labels « true » gardent un anneau noir
+  Object.values(d.labels).forEach((v, i) => {
+    const c = reseau.cercles[SORTIE][i];
+    c.classList.remove("on"); c.classList.add("out");
+    c.style.fill = "#6a59e8"; c.style.fillOpacity = (0.1 + 0.9 * v.probabilite).toFixed(2);
+    if (v.detecte) { c.classList.add("true"); reseau.etiquettes[i].classList.add("true"); }
+  });
+  const nb = Object.values(d.labels).filter((v) => v.detecte).length;
+  $("p-net-cap").textContent = nb + (nb > 1 ? " neurones de sortie dépassent" : " neurone de sortie dépasse") + " leur seuil.";
+  await sleep(700);
+}
+
+// --- objet voyageur (enveloppe, ticket) ---
+const fly = $("fly");
+function centre(e) {
+  const r = e.getBoundingClientRect(), p = $("pipe-wrap").getBoundingClientRect();
+  return { x: r.left - p.left + r.width / 2, y: r.top - p.top + r.height / 2 };
+}
+function poserFly(c, echelle, opacite, ms) {
+  const w = fly.offsetWidth || 84, h = fly.offsetHeight || 60;
+  fly.style.transition = ms ? "transform " + ms + "ms cubic-bezier(.6,0,.3,1), opacity " + ms + "ms" : "none";
+  fly.style.transform = "translate(" + (c.x - w / 2) + "px," + (c.y - h / 2) + "px) scale(" + echelle + ")";
+  fly.style.opacity = opacite;
+}
+async function voler(depuis, vers, ms, fin, opaciteFin) {
+  poserFly(centre(depuis), 1, 1, 0);
+  await frame(); await frame();
+  poserFly(centre(vers), fin, opaciteFin, rapide ? 0 : ms);
+  await sleep(ms);
+}
+
+function trail(n) {
+  [...$("trail").children].slice(0, 4).forEach((s, i) => { s.classList.toggle("act", i + 1 === n); s.classList.toggle("done", i + 1 < n); });
+}
+function vivant(n) { [1, 2, 3, 4].forEach((i) => $("st" + i).classList.toggle("live", i === n)); }
+function pip(n, t) {
+  $("pp1").className = "pip" + (n === 2 ? " act" : n > 2 ? " done" : "");
+  $("pp2").className = "pip" + (n === 3 ? " act" : n > 3 ? " done" : "");
+  $("pp1").textContent = "Anonymisation" + (t && n > 2 ? " · " + dms(t.ano) : "");
+  $("pp2").textContent = "Nettoyage" + (t && n > 3 ? " · " + dms(t.net) : "");
+}
+function razPipeline() {
+  fly.style.opacity = 0;
+  $("fly-env").classList.remove("closed"); fly.classList.remove("is-env", "is-ticket");
+  $("p-bulle").classList.remove("sent");
+  $("p-ringbox").classList.remove("busy-ring");
+  $("p-stage").replaceChildren(); $("p-caption").textContent = ""; $("p-final").classList.remove("show");
+  pip(0); trail(0); vivant(0);
+  razReseau(); $("p-net-cap").textContent = "En attente du texte nettoyé.";
+  jauge2.pose(0, $("p-verdict")); $("p-detail").textContent = ""; $("p-liste").replaceChildren(); $("p-meta").textContent = "";
+  $("p-durees").replaceChildren(); $("p-duree-modele").innerHTML = "Réflexion : <b>—</b>";
+  $("p-verdict").textContent = "—"; $("p-verdict").style.color = "";
+}
+function boutonsPipeline(enCours, peutRejouer) {
+  $("p-send").disabled = enCours;
+  $("p-passer").classList.toggle("hidden", !enCours);
+  $("p-stop").classList.toggle("hidden", !enCours);
+  $("p-rejouer").classList.toggle("hidden", enCours || !peutRejouer);
+}
+
+async function lancerPipeline(texte, mod, donneesConnues) {
+  const id = ++run;
+  rapide = reduit;
+  afficherMessage($("p-msg"), "", "");
+  razPipeline();
+  boutonsPipeline(true, false);
+  $("p-modele-nom").textContent = NOMS_MODELE[mod];
+  if (mod === "laya" && !donneesConnues) afficherMessage($("p-msg"), "info", "LAYA est lent : le premier chargement peut prendre environ 1 minute.");
+  $("vue-pipeline").scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // la requête part tout de suite : l'animation d'envoi se joue pendant l'attente
+  const reponse = donneesConnues ? Promise.resolve(donneesConnues) : appeler(texte, mod);
+  reponse.catch(() => {});
+  try {
+    // 1. envoi : la bulle se replie, l'enveloppe se ferme et part
+    trail(1); vivant(1);
+    fly.classList.add("is-env");
+    $("fly-env").classList.remove("closed");
+    $("p-bulle").classList.add("sent");
+    poserFly(centre($("p-bulle")), 1, 1, 0);
+    await sleep(500); if (id !== run) return;
+    $("fly-env").classList.add("closed");           // le rabat se ferme, le cachet apparaît
+    await sleep(900); if (id !== run) return;
+
+    // 2. l'enveloppe entre dans l'algorithme (l'anneau tourne pendant l'attente de la réponse)
+    trail(2); vivant(2);
+    await voler($("p-bulle"), $("p-ring"), 900, 0.35, 0);
+    if (id !== run) return;
+    $("p-ringbox").classList.add("busy-ring");
+    const d = await reponse;
+    if (id !== run) return;
+    afficherMessage($("p-msg"), "", "");
+    if (!donneesConnues) { derniere = d; ajouterHistorique(d); }
+
+    const t = tempsDe(d);
+    await jouerNettoyage(d.etapes, id, { stage: $("p-stage"), cap: $("p-caption"), v: 0.62, etape: (n) => pip(n, t) });
+    if (id !== run) return;
+    pip(4, t);
+    $("p-caption").textContent = "Prétraitement terminé en " + dms(t.ano + t.net) + ".";
+    afficherFinal($("p-final-txt"), d.etapes.nettoye);
+    $("p-final").classList.add("show");
+    $("p-ringbox").classList.remove("busy-ring");
+
+    // 3. le ticket « texte nettoyé » part vers le modèle
+    trail(3); vivant(3);
+    fly.classList.remove("is-env"); fly.classList.add("is-ticket");
+    const tn = d.etapes.nettoye;
+    $("fly-ticket").textContent = tn.length > 60 ? tn.slice(0, 57) + "…" : tn;
+    await voler($("p-ring"), $("p-net"), 1000, 0.5, 0);
+    if (id !== run) return;
+    await impulsions(d, id, t);
+    if (id !== run) return;
+
+    // 4. résultat : la jauge monte, les barres se remplissent
+    trail(4); vivant(4);
+    const lignes = construireLabels(d, $("p-liste"), $("p-meta"));
+    const barres = animerBarres(d, id, lignes);
+    await animer(1600, (x) => jauge2.pose(d.score_global * x, $("p-verdict")), id);
+    if (id !== run) return;
+    jauge2.pose(d.score_global, $("p-verdict"));
+    $("p-detail").textContent = resumeDetail(d);
+    dessinerDurees($("p-durees"), t);
+    await barres;
+    if (id !== run) return;
+    trail(5); vivant(0);
+    boutonsPipeline(false, true);
+  } catch (err) {
+    if (id === run) {
+      razPipeline();
+      boutonsPipeline(false, !!derniere);
+      afficherMessage($("p-msg"), "err", err.message);
+    }
+  }
+}
+$("p-send").addEventListener("click", () => {
+  const texte = $("p-texte").value, e = verifierEntree(texte);
+  if (e) return afficherMessage($("p-msg"), "err", e);
+  lancerPipeline(texte, modele(), null);
+});
+$("p-texte").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); $("p-send").click(); } });
+$("p-passer").addEventListener("click", () => { rapide = true; });
+
+/* ---------- stop ---------- */
+function arreter(avecMessage) {
+  run++;                                   // toute animation / réponse en cours devient périmée
+  if (ctrl) ctrl.abort();                  // la requête part en erreur côté navigateur (le serveur finit son calcul, mais on ignore la réponse)
+  rapide = false;
+  const b = $("analyser");
+  b.disabled = false; b.classList.remove("busy"); $("btn-txt").textContent = "Analyser"; $("stop").classList.add("hidden");
+  razPipeline(); boutonsPipeline(false, !!derniere);
+  if (avecMessage) {
+    ["prep", "score", "labels"].forEach((s) => $(s).classList.add("hidden"));
+    afficherMessage($("msg"), "info", "Analyse arrêtée.");
+    afficherMessage($("p-msg"), "info", "Analyse arrêtée.");
+  }
+}
+$("stop").addEventListener("click", () => arreter(true));
+$("p-stop").addEventListener("click", () => arreter(true));
+$("p-rejouer").addEventListener("click", () => {
+  if (!derniere) return;
+  lancerPipeline(derniere.etapes.original, derniere.modele, derniere);
+});
+
+/* =================== HISTORIQUE & EXEMPLES =================== */
+let historique = [];
+try { historique = JSON.parse(stockage("historique") || "[]").filter((h) => h && h.labels && !Array.isArray(h.labels) && h.temps); } catch { historique = []; }
+function ajouterHistorique(d) {
+  // RGPD : on ne garde que le texte ANONYMISÉ (jamais l'original), dans cet onglet uniquement
+  historique.unshift({
+    ts: Date.now(), modele: d.modele, score: d.score_global, labels: d.labels, temps: tempsDe(d),
+    texte: d.etapes.anonymise, nettoye: d.etapes.nettoye, balises: d.etapes.masques.map((m) => m.balise),
+    temps_ms: d.temps_ms, avertissement: d.avertissement,
+  });
+  historique = historique.slice(0, 30);
+  stockage("historique", JSON.stringify(historique));
+  dessinerHistorique();
+}
+function quand(ts) {
+  const dt = new Date(ts), auj = new Date();
+  const h = dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return dt.toDateString() === auj.toDateString() ? h : dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + h;
+}
+const vraisLabels = (h) => Object.entries(h.labels).filter(([, v]) => v.detecte).map(([k]) => LABELS[k].toLowerCase());
+function dessinerHistorique() {
+  const ul = $("hist");
+  ul.replaceChildren();
+  if (!historique.length) {
+    const p = document.createElement("div");
+    p.className = "vide"; p.textContent = "Aucune analyse pour l'instant.";
+    ul.appendChild(p);
+    return;
+  }
+  historique.forEach((h) => {
+    const li = document.createElement("li");
+    li.tabIndex = 0; li.setAttribute("role", "button");
+    const sc = document.createElement("div"); sc.className = "sc"; sc.textContent = Math.round(h.score); sc.style.background = couleur(h.score);
+    const tx = document.createElement("div"); tx.className = "tx"; tx.textContent = h.texte;
+    const small = document.createElement("small");
+    const vl = vraisLabels(h);
+    small.textContent = verdict(h.score) + (vl.length ? " · " + vl.join(", ") : "");
+    tx.appendChild(small);
+    const mo = document.createElement("div"); mo.className = "mo"; mo.textContent = quand(h.ts);
+    li.append(sc, tx, mo);
+    li.onclick = () => ouvrirDetail(h);
+    li.onkeydown = (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ouvrirDetail(h); } };
+    ul.appendChild(li);
+  });
+}
+$("vider").addEventListener("click", () => { historique = []; stockage("historique", "[]"); dessinerHistorique(); });
+
+/* détail d'une analyse : toutes les infos + possibilité de modifier le texte et de relancer */
+let courant = null;
+function ouvrirDetail(h) {
+  courant = h;
+  $("dlg-titre").textContent = "Analyse de " + quand(h.ts);
+  $("dlg-sous").textContent = "Modèle : " + (NOMS_MODELE[h.modele] || h.modele) + " · " + h.balises.length + (h.balises.length > 1 ? " éléments masqués" : " élément masqué") + (h.balises.length ? " (" + [...new Set(h.balises)].join(", ") + ")" : "");
+  const g = $("dlg-score"); g.textContent = Math.round(h.score); g.style.background = couleur(h.score);
+  $("dlg-verdict").textContent = verdict(h.score); $("dlg-verdict").style.color = couleur(h.score);
+  const vl = vraisLabels(h);
+  $("dlg-detail").textContent = vl.length ? vl.length + (vl.length > 1 ? " labels détectés : " : " label détecté : ") + vl.join(", ") : "Aucun label au-dessus de son seuil : score du label « toxique ».";
+  dessinerDurees($("dlg-durees"), h.temps);
+  afficherFinal($("dlg-anon"), h.texte);
+  afficherFinal($("dlg-clean"), h.nettoye);
+  const lignes = construireLabels({ labels: h.labels, modele: h.modele, temps_ms: h.temps_ms || 0, avertissement: h.avertissement }, $("dlg-liste"), document.createElement("div"));
+  for (const [k, v] of Object.entries(h.labels)) {
+    const li = lignes[k]; li.classList.add("show");
+    li.querySelector(".fill").style.width = v.probabilite * 100 + "%";
+    li.querySelector(".pct").textContent = fr(v.probabilite * 100) + " %";
+  }
+  $("dlg-edit").value = h.texte;
+  $("dlg").showModal();
+}
+$("dlg-x").onclick = $("dlg-fermer").onclick = () => $("dlg").close();
+$("dlg").addEventListener("click", (ev) => { if (ev.target === $("dlg")) $("dlg").close(); });   // clic sur le fond = fermer
+$("dlg-relancer").onclick = () => {
+  const texte = $("dlg-edit").value;
+  if (!texte.trim() || !courant) return;
+  const radio = $("m-" + courant.modele);
+  if (radio && !radio.disabled) radio.checked = true;      // même modèle que l'analyse d'origine
+  $("p-modele-nom").textContent = NOMS_MODELE[modele()];
+  $("dlg").close();
+  poserTexte(texte);
+  (vue() === "pipeline" ? $("p-send") : $("analyser")).click();
+};
+
+(function construireExemples() {
+  const pan = $("pan-ex");
+  EXEMPLES.forEach(([groupe, liste]) => {
+    const h = document.createElement("div"); h.className = "ex-groupe"; h.textContent = groupe; pan.appendChild(h);
+    const box = document.createElement("div"); box.className = "ex-liste"; pan.appendChild(box);
+    liste.forEach((t) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "ex"; b.textContent = t;
+      b.onclick = () => poserTexte(t);
+      box.appendChild(b);
+    });
+  });
+})();
+function onglet(nom) {
+  const hist = nom === "hist";
+  $("tab-hist").setAttribute("aria-selected", hist); $("tab-ex").setAttribute("aria-selected", !hist);
+  $("pan-hist").classList.toggle("hidden", !hist); $("pan-ex").classList.toggle("hidden", hist);
+  $("vider").classList.toggle("hidden", !hist);
+}
+$("tab-hist").onclick = () => onglet("hist");
+$("tab-ex").onclick = () => onglet("ex");
+
+/* ---------- démarrage ---------- */
+dessinerHistorique();
+verifierSante();
+appliquerVue(location.hash === "#pipeline" || stockage("mode") === "pipeline" ? "pipeline" : "classique");
+</script>
+</body>
+</html>
