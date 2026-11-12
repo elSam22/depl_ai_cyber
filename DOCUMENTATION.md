@@ -424,7 +424,7 @@ Ligne type : `score=87 longueur=142 duree_ms=14.2`
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | Authentification API                 | Clé API via header `X-API-Key`, comparaison à temps constant `secrets.compare_digest` — protection timing attack (`api/main.py`) | Implémentée |
 | Chiffrement en transit               | HTTPS forcé via `FrontendConfig` GKE (`redirectToHttps: enabled`) + `ManagedCertificate` Google (`api/k8s/ingress.yaml`) | Implémentée |
-| Anonymisation des commentaires       | spaCy NER + regex — 8 balises de remplacement : `personne_tag`, `organisation_tag`, `email_tag`, `url_tag`, `ip_tag`, `telephone_tag`, `pseudo_tag`, `adresse_tag` (`api/preprocessing.py`) | Implémentée |
+| Anonymisation des commentaires       | spaCy NER + regex — 8 balises de remplacement : `personne_tag`, `organisation_tag`, `email_tag`, `url_tag`, `ip_tag`, `telephone_tag`, `pseudo_tag`, `adresse_tag` (`api/preprocess.py`) | Implémentée |
 | Minimisation des logs                | `log.info` sans texte brut : longueur, score, durée uniquement — aucun stockage du contenu (`api/main.py`) | Implémentée |
 | Gestion des secrets                  | `secretKeyRef: {name: dss-api-key, key: API_KEY}` dans `api/k8s/deployment.yaml` — clé absente du code source et de l'image Docker | Implémentée |
 | Conteneur non-root                   | `useradd --uid 1000 appuser` + `USER 1000` dans `api/Dockerfile` ; `runAsNonRoot: true` + `runAsUser: 1000` dans `api/k8s/deployment.yaml` | Implémentée |
