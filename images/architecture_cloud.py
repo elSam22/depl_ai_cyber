@@ -1,107 +1,210 @@
-"""Dessine le schéma d'architecture cloud de l'API Digital Social Score (étape 7) -> images/architecture_cloud.png.
-
-Le schéma reprend ce que contiennent les scripts et manifestes de la branche Enzo (api/deploy, api/k8s, api/Dockerfile).
-Ce qui n'existe pas encore (supervision) est en pointillés.
-
-Lancement (depuis la racine) : .venv/bin/python images/architecture_cloud.py
+"""Schéma d'architecture cloud — Digital Social Score (étape 7).
+Lancement : .venv/bin/python images/architecture_cloud.py
 """
 from pathlib import Path
-
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch
 
 SORTIE = Path(__file__).resolve().parent / "architecture_cloud.png"
-ENCRE, ENCRE_2, FOND = "#0b0b0b", "#52514e", "#fcfcfb"
-BLEU, ORANGE, VERT, GRIS = "#2a78d6", "#eb6834", "#1f8f5f", "#d9d8d3"
 
-fig, ax = plt.subplots(figsize=(15, 9), facecolor=FOND)
+# ── Palette ──────────────────────────────────────────────────────────────────
+FOND        = "#f9f9f7"
+ENCRE       = "#1a1a18"
+GRIS_TEXTE  = "#555550"
+VERT        = "#1a7a4a"   # flux sécurisés (HTTPS, secrets)
+ROUGE       = "#c0392b"   # HTTP non chiffré
+BLEU        = "#2a6db5"   # flux numérotés (requête client)
+ORANGE      = "#d4680a"   # supervision (pointillés / à faire)
+JAUNE_FOND  = "#fff8ed"
+BLEU_FOND   = "#edf3fb"
+GRIS_FOND   = "#f0efec"
+
+fig, ax = plt.subplots(figsize=(18, 11), facecolor=FOND)
 ax.set_xlim(0, 100)
-ax.set_ylim(0, 66)
+ax.set_ylim(0, 68)
 ax.axis("off")
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def boite(x, y, w, h, titre, lignes=(), fc="#ffffff", ec=ENCRE,
+          pointille=False, taille=9.5, gras=True, ecw=1.5):
+    ls = (0, (5, 3)) if pointille else "-"
+    ax.add_patch(FancyBboxPatch((x, y), w, h,
+                                boxstyle="round,pad=0.3,rounding_size=0.8",
+                                fc=fc, ec=ec, lw=ecw, ls=ls, zorder=2))
+    ax.text(x + w/2, y + h - 1.3, titre, ha="center", va="top",
+            fontsize=taille, fontweight="bold" if gras else "normal",
+            color=ENCRE, zorder=3)
+    for i, l in enumerate(lignes):
+        ax.text(x + w/2, y + h - 3.2 - 1.7*i, l, ha="center", va="top",
+                fontsize=8, color=GRIS_TEXTE, zorder=3)
 
-def boite(x, y, w, h, titre, lignes=(), fc="#ffffff", ec=ENCRE_2, pointille=False, taille=10, gras=True):
-    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.25,rounding_size=0.8", fc=fc, ec=ec, lw=1.6,
-                                ls=(0, (5, 3)) if pointille else "-"))
-    ax.text(x + w / 2, y + h - 1.4, titre, ha="center", va="top", fontsize=taille,
-            fontweight="bold" if gras else "normal", color=ENCRE)
-    for i, ligne in enumerate(lignes):
-        ax.text(x + w / 2, y + h - 3.6 - 1.75 * i, ligne, ha="center", va="top", fontsize=8.5, color=ENCRE_2)
+def zone(x, y, w, h, label, fc):
+    ax.add_patch(FancyBboxPatch((x, y), w, h,
+                                boxstyle="round,pad=0.3,rounding_size=1.2",
+                                fc=fc, ec="#c8c8c0", lw=1.2, zorder=1))
+    ax.text(x + 1, y + h - 0.9, label, ha="left", va="top",
+            fontsize=8.5, color=GRIS_TEXTE, fontstyle="italic", zorder=2)
 
-
-def zone(x, y, w, h, titre, fc):
-    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.2,rounding_size=1.2", fc=fc, ec=GRIS, lw=1.4))
-    ax.text(x + 1.2, y + h - 0.9, titre, ha="left", va="top", fontsize=9.5, color=ENCRE_2, fontstyle="italic")
-
-
-def fleche(x1, y1, x2, y2, couleur=ENCRE, pointille=False, texte=None, tx=None, ty=None):
+def fleche(x1, y1, x2, y2, couleur=ENCRE, pointille=False, lw=1.8):
+    ls = (0, (4, 3)) if pointille else "-"
     ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
-                arrowprops=dict(arrowstyle="-|>", color=couleur, lw=1.8, ls=(0, (4, 3)) if pointille else "-",
-                                shrinkA=0, shrinkB=0))
-    if texte:
-        ax.text(tx if tx is not None else (x1 + x2) / 2, ty if ty is not None else (y1 + y2) / 2 + 1.1, texte,
-                ha="center", va="bottom", fontsize=8.5, color=couleur, fontweight="bold")
+                arrowprops=dict(arrowstyle="-|>", color=couleur,
+                                lw=lw, ls=ls, shrinkA=0, shrinkB=0),
+                zorder=4)
 
+def badge(x, y, texte, couleur):
+    ax.add_patch(plt.Circle((x, y), 1.1, fc=couleur, ec="white",
+                            lw=1.4, zorder=5))
+    ax.text(x, y, texte, ha="center", va="center", fontsize=8.5,
+            color="white", fontweight="bold", zorder=6)
 
-def numero(x, y, n, couleur=BLEU):
-    ax.add_patch(plt.Circle((x, y), 1.25, fc=couleur, ec="white", lw=1.5, zorder=5))
-    ax.text(x, y, str(n), ha="center", va="center", fontsize=9, color="white", fontweight="bold", zorder=6)
+def etiquette(x, y, texte, couleur, ha="center", taille=7.8, gras=False):
+    ax.text(x, y, texte, ha=ha, va="center", fontsize=taille,
+            color=couleur, fontweight="bold" if gras else "normal", zorder=5)
 
+# ── Zones ─────────────────────────────────────────────────────────────────────
+zone(16, 1, 83, 63, "Google Cloud Platform — région europe-west9 (Paris, France) — données dans l'UE", BLEU_FOND)
+zone(61, 12, 36.5, 44, "Cluster GKE Autopilot — Kubernetes géré", JAUNE_FOND)
 
-# ---- zones
-zone(18.5, 1.5, 80.5, 59.5, "Google Cloud : région europe-west9 (Paris), données dans l'UE", "#f4f7fc")
-zone(64.5, 14.5, 33.5, 38, "Cluster GKE Autopilot (Kubernetes)", "#fff6ef")
+# ── Composants principaux ─────────────────────────────────────────────────────
+# Client
+boite(1, 29, 13, 10, "Client",
+      ["navigateur,", "curl, app"], fc=GRIS_FOND, ec="#888880")
 
-# ---- flux principal
-boite(1.5, 27, 13.5, 11, "Client", ["front, curl,", "application"])
-boite(22, 27, 17.5, 11, "Load balancer HTTPS", ["Ingress Google", "IP fixe, certificat géré", "HTTP redirigé vers HTTPS"])
-boite(44, 27, 15, 11, "Service dss-api", ["ClusterIP, port 80", "vers 8080 des pods", "pods prêts seulement"])
-boite(66, 17, 30.5, 32.5, "Pods dss-api : 2 à 5", ["autoscaler à 70 % de CPU", "utilisateur non-root, privilèges retirés"], fc="#ffffff")
+# Load Balancer
+boite(19, 29, 18, 10, "Load Balancer HTTPS",
+      ["Ingress Google", "IP fixe, certificat géré", "HTTP → HTTPS forcé"],
+      fc="#ffffff")
 
-etapes = ["a  clé X-API-Key vérifiée (401 sinon)", "b  validation : 1 à 5 000 caractères (422 sinon)",
-          "c  anonymisation : regex + NER spaCy", "d  nettoyage : minuscules, emojis, ponctuation",
-          "e  DistilBERT : 6 probabilités", "f  seuils par label, score 0 à 100"]
-for i, e in enumerate(etapes):
-    ax.text(68, 40.2 - 2.9 * i, e, ha="left", va="top", fontsize=9, color=ENCRE)
-ax.text(68, 22.2, "Sondes /health : démarrage, prêt, vivant", ha="left", va="top", fontsize=8.5, color=ENCRE_2)
+# Service K8s
+boite(42, 29, 15, 10, "Service dss-api",
+      ["ClusterIP :80→8080", "pods prêts uniquement"],
+      fc="#ffffff")
 
-fleche(15, 32.5, 22, 32.5)
-fleche(39.5, 32.5, 44, 32.5)
-fleche(59, 32.5, 66, 32.5)
-numero(18.5, 35.0, 1); numero(41.8, 35.0, 2); numero(62.5, 35.0, 3)
-ax.text(18.5, 39.6, "HTTPS (chiffré)", ha="center", va="bottom", fontsize=8.5, color=BLEU, fontweight="bold")
+# Pods
+boite(63, 15, 33, 42, "Pods dss-api  (2 à 5)",
+      ["autoscaler HPA : 70 % CPU", "conteneur non-root, drop ALL"],
+      fc="#fffdf8", ec="#b08030", taille=10)
 
-# ---- chaîne de construction
-boite(22, 5, 14, 8, "Cloud Build", ["construit l'image", "sans rien installer en local"])
-boite(41, 4, 17, 10, "Artifact Registry", ["image : code + modèle", "(aucun téléchargement", "au démarrage)"])
-fleche(36, 9, 41, 9)
-fleche(58, 10, 66, 20, couleur=VERT)
-ax.text(60.0, 17.2, "B", fontsize=9, color=VERT, fontweight="bold", ha="right")
-ax.text(30, 3.3, "livraison : deploy_gke.sh", ha="center", fontsize=8.5, color=ENCRE_2)
+# Étapes dans le pod
+etapes_pod = [
+    ("a", "Vérif. clé  X-API-Key  →  401 si absente/fausse", ROUGE),
+    ("b", "Validation entrée  1–5 000 car.  →  422 si KO",   ENCRE),
+    ("c", "Anonymisation : spaCy NER + regex  →  8 balises",  VERT),
+    ("d", "Nettoyage : minuscules, emojis, ponctuation",       ENCRE),
+    ("e", "DistilBERT : 6 probabilités (multi-label)",         BLEU),
+    ("f", "Seuils par label → score 0-100",                    BLEU),
+]
+for i, (lettre, texte, coul) in enumerate(etapes_pod):
+    yy = 47 - 4.5*i
+    ax.add_patch(plt.Circle((66.5, yy), 0.9, fc=coul, ec="white", lw=1.2, zorder=5))
+    ax.text(66.5, yy, lettre, ha="center", va="center",
+            fontsize=7.5, color="white", fontweight="bold", zorder=6)
+    etiquette(68, yy, texte, ENCRE, ha="left", taille=7.8)
 
-# ---- secret
-boite(66, 5, 30.5, 8, "Secret Manager, puis Secret Kubernetes", ["clé API jamais dans le code ni dans Git", "injectée dans la variable API_KEY"])
-fleche(81, 13, 81, 17, couleur=VERT)
-ax.text(79.8, 14.4, "A", fontsize=9, color=VERT, fontweight="bold", ha="right")
+etiquette(66.5, 20.5, "Sondes /health : startupProbe · readinessProbe · livenessProbe",
+          GRIS_TEXTE, ha="left", taille=7.5)
 
-# ---- journaux et supervision
-boite(66, 53, 30.5, 6, "Cloud Logging", ["score, longueur, durée : jamais le texte"], taille=10)
-fleche(92, 49.5, 92, 53, couleur=VERT)
-ax.text(90.8, 50.6, "C", fontsize=9, color=VERT, fontweight="bold", ha="right")
-boite(40, 47, 22, 9, "Supervision (à faire, étape 6)", ["Prometheus et Grafana :", "requêtes/s, erreurs, latence"], pointille=True,
-      ec=ORANGE)
-fleche(66, 46, 62, 49, couleur=ORANGE, pointille=True)
+# Secret Manager
+boite(63, 3, 33, 8.5, "Secret Manager → Secret Kubernetes",
+      ["clé API hors code et hors Git", "injectée via variable d'env. API_KEY"],
+      fc="#ffffff", ec=VERT, ecw=1.4)
 
-# ---- retour de la réponse (JSON) : des pods vers le client
-ax.plot([66, 8], [24.5, 24.5], color=ENCRE, lw=1.6, solid_capstyle="butt")
-fleche(8, 24.5, 8, 27)
-numero(37, 24.5, 4, couleur=ENCRE)
-ax.text(37, 22.9, "réponse JSON : score, labels, seuils, labels détectés", ha="center", va="top", fontsize=8.5, color=ENCRE)
+# Artifact Registry + Cloud Build
+boite(19, 3, 13, 8, "Cloud Build",
+      ["image construite", "sans install locale"], fc="#ffffff")
+boite(37, 3, 18, 8, "Artifact Registry",
+      ["image : code + modèle", "(aucun DL au démarrage)"], fc="#ffffff")
 
-ax.text(1.5, 65.5, "Digital Social Score : architecture cloud", fontsize=14, fontweight="bold", color=ENCRE, va="top")
-ax.text(1.5, 15, "Lecture\n1 à 4 : trajet d'une requête\na à f : étapes dans le pod\nA : secret\nB : image\nC : journaux\nPointillés : pas encore en place", fontsize=9, color=ENCRE_2, va="top")
+# Cloud Logging
+boite(63, 57.5, 33, 7, "Cloud Logging",
+      ["score · longueur · durée — jamais le texte"], fc="#ffffff", ec=VERT)
+
+# Supervision (pointillés)
+boite(35, 46, 20, 9, "Supervision (étape 6)",
+      ["Prometheus + Grafana :", "req/s, latence, erreurs, CPU"],
+      fc="#fff4e8", ec=ORANGE, pointille=True, ecw=1.6)
+
+# ── Flux numérotés (requête) ──────────────────────────────────────────────────
+# 1 Client → LB  (HTTPS)
+fleche(14, 34, 19, 34, couleur=VERT, lw=2)
+badge(16.5, 36.2, "1", BLEU)
+etiquette(16.5, 37.8, "HTTPS ✓", VERT, taille=7.5, gras=True)
+etiquette(16.5, 36.9, "chiffré", VERT, taille=7)
+
+# 2 LB → Service  (HTTP interne)
+fleche(37, 34, 42, 34, couleur=ROUGE, lw=2)
+badge(39.5, 36.2, "2", BLEU)
+etiquette(39.5, 37.8, "HTTP ✗", ROUGE, taille=7.5, gras=True)
+etiquette(39.5, 36.9, "réseau Google interne", ROUGE, taille=7)
+
+# 3 Service → Pods  (HTTP interne)
+fleche(57, 34, 63, 34, couleur=ROUGE, lw=2)
+badge(60, 36.2, "3", BLEU)
+etiquette(60, 37.8, "HTTP ✗", ROUGE, taille=7.5, gras=True)
+etiquette(60, 36.9, "réseau Google interne", ROUGE, taille=7)
+# Auth marker
+etiquette(60, 35.9, "→ auth en (a)", ROUGE, taille=7)
+
+# 4 Réponse JSON (HTTPS, retour)
+ax.plot([79.5, 8], [27, 27], color=VERT, lw=2, solid_capstyle="butt", zorder=4)
+fleche(8, 27, 8, 29, couleur=VERT, lw=2)
+badge(43, 27.5, "4", BLEU)
+etiquette(43, 25.8, "réponse HTTPS : score, labels, seuils, labels_detectes, model_version",
+          VERT, taille=7.5)
+
+# ── Flux infrastructure (vert) ────────────────────────────────────────────────
+# A : Secret → Pods
+fleche(79.5, 11.5, 79.5, 15, couleur=VERT, lw=1.6)
+badge(79.5, 13.0, "A", VERT)
+etiquette(81, 13.0, "injection secret", VERT, ha="left", taille=7.5)
+
+# B : Artifact Registry → Pods
+fleche(55, 7, 63, 20, couleur=VERT, lw=1.6)
+badge(60, 15, "B", VERT)
+etiquette(61, 13.5, "image Docker", VERT, ha="left", taille=7.5)
+
+# Cloud Build → Artifact Registry
+fleche(32, 7, 37, 7, couleur=ENCRE, lw=1.4)
+
+# C : Pods → Cloud Logging
+fleche(79.5, 57, 79.5, 57.5, couleur=VERT, lw=1.6)
+badge(79.5, 57.1, "C", VERT)
+
+# Supervision pointillés
+fleche(63, 36.5, 55, 48, couleur=ORANGE, pointille=True, lw=1.4)
+
+# ── Légende ───────────────────────────────────────────────────────────────────
+lx, ly, lw2, lh = 1, 1, 14, 24
+ax.add_patch(FancyBboxPatch((lx, ly), lw2, lh,
+                            boxstyle="round,pad=0.3,rounding_size=0.5",
+                            fc="#f4f4f1", ec="#aaaaaa", lw=1, zorder=2))
+ax.text(lx + lw2/2, ly + lh - 0.8, "Légende", ha="center", va="top",
+        fontsize=9, fontweight="bold", color=ENCRE, zorder=3)
+
+legende_items = [
+    ("1–4", "Flux requête/réponse",        BLEU),
+    ("a–f", "Étapes dans le pod",           ENCRE),
+    ("A",   "Secret → pods",               VERT),
+    ("B",   "Image → nœuds",              VERT),
+    ("C",   "Logs → Cloud Logging",        VERT),
+    ("▬",   "HTTPS (chiffré)",             VERT),
+    ("▬",   "HTTP (réseau interne)",       ROUGE),
+    ("╌",   "Non installé",               ORANGE),
+]
+for i, (sym, desc, coul) in enumerate(legende_items):
+    yy = ly + lh - 2.5 - 2.5*i
+    ax.text(lx + 1.2, yy, sym, ha="left", va="center",
+            fontsize=8.5, color=coul, fontweight="bold", zorder=3)
+    ax.text(lx + 3.5, yy, desc, ha="left", va="center",
+            fontsize=7.8, color=ENCRE, zorder=3)
+
+# ── Titre ─────────────────────────────────────────────────────────────────────
+ax.text(1, 67.5, "Digital Social Score — Architecture cloud (étape 7)",
+        fontsize=14, fontweight="bold", color=ENCRE, va="top")
 
 fig.savefig(SORTIE, dpi=140, facecolor=FOND, bbox_inches="tight")
 print("écrit :", SORTIE)
