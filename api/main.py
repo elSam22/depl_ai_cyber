@@ -10,6 +10,8 @@ import time
 
 from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
+from prometheus_client import start_http_server
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
 
 from preprocessing import PREPROCESSING_VERSION, preprocess
@@ -29,6 +31,15 @@ app = FastAPI(
     version="1.0.0",
 )
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+# --- Supervision (étape 6) : métriques Prometheus (requêtes, erreurs, latence par route).
+# Servies sur un port SÉPARÉ (9090), pas sur /metrics : le Service et l'Ingress n'exposent que le port 8080,
+# donc les métriques ne sont pas publiques. Prometheus les lit directement sur le pod (PodMonitor).
+# /health est exclu (appelé en continu par les sondes Kubernetes). METRICS_PORT=0 désactive (tests).
+Instrumentator(excluded_handlers=["/health"]).instrument(app)
+_port_metriques = int(os.environ.get("METRICS_PORT", "9090"))
+if _port_metriques:
+    start_http_server(_port_metriques)
 
 
 def verifier_cle(cle: str | None = Security(api_key_header)) -> None:

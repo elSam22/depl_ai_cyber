@@ -1,0 +1,65 @@
+--- a/api/main.py
++++ b/api/main.py
+@@ -10,6 +10,8 @@
+ 
+ from fastapi import Depends, FastAPI, HTTPException, Security
+ from fastapi.security import APIKeyHeader
++from prometheus_client import start_http_server
++from prometheus_fastapi_instrumentator import Instrumentator
+ from pydantic import BaseModel, Field
+ 
+ from preprocessing import PREPROCESSING_VERSION, preprocess
+@@ -30,7 +32,16 @@
+ )
+ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+ 
++# --- Supervision (étape 6) : métriques Prometheus (requêtes, erreurs, latence par route).
++# Servies sur un port SÉPARÉ (9090), pas sur /metrics : le Service et l'Ingress n'exposent que le port 8080,
++# donc les métriques ne sont pas publiques. Prometheus les lit directement sur le pod (PodMonitor).
++# /health est exclu (appelé en continu par les sondes Kubernetes). METRICS_PORT=0 désactive (tests).
++Instrumentator(excluded_handlers=["/health"]).instrument(app)
++_port_metriques = int(os.environ.get("METRICS_PORT", "9090"))
++if _port_metriques:
++    start_http_server(_port_metriques)
+ 
++
+ def verifier_cle(cle: str | None = Security(api_key_header)) -> None:
+     """Refuse la requête si la clé API est absente ou fausse (401)."""
+     if API_KEY is None:
+--- a/api/requirements.txt
++++ b/api/requirements.txt
+@@ -5,4 +5,5 @@
+ en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+ torch==2.15.0
+ transformers==5.22.2
+-laya==0.4.30
+\ No newline at end of file
++laya==0.4.30
++prometheus-fastapi-instrumentator>=7.0
+--- a/api/k8s/deployment.yaml
++++ b/api/k8s/deployment.yaml
+@@ -21,6 +21,8 @@
+           imagePullPolicy: Always
+           ports:
+             - containerPort: 8080
++            - containerPort: 9090                # métriques Prometheus (non exposé par le Service ni l'Ingress)
++              name: metrics
+           env:
+             - name: PORT
+               value: "8080"
+--- /dev/null
++++ b/api/k8s/podmonitor.yaml
+@@ -0,0 +1,13 @@
++# Dit à Prometheus (kube-prometheus-stack, release « monitoring ») de lire les métriques des pods dss-api.
++# Le label « release: monitoring » est nécessaire : c'est lui que le Prometheus du chart utilise pour choisir ses cibles.
++apiVersion: monitoring.coreos.com/v1
++kind: PodMonitor
++metadata:
++  name: dss-api
++  labels: {release: monitoring}
++spec:
++  selector:
++    matchLabels: {app: dss-api}
++  podMetricsEndpoints:
++    - port: metrics
++      interval: 15s

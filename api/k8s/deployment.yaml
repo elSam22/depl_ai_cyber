@@ -21,6 +21,8 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+            - containerPort: 9090                # métriques Prometheus (non exposé par le Service ni l'Ingress)
+              name: metrics
           env:
             - name: PORT
               value: "8080"
