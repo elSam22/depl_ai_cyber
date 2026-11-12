@@ -25,6 +25,8 @@ def test_score_format():
     corps = r.json()
     assert 0 <= corps["score"] <= 100
     assert set(corps["labels"]) == {"toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"}
+    assert isinstance(corps["toxique"], bool) and set(corps["seuils"]) == set(corps["labels"])
+    assert set(corps["labels_detectes"]) <= set(corps["labels"])
 
 
 def test_toxique_plus_haut_que_neutre():

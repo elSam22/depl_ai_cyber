@@ -20,7 +20,7 @@ log = logging.getLogger("dss")
 
 # --- Chargés UNE fois au démarrage (modèle spaCy via l'import de preprocessing, puis le modèle)
 scorer = load_scorer()
-API_KEY = os.environ.get("API_KEY")          # injectée par Cloud Run (Secret Manager), jamais dans le code
+API_KEY = os.environ.get("API_KEY")          # injectée depuis Secret Manager (Secret Kubernetes), jamais dans le code
 MAX_CHARS = int(os.environ.get("MAX_CHARS", "5000"))
 
 app = FastAPI(
@@ -45,14 +45,18 @@ class Demande(BaseModel):
 
 
 class Reponse(BaseModel):
-    score: int = Field(..., ge=0, le=100, description="Probabilité de toxicité x 100")
+    score: int = Field(..., ge=0, le=100,
+                       description="Moyenne x 100 des labels détectés, sinon probabilité de toxic x 100")
     labels: dict[str, float]
+    toxique: bool = Field(..., description="Au moins un label dépasse son seuil de décision")
+    labels_detectes: list[str] = Field(..., description="Labels dont la probabilité dépasse le seuil")
+    seuils: dict[str, float] = Field(..., description="Seuils de décision du modèle, calibrés sur la validation")
     model_version: str
 
 
 @app.get("/health")
 def health():
-    """Sonde de vie (Cloud Run, load balancer, Kubernetes)."""
+    """Sonde de vie (load balancer, Kubernetes)."""
     return {"status": "ok", "model_version": scorer.version, "preprocessing_version": PREPROCESSING_VERSION}
 
 
@@ -66,11 +70,17 @@ def score(demande: Demande):
     probas = scorer.predict([texte])[0]
     duree_ms = 1000 * (time.perf_counter() - t0)
 
-    score_final = round(100 * probas["toxic"])
+    detectes = [label for label in LABELS if probas[label] >= scorer.seuils[label]]
+    # Score 0-100 (DOCUMENTATION.md §4) : moyenne des labels détectés, sinon probabilité de toxic
+    retenus = detectes or ["toxic"]
+    score_final = round(100 * sum(probas[label] for label in retenus) / len(retenus))
     # Log SANS le texte : longueur, score, durée (minimisation RGPD)
     log.info("score=%d longueur=%d duree_ms=%.1f", score_final, len(demande.text), duree_ms)
     return Reponse(
         score=score_final,
         labels={label: round(probas[label], 4) for label in LABELS},
+        toxique=bool(detectes),
+        labels_detectes=detectes,
+        seuils=scorer.seuils,
         model_version=scorer.version,
     )

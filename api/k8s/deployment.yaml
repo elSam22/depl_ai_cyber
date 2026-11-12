@@ -28,8 +28,8 @@ spec:
               valueFrom:
                 secretKeyRef: {name: dss-api-key, key: API_KEY}
           resources:                          # Autopilot facture ces ressources demandées
-            requests: {cpu: "2", memory: 4Gi}   # LAYA : 421 M de paramètres (BiLSTM/DistilBERT : 1 CPU, 2Gi)
-            limits: {cpu: "2", memory: 4Gi}
+            requests: {cpu: "1", memory: 2Gi}   # DistilBERT : 66 M de paramètres (LAYA : 2 CPU, 4Gi)
+            limits: {cpu: "1", memory: 2Gi}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: {drop: ["ALL"]}

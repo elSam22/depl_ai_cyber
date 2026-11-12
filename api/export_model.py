@@ -34,6 +34,9 @@ QUESTIONS_LAYA = {
     "identity_hate": "Does this comment contain identity-based hate?",
 }
 
+# Nom de chaque modèle dans models/seuils.json (écrit par le notebook d'entraînement)
+NOMS_SEUILS = {"bilstm": "BiLSTM", "distilbert": "DistilBERT", "laya": "LAYA (zéro-shot)"}
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--type", choices=PARAMS, required=True)
 args = parser.parse_args()
@@ -53,6 +56,14 @@ else:
         sys.exit(f"Modèle introuvable : {source} (lancer d'abord notebooks/train.ipynb)")
     shutil.copytree(source, cible)
 
+# Seuils de décision par label, choisis sur la validation (sinon 0,5 par défaut dans l'API)
+fichier_seuils = RACINE / "models" / "seuils.json"
+if fichier_seuils.exists():
+    tous = json.loads(fichier_seuils.read_text(encoding="utf-8"))
+    params["seuils"] = {l: round(float(s), 4) for l, s in tous.get(NOMS_SEUILS[args.type], {}).items()}
+if not params.get("seuils"):
+    print("ATTENTION : pas de seuils pour ce modèle, l'API utilisera 0,5 pour chaque label")
+
 meta = {
     "model_type": args.type,
     "model_version": f"{args.type}{'-zero-shot' if args.type == 'laya' else ''}-{date.today().isoformat()}",
@@ -61,4 +72,5 @@ meta = {
     **params,
 }
 (cible / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+(cible / ".gitkeep").touch()   # garde le dossier dans Git (son contenu est ignoré)
 print(f"Modèle copié dans {cible} :", json.dumps(meta, indent=2))
