@@ -11,8 +11,8 @@ API qui note la toxicité d'un commentaire de **0 à 100**, avec anonymisation R
 L'API tourne sur Google Cloud. **L'adresse et la clé d'API vous sont remises séparément** (elles ne sont pas dans ce dépôt, qui est public). Le modèle utilisé est celui du serveur (DistilBERT) : inutile de rien entraîner ni télécharger.
 
 **1. Avec le front de démonstration** (le plus simple)
-1. Ouvrir `front/index.html` dans un navigateur (double-clic).
-2. En haut, choisir **« API distante (GKE) »**.
+1. Ouvrir `front/index.html` dans un navigateur (double-clic) : le mode **« API distante (GKE) »** est déjà sélectionné.
+2. (Si besoin, le choisir en haut.)
 3. Coller l'**adresse** de l'API et la **clé** dans les deux champs, puis écrire un commentaire et cliquer sur **Analyser**.
 
 La clé n'est jamais enregistrée : elle reste dans le champ le temps de la page. Le voyant à côté de « API locale » devient vert quand l'API répond.
@@ -23,7 +23,7 @@ curl -X POST https://<adresse>/score \
   -H "Content-Type: application/json" -H "X-API-Key: <clé>" \
   -d '{"text":"You are a stupid idiot"}'
 ```
-Réponse : `score` (0 à 100), `labels` (probabilité de chacun des 6 labels), `seuils`, `labels_detectes`, `toxique`, `model_version`. Codes d'erreur : 401 (clé absente ou fausse), 422 (texte vide ou de plus de 5 000 caractères).
+Réponse : `score` (0 à 100), `labels` (probabilité de chacun des 6 labels), `seuils`, `labels_detectes`, `toxique`, `model_version`, ainsi que `texte_anonymise` et `texte_nettoye` (ce que le serveur a fait du texte : le front les affiche et ne garde que le texte anonymisé dans son historique). Codes d'erreur : 401 (clé absente ou fausse), 422 (texte vide ou de plus de 5 000 caractères).
 
 **3. Avec la documentation interactive** : `https://<adresse>/docs` (la route `/score` s'y teste avec la clé dans l'en-tête `X-API-Key`).
 
@@ -36,7 +36,7 @@ Si l'API ne répond pas : le cluster est parfois mis en pause pour économiser l
 | `DOCUMENTATION.md` / `.pdf` | Documentation complète, étapes 1 à 7, annexes |
 | `front/index.html` | Interface de démonstration (un seul fichier, rien à installer) |
 | `notebooks/` | Anonymisation, nettoyage, entraînement des 3 modèles (BiLSTM, DistilBERT, LAYA) |
-| `api/` | API locale de développement (route `/predire`). Le code de l'API **déployée** (route `/score`, manifestes Kubernetes, scripts Google Cloud) est sur la branche `Enzo` |
+| `api/` | API locale de développement (route `/predire`). Le code de l'API **déployée** (route `/score`, manifestes Kubernetes, scripts Google Cloud) est sur la branche `Enzo`, avec le CORS et les champs `texte_anonymise` / `texte_nettoye` sur la branche `cors` |
 | `loadtest/` | Tests de charge Locust, rapport et courbes |
 | `supervision/` | Grille de tests, plan de supervision, tableau de bord Grafana importable (`grafana_dashboard.json`), installation de Prometheus et Grafana |
 | `images/` | Schéma d'architecture cloud et son script |

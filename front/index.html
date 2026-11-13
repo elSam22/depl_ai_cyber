@@ -1315,6 +1315,8 @@ $("tab-ex").onclick = () => onglet("ex");
 
 /* ---------- démarrage ---------- */
 dessinerHistorique();
+// Page ouverte en double-clic (file://) : pas d'API locale derrière, on propose directement l'API déployée
+if (location.protocol === "file:") { $("api-remote").checked = true; adapterAuMode(); }
 verifierSante();
 appliquerVue(location.hash === "#pipeline" || stockage("mode") === "pipeline" ? "pipeline" : "classique");
 </script>
