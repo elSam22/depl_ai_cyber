@@ -9,6 +9,7 @@ import secrets
 import time
 
 from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from prometheus_client import start_http_server
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -29,6 +30,15 @@ app = FastAPI(
     title="Digital Social Score API",
     description="Score de toxicité (0-100) d'un texte. Le texte reçu est anonymisé et n'est jamais stocké.",
     version="1.0.0",
+)
+# CORS : le front de démonstration appelle l'API depuis le navigateur (page ouverte depuis un fichier, origine « null »).
+# Pas de cookies (la clé est dans l'en-tête X-API-Key) : "*" sans credentials ne réduit pas la sécurité de la clé.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["X-API-Key", "Content-Type"],
+    allow_credentials=False,
 )
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
