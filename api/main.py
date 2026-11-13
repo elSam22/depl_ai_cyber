@@ -15,7 +15,7 @@ from prometheus_client import start_http_server
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
 
-from preprocessing import PREPROCESSING_VERSION, preprocess
+from preprocessing import PREPROCESSING_VERSION, anonymize, clean_text
 from scorer import LABELS, load_scorer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -73,6 +73,10 @@ class Reponse(BaseModel):
     labels_detectes: list[str] = Field(..., description="Labels dont la probabilité dépasse le seuil")
     seuils: dict[str, float] = Field(..., description="Seuils de décision du modèle, calibrés sur la validation")
     model_version: str
+    # Ce que le serveur a fait du texte reçu (renvoyés à l'appelant seulement, jamais journalisés ni stockés) :
+    # permet au front de montrer le prétraitement et de garder un historique SANS conserver le texte original.
+    texte_anonymise: str | None = Field(None, description="Texte après anonymisation (balises xxx_tag)")
+    texte_nettoye: str | None = Field(None, description="Texte après nettoyage : celui que le modèle voit")
 
 
 @app.get("/health")
@@ -87,7 +91,8 @@ def score(demande: Demande):
         raise HTTPException(status_code=422, detail="Texte vide")
 
     t0 = time.perf_counter()
-    texte = preprocess(demande.text)            # MÊME traitement qu'à l'entraînement
+    anonymise = anonymize(demande.text)         # MÊME traitement qu'à l'entraînement (= preprocess)
+    texte = clean_text(anonymise)
     probas = scorer.predict([texte])[0]
     duree_ms = 1000 * (time.perf_counter() - t0)
 
@@ -104,4 +109,6 @@ def score(demande: Demande):
         labels_detectes=detectes,
         seuils=scorer.seuils,
         model_version=scorer.version,
+        texte_anonymise=anonymise,
+        texte_nettoye=texte,
     )
