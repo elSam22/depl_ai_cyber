@@ -178,6 +178,7 @@ Déployé par Enzo (scripts dans `api/deploy/`, manifestes dans `api/k8s/` de la
 | **Conteneur non-root**, privilèges retirés (`drop ALL`, pas d'élévation) | Bonne pratique de sécurité : limite les dégâts si le conteneur est compromis. | — |
 | **Clé API dans Secret Manager, puis Secret Kubernetes** ; comparaison à temps constant | La clé n'est jamais dans le code ni dans Git ; la comparaison à temps constant évite de la deviner par mesure du temps de réponse. | Sans clé ou avec une mauvaise clé : 401 (grille de tests, S1 et S2). |
 | **HTTPS forcé** (Ingress Google, certificat géré, redirection) ; domaine `<ip>.sslip.io` | Chiffrement en transit ; le domaine gratuit permet d'obtenir le certificat sans acheter de nom. | HTTP redirigé vers HTTPS (S3). |
+| **CORS ouvert (`*`) sans cookies** (branche `cors`, déployé le 13 novembre) | Le front de démonstration appelle l'API depuis le navigateur (page ouverte depuis un fichier, origine `null`). La clé est dans l'en-tête `X-API-Key`, pas dans un cookie : autoriser toutes les origines (sans `credentials`) n'affaiblit pas l'authentification. Méthodes limitées à `GET` et `POST`, en-têtes limités à `X-API-Key` et `Content-Type`. | Avant : le front affichait « bloquée par le navigateur » ; après : la requête de vérification renvoie 200 et le front affiche le score. |
 | **Logs d'accès désactivés** (`--no-access-log`) | Pas d'adresse IP des clients dans les journaux (RGPD). | — |
 | **2 pods minimum** | Redondance : si l'un tombe, l'autre continue. | Failover : 0 erreur (testé avec 5 pods, étape 5). |
 | **Autoscaler 2 à 5 pods à 70 % de CPU** | Absorber les pics ; le plafond de 5 limite le coût (crédits étudiants). | Atteint 5 pods, mais trop lentement pour une montée de 5 minutes. |
@@ -186,6 +187,21 @@ Déployé par Enzo (scripts dans `api/deploy/`, manifestes dans `api/k8s/` de la
 | **Un seul worker uvicorn par pod** | Raison **non écrite dans le code**. | Un pod traite un commentaire à la fois : ≈ 4 requêtes/s par pod. |
 
 **Faiblesses constatées** (non corrigées) : `/docs` est public, pas de limitation de débit, bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6).
+
+**Redéployer l'API (leçons du 13 novembre).** Les poids du modèle ne sont **pas dans Git** (trop lourds, `api/model/` est ignoré) : l'image Docker n'embarque le modèle que si `api/model/` est rempli **sur la machine qui lance le déploiement**. Séquence correcte, depuis une machine qui possède `models/distilbert` :
+
+```bash
+python api/export_model.py --type distilbert          # copie les poids dans api/model/
+chmod a+r api/model/*                                 # le conteneur est non-root (USER 1000)
+PROJECT_ID=<projet> bash api/deploy/deploy_gke.sh     # build Cloud Build + déploiement
+curl https://<adresse>/health                         # doit indiquer distilbert-…, jamais dummy-0
+```
+
+Deux pièges rencontrés, qui ont chacun coûté un déploiement raté :
+- **Déployer depuis un clone Git (Cloud Shell)** : l'image part sans modèle et l'API **retombe silencieusement sur un modèle factice** (`model_version: dummy-0`, scores fixes, seuils à 0,5) tout en répondant 200. Le contrôle de `model_version` après chaque déploiement est donc indispensable.
+- **Fichier de poids en lecture réservée au propriétaire** (`-rw-------`) : le conteneur non-root ne peut pas le lire et le pod plante en boucle (`CrashLoopBackOff`, `FileNotFoundError`). Le déploiement progressif a protégé le service : les deux anciens pods ont continué à répondre pendant tout l'incident.
+
+**Limite du procédé :** il dépend d'une copie locale non versionnée, donc il n'est pas reproductible depuis le seul dépôt. Amélioration proposée : stocker les poids dans un bucket Cloud Storage (ou un registre de modèles) et les récupérer pendant le build, avec une étape de contrôle qui refuse de déployer si `model_version` commence par `dummy`.
 
 ### 3.3 Utiliser l'API : exemples de requêtes et réponses
 
