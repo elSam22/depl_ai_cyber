@@ -1,6 +1,6 @@
 # Étape 5 : test de charge de l'API Digital Social Score
 
-Cible : l'API déployée sur GKE (Kubernetes Autopilot, Paris), 2 pods au minimum, autoscaler de 2 à 5 pods à 70 % de CPU. Modèle : DistilBERT. Route testée : `POST /score` avec clé API.
+Cible : l'API déployée sur GKE (Kubernetes Autopilot, Paris), 2 pods au minimum, autoscaler de 2 à 5 pods à 70 % de CPU, **1 CPU et 2 Go par pod** (vérifié : le même ReplicaSet a servi pendant tous les tests). Modèle : DistilBERT. Route testée : `POST /score` avec clé API.
 
 ## 1. Méthode et justification des choix
 
@@ -133,7 +133,7 @@ Le TP demande de **proposer** des améliorations. Voici ce qui existe déjà, ce
 | **Redondance** : 2 pods minimum + autoscaler jusqu'à 5 | **En place et testée** (failover : 0 erreur ; autoscaler : 5 pods atteints à la 2e montée) | Le service continue quand un pod disparaît. |
 | **Au moins 3 pods en permanence** | Proposée | Avec 2 pods, la perte d'un pod divise la capacité par 2 (≈ 4 requêtes/s restantes) ; le failover a été testé avec 5 pods, pas avec 2. |
 | **Pods prêts plus vite** (minimum relevé avant un pic prévu, cible de CPU plus basse) | Proposée | Un pod neuf a mis **5 min 29 s** à être prêt (5 min 10 s de `Pending`) : trop lent pour une montée de 5 minutes. |
-| **Plus de CPU par pod, ou réglage des threads de torch** | Proposée | Pods à 91-99 % de CPU pour ≈ 4 requêtes/s chacun : le calcul du modèle est le goulot. |
+| **Plus de CPU par pod, ou réglage des threads de torch** | Proposée | Pods à 91-99 % de leur **1 CPU** pour ≈ 4 requêtes/s chacun : le calcul du modèle est le goulot. Doubler le CPU par pod est l'essai le plus direct. |
 | **Traitement par lots** (plusieurs commentaires par appel du modèle) | Proposée | Le modèle est plus efficace par lots ; à 100 requêtes/s, un appel par commentaire pèse. |
 | **Limite de débit par clé API** | Proposée, non faite | Au-delà de ≈ 8 requêtes/s l'API fait la queue : mieux vaut refuser tôt (429) que laisser la latence monter à 10 s. |
 | **File d'attente pour les pics** | Proposée | Absorbe un pic sans faire attendre l'appelant en direct. |

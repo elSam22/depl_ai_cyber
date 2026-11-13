@@ -54,6 +54,7 @@
   .dot.off { background: var(--bad); box-shadow: 0 0 0 4px rgba(239,68,68,.15); }
   .remote { display: none; grid-template-columns: 2fr 1.4fr; gap: 12px; margin-top: 18px; }
   .remote.show { display: grid; animation: drop .25s ease; }
+  .remote .note { grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted, #6b7080); }
   .modelbar { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
   .modelbar .field-label { margin: 0; }
   @keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
@@ -304,15 +305,16 @@
           <input type="radio" name="api" id="api-local" value="local" checked>
           <label for="api-local"><span class="dot" id="statut"></span>API locale</label>
           <input type="radio" name="api" id="api-remote" value="remote">
-          <label for="api-remote">API distante</label>
+          <label for="api-remote">API distante (GKE)</label>
         </div>
       </div>
     </div>
     <div class="remote" id="remote">
       <div><label class="field-label" for="url">URL de l'API</label>
-        <input type="url" id="url" placeholder="https://mon-api.exemple.fr" autocomplete="off"></div>
+        <input type="url" id="url" placeholder="https://&lt;ip&gt;.sslip.io" autocomplete="off"></div>
       <div><label class="field-label" for="cle">Clé d'API</label>
         <input type="password" id="cle" placeholder="••••••••" autocomplete="off"></div>
+      <p class="note">API déployée sur Google Cloud (routes <code>/score</code> et <code>/health</code>, clé dans l'en-tête <code>X-API-Key</code>). Ton texte part en HTTPS vers ce serveur, qui l'anonymise avant l'analyse ; il n'est ni stocké ni journalisé. Une seule version du modèle (DistilBERT), pas d'étapes de prétraitement renvoyées, donc pas de vue « Pipeline » ni d'historique dans ce mode. La clé reste dans ce champ, elle n'est jamais enregistrée.</p>
     </div>
     <div class="modelbar">
       <span class="field-label">Modèle</span>
@@ -539,6 +541,12 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const dms = (x) => (x >= 1000 ? fr(x / 1000, 2) + " s" : x >= 10 ? Math.round(x) + " ms" : fr(x, x < 1 ? 2 : 1) + " ms");
 function dessinerDurees(box, t) {
   box.replaceChildren();
+  if (t.pre == null) {                       // API déployée : seul le temps de réponse mesuré par le navigateur existe
+    const s = document.createElement("span"); s.className = "dur tot";
+    s.append("Temps de réponse (réseau inclus) : "); const b = document.createElement("b"); b.textContent = dms(t.total); s.appendChild(b);
+    box.appendChild(s);
+    return;
+  }
   [["Prétraitement", t.pre, ""], ["Réflexion du modèle", t.mod, ""], ["Total", t.total, " tot"]].forEach(([nom, v, cls]) => {
     const s = document.createElement("span"); s.className = "dur" + cls;
     s.append(nom + " : "); const b = document.createElement("b"); b.textContent = dms(v); s.appendChild(b);
@@ -546,7 +554,7 @@ function dessinerDurees(box, t) {
   });
 }
 const tempsDe = (d) => ({ pre: d.temps_pretraitement_ms, mod: d.temps_modele_ms, total: d.temps_ms,
-  ano: d.etapes.temps_anonymisation_ms, net: d.etapes.temps_nettoyage_ms });
+  ano: d.etapes && d.etapes.temps_anonymisation_ms, net: d.etapes && d.etapes.temps_nettoyage_ms });
 
 function animer(duree, f, id) {
   return new Promise((ok) => {
@@ -570,7 +578,11 @@ function stockage(cle, val) {            // le stockage du navigateur peut être
 const apiMode = () => document.querySelector("input[name=api]:checked").value;
 const modele = () => document.querySelector("input[name=modele]:checked").value;
 function base() {
-  if (apiMode() === "remote") return $("url").value.trim().replace(/\/+$/, "");
+  if (apiMode() === "remote") {
+    let u = $("url").value.trim().replace(/\/+$/, "");
+    if (u && !/^https?:\/\//i.test(u)) u = "https://" + u;     // « 1-2-3-4.sslip.io » suffit
+    return u;
+  }
   return location.protocol.startsWith("http") ? "" : "http://127.0.0.1:8000";   // page ouverte en fichier : API locale par défaut
 }
 function entetes() {
@@ -579,12 +591,43 @@ function entetes() {
   if (apiMode() === "remote" && cle) h["X-API-Key"] = cle;   // la clé n'est jamais stockée
   return h;
 }
+
+/* ---------- API déployée sur GKE (Enzo) : /score et /health ---------- */
+// Réponse de /score : { score, labels:{label:proba}, seuils:{label:seuil}, toxique, labels_detectes:[…], model_version }
+// On la convertit au format de l'API locale pour réutiliser tout l'affichage.
+function convertirReponseDistante(r, tempsMs) {
+  const detectes = new Set(r.labels_detectes || []);
+  const labels = {};
+  for (const [k, p] of Object.entries(r.labels || {})) {
+    labels[k] = { probabilite: p, seuil: (r.seuils || {})[k] ?? 0.5, score: Math.round(p * 100), detecte: detectes.has(k) };
+  }
+  return { modele: "distilbert", version_modele: r.model_version, score_global: r.score, toxique: !!r.toxique, labels,
+           etapes: null, temps_ms: tempsMs, distant: true };
+}
+function erreurDistante(statut) {
+  if (statut === 401 || statut === 403) return "Clé d'API refusée (en-tête X-API-Key).";
+  if (statut === 404) return "Adresse incorrecte : cette URL n'a pas la route /score de l'API déployée.";
+  if (statut === 405 || statut === 501) return "Cette URL n'accepte pas POST /score : ce n'est pas l'API déployée (ou son CORS refuse cette page).";
+  if (statut === 422) return "Texte invalide : il doit faire entre 1 et 5 000 caractères.";
+  if (statut === 429) return "Trop de requêtes : attends un instant.";
+  if (statut === 502 || statut === 503 || statut === 504) return "Service momentanément indisponible (code " + statut + ", souvent un pod qui redémarre). Réessaie dans un instant.";
+  return "Erreur de l'API (" + statut + ").";
+}
 let tSante;
 async function verifierSante() {
   const pastille = $("statut");
   pastille.className = "dot";
   if (apiMode() === "remote" && !$("url").value.trim()) return;
   try {
+    if (apiMode() === "remote") {                      // API déployée : /health, sans clé
+      const r = await fetch(base() + "/health");
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json();
+      pastille.className = "dot on";
+      pastille.title = "API déployée : " + (d.model_version || "ok");
+      return;
+    }
+    pastille.title = "";
     const r = await fetch(base() + "/sante", { headers: entetes() });
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
@@ -598,8 +641,19 @@ async function verifierSante() {
     $("p-modele-nom").textContent = NOMS_MODELE[modele()];
   } catch { pastille.className = "dot off"; }
 }
+function adapterAuMode() {
+  const distant = apiMode() === "remote";
+  $("remote").classList.toggle("show", distant);
+  // API déployée : un seul modèle, pas d'étapes de prétraitement renvoyées
+  ["bilstm", "laya"].forEach((m) => { $("m-" + m).disabled = distant; });
+  if (distant) $("m-distilbert").checked = true;
+  $("m-distilbert").disabled = false;
+  $("mode-pipeline").disabled = distant;
+  if (distant && vue() === "pipeline") { $("mode-classique").checked = true; appliquerVue("classique"); }
+  $("p-modele-nom").textContent = NOMS_MODELE[modele()];
+}
 document.querySelectorAll("input[name=api]").forEach((r) => r.addEventListener("change", () => {
-  $("remote").classList.toggle("show", apiMode() === "remote");
+  adapterAuMode();
   verifierSante();
 }));
 ["url", "cle"].forEach((id) => $(id).addEventListener("input", () => { clearTimeout(tSante); tSante = setTimeout(verifierSante, 500); }));
@@ -609,9 +663,20 @@ let ctrl = null;                          // permet d'interrompre la requête en
 async function appeler(texte, mod) {
   let r;
   ctrl = new AbortController();
+  if (apiMode() === "remote") {                         // API déployée sur GKE
+    const t0 = performance.now();
+    try {
+      r = await fetch(base() + "/score", { method: "POST", headers: entetes(), body: JSON.stringify({ text: texte }), signal: ctrl.signal });
+    } catch (e) {
+      if (e && e.name === "AbortError") throw e;
+      throw new Error("API injoignable, ou bloquée par le navigateur (CORS : l'API doit autoriser cette page et l'en-tête X-API-Key). Vérifie l'URL en HTTPS.");
+    }
+    if (!r.ok) throw new Error(erreurDistante(r.status));
+    return convertirReponseDistante(await r.json(), performance.now() - t0);
+  }
   try {
     r = await fetch(base() + "/predire", { method: "POST", headers: entetes(), body: JSON.stringify({ texte, modele: mod, anonymiser: true }), signal: ctrl.signal });
-  } catch { throw new Error("API injoignable. Vérifie qu'elle est lancée" + (apiMode() === "remote" ? " et que l'URL est correcte." : " (uvicorn api.main:app).")); }
+  } catch { throw new Error("API injoignable. Vérifie qu'elle est lancée (uvicorn api.main:app)."); }
   if (!r.ok) {
     let detail = "";
     try { const j = await r.json(); detail = typeof j.detail === "string" ? j.detail : ""; } catch {}
@@ -836,7 +901,9 @@ function construireLabels(d, liste, meta) {
     lignes[k] = li;
   }
   const t = d.temps_ms >= 1000 ? fr(d.temps_ms / 1000, 2) + " s" : Math.round(d.temps_ms) + " ms";
-  meta.textContent = "Modèle : " + (NOMS_MODELE[d.modele] || d.modele) + " · analysé en " + t + (d.avertissement ? " · ⚠ " + d.avertissement : "");
+  meta.textContent = d.distant
+    ? "Modèle : " + (NOMS_MODELE[d.modele] || d.modele) + " (" + d.version_modele + ") · réponse en " + t + ", réseau inclus"
+    : "Modèle : " + (NOMS_MODELE[d.modele] || d.modele) + " · analysé en " + t + (d.avertissement ? " · ⚠ " + d.avertissement : "");
   return lignes;
 }
 async function animerBarres(d, id, lignes) {
@@ -888,21 +955,25 @@ $("rejouer").addEventListener("click", async () => { if (derniere) { const id = 
 
 async function lectureClassique(d, id) {
   const et = d.etapes;
-  $("prep").classList.remove("hidden");
-  $("final").classList.remove("show");
-  $("prep").scrollIntoView({ behavior: "smooth", block: "center" });
   const t = tempsDe(d);
-  await jouerNettoyage(et, id, { stage: $("stage"), cap: $("caption"), v: 1, etape: (n) => {
-    etapeClassique(n);
-    if (n >= 3) $("d2").textContent = "· " + dms(t.ano);
-    if (n >= 4) $("d3").textContent = "· " + dms(t.net);
-  } });
-  if (id !== run) return;
-  afficherFinal($("final-txt"), et.nettoye);
-  $("final").classList.add("show");
-  $("caption").textContent = "Prétraitement terminé en " + dms(t.ano + t.net) + ".";
-  etapeClassique(4);
-  await sleep(500); if (id !== run) return;
+  if (et) {
+    $("prep").classList.remove("hidden");
+    $("final").classList.remove("show");
+    $("prep").scrollIntoView({ behavior: "smooth", block: "center" });
+    await jouerNettoyage(et, id, { stage: $("stage"), cap: $("caption"), v: 1, etape: (n) => {
+      etapeClassique(n);
+      if (n >= 3) $("d2").textContent = "· " + dms(t.ano);
+      if (n >= 4) $("d3").textContent = "· " + dms(t.net);
+    } });
+    if (id !== run) return;
+    afficherFinal($("final-txt"), et.nettoye);
+    $("final").classList.add("show");
+    $("caption").textContent = "Prétraitement terminé en " + dms(t.ano + t.net) + ".";
+    etapeClassique(4);
+    await sleep(500); if (id !== run) return;
+  } else {
+    $("prep").classList.add("hidden");               // API déployée : le prétraitement se fait côté serveur, rien à montrer
+  }
 
   ["score", "labels"].forEach((s) => $(s).classList.remove("hidden"));
   jauge1.pose(0, $("verdict"));
@@ -1114,7 +1185,7 @@ function arreter(avecMessage) {
 $("stop").addEventListener("click", () => arreter(true));
 $("p-stop").addEventListener("click", () => arreter(true));
 $("p-rejouer").addEventListener("click", () => {
-  if (!derniere) return;
+  if (!derniere || !derniere.etapes) return;
   lancerPipeline(derniere.etapes.original, derniere.modele, derniere);
 });
 
@@ -1122,6 +1193,7 @@ $("p-rejouer").addEventListener("click", () => {
 let historique = [];
 try { historique = JSON.parse(stockage("historique") || "[]").filter((h) => h && h.labels && !Array.isArray(h.labels) && h.temps); } catch { historique = []; }
 function ajouterHistorique(d) {
+  if (!d.etapes) return;                    // API déployée : pas de texte anonymisé reçu, donc rien à garder (RGPD)
   // RGPD : on ne garde que le texte ANONYMISÉ (jamais l'original), dans cet onglet uniquement
   historique.unshift({
     ts: Date.now(), modele: d.modele, score: d.score_global, labels: d.labels, temps: tempsDe(d),

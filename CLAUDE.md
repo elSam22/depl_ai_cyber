@@ -86,3 +86,7 @@ Macro-moyenne sur les 6 labels. Entraînement : mêmes 30000 lignes (LAYA : zér
 | LAYA (zéro-shot) | 0 | 0 | 0.9646 | 0.5767 | 2192 | 3000 | 0.9686 | 0.2375 | 0.8971 | 0.3283 | 0.3659 | 0.7403 | 0.4756 | 7006 | 700.6 | 1e+04 |
 
 <!-- RESULTATS:FIN -->
+
+## Livrable unique : DOCUMENTATION.pdf
+
+Le prof ne veut qu'un seul document, images affichées (pas de liens vers des fichiers). `DOCUMENTATION.md` est la source et contient tout. Plan fusionné le 12 novembre : structure par étapes 1 à 7 d'Eliana (`DOCUMENTATION2.md`) + nos résultats (étape 5 : charge, étape 6 : supervision, panne, attaque, § 4.2 : IAM) ; annexe A : grille de tests, annexe B : rapport de charge. Le schéma `images/architecture_cloud.py` est la version d'Eliana corrigée (chevauchements, supervision installée). Les images sont intégrées avec `![légende](chemin)`, jamais avec un lien. Après chaque modification : `.venv/bin/pip install markdown` (une fois) puis `.venv/bin/python outils/exporter_documentation.py` -> `DOCUMENTATION.pdf` (images incluses, via Brave ou Chrome) et `DOCUMENTATION.html` (non commité).

@@ -11,3 +11,10 @@ tqdm==4.70.1
 ipykernel==7.4.0
 fastapi==0.162.3
 uvicorn==0.54.0
+
+# --- Tests de charge et rapport (dossier loadtest/) : inutile pour utiliser l'API déployée
+locust==2.47.0
+matplotlib==3.11.2
+
+# --- Export de la documentation en PDF (outils/exporter_documentation.py)
+markdown==3.10
