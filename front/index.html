@@ -314,7 +314,7 @@
         <input type="url" id="url" placeholder="https://&lt;ip&gt;.sslip.io" autocomplete="off"></div>
       <div><label class="field-label" for="cle">Clé d'API</label>
         <input type="password" id="cle" placeholder="••••••••" autocomplete="off"></div>
-      <p class="note">API déployée sur Google Cloud (routes <code>/score</code> et <code>/health</code>, clé dans l'en-tête <code>X-API-Key</code>). Ton texte part en HTTPS vers ce serveur, qui l'anonymise avant l'analyse ; il n'est ni stocké ni journalisé. Une seule version du modèle (DistilBERT), pas d'étapes de prétraitement renvoyées, donc pas de vue « Pipeline » ni d'historique dans ce mode. La clé reste dans ce champ, elle n'est jamais enregistrée.</p>
+      <p class="note">API déployée sur Google Cloud (routes <code>/score</code> et <code>/health</code>, clé dans l'en-tête <code>X-API-Key</code>). Ton texte part en HTTPS vers ce serveur, qui l'anonymise avant l'analyse ; il n'est ni stocké ni journalisé. Une seule version du modèle (DistilBERT). Le serveur renvoie le texte anonymisé et nettoyé (affichés, et seuls gardés dans l'historique de l'onglet) ; pas de vue « Pipeline », qui demande les positions des éléments masqués. La clé reste dans ce champ, elle n'est jamais enregistrée.</p>
     </div>
     <div class="modelbar">
       <span class="field-label">Modèle</span>
@@ -349,6 +349,7 @@
       </div>
       <div class="stage" id="stage" aria-live="polite"></div>
       <div class="caption"><span id="caption"></span><button class="link" id="rejouer">↻ Rejouer l'animation</button></div>
+      <div class="final" id="final-anon"><span class="field-label">Texte anonymisé</span><code id="final-anon-txt"></code></div>
       <div class="final" id="final"><span class="field-label">Texte vu par le modèle</span><code id="final-txt"></code></div>
     </section>
 
@@ -602,7 +603,11 @@ function convertirReponseDistante(r, tempsMs) {
     labels[k] = { probabilite: p, seuil: (r.seuils || {})[k] ?? 0.5, score: Math.round(p * 100), detecte: detectes.has(k) };
   }
   return { modele: "distilbert", version_modele: r.model_version, score_global: r.score, toxique: !!r.toxique, labels,
-           etapes: null, temps_ms: tempsMs, distant: true };
+           etapes: null, temps_ms: tempsMs, distant: true,
+           // L'API renvoie le texte anonymisé et nettoyé (jamais l'original) : de quoi montrer le prétraitement et garder un historique
+           apercu: typeof r.texte_anonymise === "string"
+             ? { anonymise: r.texte_anonymise, nettoye: r.texte_nettoye || "", balises: r.texte_anonymise.match(/\b[a-z]+_tag\b/g) || [] }
+             : null };
 }
 function erreurDistante(statut) {
   if (statut === 401 || statut === 403) return "Clé d'API refusée (en-tête X-API-Key).";
@@ -957,6 +962,9 @@ async function lectureClassique(d, id) {
   const et = d.etapes;
   const t = tempsDe(d);
   if (et) {
+    ["stage", "rejouer"].forEach((x) => { $(x).style.display = ""; });
+    document.querySelector("#prep .steps").style.display = "";
+    $("final-anon").classList.remove("show");
     $("prep").classList.remove("hidden");
     $("final").classList.remove("show");
     $("prep").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -971,8 +979,18 @@ async function lectureClassique(d, id) {
     $("caption").textContent = "Prétraitement terminé en " + dms(t.ano + t.net) + ".";
     etapeClassique(4);
     await sleep(500); if (id !== run) return;
+  } else if (d.apercu) {
+    // API déployée : pas d'animation (le serveur ne renvoie pas les positions des éléments masqués), mais les deux textes
+    $("prep").classList.remove("hidden");
+    ["stage", "rejouer"].forEach((x) => { $(x).style.display = "none"; });
+    document.querySelector("#prep .steps").style.display = "none";
+    $("caption").textContent = "Prétraitement fait côté serveur : voici ce qu'il a produit (le texte original n'est pas conservé).";
+    afficherFinal($("final-anon-txt"), d.apercu.anonymise);
+    afficherFinal($("final-txt"), d.apercu.nettoye);
+    $("final-anon").classList.add("show");
+    $("final").classList.add("show");
   } else {
-    $("prep").classList.add("hidden");               // API déployée : le prétraitement se fait côté serveur, rien à montrer
+    $("prep").classList.add("hidden");               // ancienne API sans ces champs : rien à montrer
   }
 
   ["score", "labels"].forEach((s) => $(s).classList.remove("hidden"));
@@ -1193,11 +1211,12 @@ $("p-rejouer").addEventListener("click", () => {
 let historique = [];
 try { historique = JSON.parse(stockage("historique") || "[]").filter((h) => h && h.labels && !Array.isArray(h.labels) && h.temps); } catch { historique = []; }
 function ajouterHistorique(d) {
-  if (!d.etapes) return;                    // API déployée : pas de texte anonymisé reçu, donc rien à garder (RGPD)
+  const e = d.etapes || d.apercu;           // texte anonymisé : fourni par l'API locale ou renvoyé par l'API déployée
+  if (!e) return;                           // sinon rien à garder (RGPD : jamais le texte original)
   // RGPD : on ne garde que le texte ANONYMISÉ (jamais l'original), dans cet onglet uniquement
   historique.unshift({
     ts: Date.now(), modele: d.modele, score: d.score_global, labels: d.labels, temps: tempsDe(d),
-    texte: d.etapes.anonymise, nettoye: d.etapes.nettoye, balises: d.etapes.masques.map((m) => m.balise),
+    texte: e.anonymise, nettoye: e.nettoye, balises: d.etapes ? d.etapes.masques.map((m) => m.balise) : e.balises,
     temps_ms: d.temps_ms, avertissement: d.avertissement,
   });
   historique = historique.slice(0, 30);
