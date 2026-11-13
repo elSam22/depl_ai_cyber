@@ -1,4 +1,6 @@
 """Schéma d'architecture cloud — Digital Social Score (étape 7).
+Base : version d'Eliana ; corrigé pour supprimer les chevauchements (cadre Cloud Logging, titre du cluster, étiquettes sous les pastilles)
+et passer la supervision de « à faire » à « installée ».
 Lancement : .venv/bin/python images/architecture_cloud.py
 """
 from pathlib import Path
@@ -17,7 +19,7 @@ GRIS_TEXTE  = "#555550"
 VERT        = "#1a7a4a"   # flux sécurisés (HTTPS, secrets)
 ROUGE       = "#c0392b"   # HTTP non chiffré
 BLEU        = "#2a6db5"   # flux numérotés (requête client)
-ORANGE      = "#d4680a"   # supervision (pointillés / à faire)
+ORANGE      = "#d4680a"   # supervision (installée)
 JAUNE_FOND  = "#fff8ed"
 BLEU_FOND   = "#edf3fb"
 GRIS_FOND   = "#f0efec"
@@ -67,7 +69,7 @@ def etiquette(x, y, texte, couleur, ha="center", taille=7.8, gras=False):
 
 # ── Zones ─────────────────────────────────────────────────────────────────────
 zone(16, 1, 83, 63, "Google Cloud Platform — région europe-west9 (Paris, France) — données dans l'UE", BLEU_FOND)
-zone(61, 12, 36.5, 44, "Cluster GKE Autopilot — Kubernetes géré", JAUNE_FOND)
+zone(61, 12, 36.5, 43.5, "Cluster GKE Autopilot — Kubernetes géré", JAUNE_FOND)
 
 # ── Composants principaux ─────────────────────────────────────────────────────
 # Client
@@ -85,7 +87,7 @@ boite(42, 29, 15, 10, "Service dss-api",
       fc="#ffffff")
 
 # Pods
-boite(63, 15, 33, 42, "Pods dss-api  (2 à 5)",
+boite(63, 15, 33, 37, "Pods dss-api  (2 à 5)",
       ["autoscaler HPA : 70 % CPU", "conteneur non-root, drop ALL"],
       fc="#fffdf8", ec="#b08030", taille=10)
 
@@ -99,13 +101,13 @@ etapes_pod = [
     ("f", "Seuils par label → score 0-100",                    BLEU),
 ]
 for i, (lettre, texte, coul) in enumerate(etapes_pod):
-    yy = 47 - 4.5*i
+    yy = 44 - 4.0*i
     ax.add_patch(plt.Circle((66.5, yy), 0.9, fc=coul, ec="white", lw=1.2, zorder=5))
     ax.text(66.5, yy, lettre, ha="center", va="center",
             fontsize=7.5, color="white", fontweight="bold", zorder=6)
     etiquette(68, yy, texte, ENCRE, ha="left", taille=7.8)
 
-etiquette(66.5, 20.5, "Sondes /health : startupProbe · readinessProbe · livenessProbe",
+etiquette(66.5, 19.5, "Sondes /health : startupProbe · readinessProbe · livenessProbe",
           GRIS_TEXTE, ha="left", taille=7.5)
 
 # Secret Manager
@@ -120,40 +122,39 @@ boite(37, 3, 18, 8, "Artifact Registry",
       ["image : code + modèle", "(aucun DL au démarrage)"], fc="#ffffff")
 
 # Cloud Logging
-boite(63, 57.5, 33, 7, "Cloud Logging",
+boite(63, 58.5, 33, 5.2, "Cloud Logging",
       ["score · longueur · durée — jamais le texte"], fc="#ffffff", ec=VERT)
 
 # Supervision (pointillés)
-boite(35, 46, 20, 9, "Supervision (étape 6)",
-      ["Prometheus + Grafana :", "req/s, latence, erreurs, CPU"],
-      fc="#fff4e8", ec=ORANGE, pointille=True, ecw=1.6)
+boite(33, 46, 24, 10, "Supervision (étape 6, installée)",
+      ["Prometheus + Grafana :", "req/s, erreurs, CPU, mémoire, pods"],
+      fc="#fff4e8", ec=ORANGE, ecw=1.6)
 
 # ── Flux numérotés (requête) ──────────────────────────────────────────────────
 # 1 Client → LB  (HTTPS)
 fleche(14, 34, 19, 34, couleur=VERT, lw=2)
-badge(16.5, 36.2, "1", BLEU)
-etiquette(16.5, 37.8, "HTTPS ✓", VERT, taille=7.5, gras=True)
-etiquette(16.5, 36.9, "chiffré", VERT, taille=7)
+badge(16.5, 34, "1", BLEU)
+etiquette(16.5, 41.6, "HTTPS ✓", VERT, taille=7.5, gras=True)
+etiquette(16.5, 40.5, "chiffré", VERT, taille=7)
 
 # 2 LB → Service  (HTTP interne)
 fleche(37, 34, 42, 34, couleur=ROUGE, lw=2)
-badge(39.5, 36.2, "2", BLEU)
-etiquette(39.5, 37.8, "HTTP ✗", ROUGE, taille=7.5, gras=True)
-etiquette(39.5, 36.9, "réseau Google interne", ROUGE, taille=7)
+badge(39.5, 34, "2", BLEU)
+etiquette(39.5, 41.6, "HTTP ✗", ROUGE, taille=7.5, gras=True)
+etiquette(39.5, 40.5, "réseau interne", ROUGE, taille=7)
 
 # 3 Service → Pods  (HTTP interne)
 fleche(57, 34, 63, 34, couleur=ROUGE, lw=2)
-badge(60, 36.2, "3", BLEU)
-etiquette(60, 37.8, "HTTP ✗", ROUGE, taille=7.5, gras=True)
-etiquette(60, 36.9, "réseau Google interne", ROUGE, taille=7)
-# Auth marker
-etiquette(60, 35.9, "→ auth en (a)", ROUGE, taille=7)
+badge(60, 34, "3", BLEU)
+etiquette(62, 42.7, "HTTP ✗", ROUGE, ha="right", taille=7.5, gras=True)
+etiquette(62, 41.6, "réseau interne", ROUGE, ha="right", taille=7)
+etiquette(62, 40.5, "authentification en (a)", ROUGE, ha="right", taille=7)
 
 # 4 Réponse JSON (HTTPS, retour)
 ax.plot([79.5, 8], [27, 27], color=VERT, lw=2, solid_capstyle="butt", zorder=4)
 fleche(8, 27, 8, 29, couleur=VERT, lw=2)
-badge(43, 27.5, "4", BLEU)
-etiquette(43, 25.8, "réponse HTTPS : score, labels, seuils, labels_detectes, model_version",
+badge(43, 27, "4", BLEU)
+etiquette(43, 25.4, "réponse HTTPS : score, labels, seuils, labels_detectes, model_version",
           VERT, taille=7.5)
 
 # ── Flux infrastructure (vert) ────────────────────────────────────────────────
@@ -165,17 +166,18 @@ etiquette(81, 13.0, "injection secret", VERT, ha="left", taille=7.5)
 # B : Artifact Registry → Pods
 fleche(55, 7, 63, 20, couleur=VERT, lw=1.6)
 badge(60, 15, "B", VERT)
-etiquette(61, 13.5, "image Docker", VERT, ha="left", taille=7.5)
+etiquette(58.6, 15.6, "image Docker", VERT, ha="right", taille=7.5)
 
 # Cloud Build → Artifact Registry
 fleche(32, 7, 37, 7, couleur=ENCRE, lw=1.4)
 
 # C : Pods → Cloud Logging
-fleche(79.5, 57, 79.5, 57.5, couleur=VERT, lw=1.6)
-badge(79.5, 57.1, "C", VERT)
+fleche(90, 52, 90, 58.5, couleur=VERT, lw=1.6)
+badge(90, 55.2, "C", VERT)
 
-# Supervision pointillés
-fleche(63, 36.5, 55, 48, couleur=ORANGE, pointille=True, lw=1.4)
+# Supervision : métriques des pods (port 9090, interne)
+fleche(63, 44, 57, 49, couleur=ORANGE, lw=1.6)
+etiquette(50, 44.6, "métriques des pods (port 9090, interne)", ORANGE, ha="center", taille=7.2)
 
 # ── Légende ───────────────────────────────────────────────────────────────────
 lx, ly, lw2, lh = 1, 1, 14, 24
@@ -193,7 +195,7 @@ legende_items = [
     ("C",   "Logs → Cloud Logging",        VERT),
     ("▬",   "HTTPS (chiffré)",             VERT),
     ("▬",   "HTTP (réseau interne)",       ROUGE),
-    ("╌",   "Non installé",               ORANGE),
+    ("▬",   "Supervision (interne)",      ORANGE),
 ]
 for i, (sym, desc, coul) in enumerate(legende_items):
     yy = ly + lh - 2.5 - 2.5*i
