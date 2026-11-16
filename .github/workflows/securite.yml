@@ -37,26 +37,33 @@ jobs:
   tests-et-dependances:
     name: Tests de l'API et audit des dépendances (pip-audit)
     runs-on: ubuntu-latest
-    # Les tests et api/requirements-dev.txt appartiennent au code de l'API déployée (branches Enzo, cors, ci) ;
-    # sur main, api/ contient l'API locale de développement, sans tests : le job est alors ignoré.
-    if: ${{ hashFiles('api/tests/*.py') != '' }}
     steps:
       - uses: actions/checkout@v4
+      # Les tests et api/requirements-dev.txt appartiennent au code de l'API déployée (branches Enzo, cors, ci).
+      # Sur main, api/ contient l'API locale de développement, sans tests : les étapes suivantes sont alors ignorées.
+      - name: Chercher les tests de l'API
+        id: presence
+        run: |
+          if [ -d api/tests ] && [ -f api/requirements-dev.txt ]; then echo "presents=true" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-python@v5
+        if: steps.presence.outputs.presents == 'true'
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: api/requirements-dev.txt
       - name: Installer les dépendances de l'API (torch en version CPU)
+        if: steps.presence.outputs.presents == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install --extra-index-url https://download.pytorch.org/whl/cpu -r api/requirements-dev.txt
       - name: Tests (clé, validation d'entrée, format de réponse, RGPD)
+        if: steps.presence.outputs.presents == 'true'
         working-directory: api
         env:
           METRICS_PORT: "0"          # pas de serveur de métriques pendant les tests
         run: pytest -v
       - name: Audit des dépendances installées (vulnérabilités connues)
+        if: steps.presence.outputs.presents == 'true'
         run: |
           pip install pip-audit
           pip-audit --skip-editable
