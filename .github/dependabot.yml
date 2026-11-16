@@ -1,0 +1,10 @@
+# Mises à jour automatiques proposées (en pull request) : actions GitHub (épinglées par empreinte) et dépendances Python de l'API.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly}
+  - package-ecosystem: pip
+    directory: /api
+    schedule: {interval: weekly}
+    open-pull-requests-limit: 3

@@ -1,0 +1,13 @@
+# Réglages du backend du load balancer. Cloud Armor (limite par IP au bord du réseau) a été essayé le 16 novembre :
+# refusé, le quota « SECURITY_POLICIES » du projet étudiant est à 0. La limitation est donc faite dans l'API (protection.py).
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: dss-backend
+spec:
+  timeoutSec: 15                  # coupe les requêtes qui traînent (30 s par défaut) ; un score en dure 0,1
+  connectionDraining:
+    drainingTimeoutSec: 30
+  logging:
+    enable: true
+    sampleRate: 1.0               # tous les journaux du load balancer : indispensables pour reconstituer une attaque

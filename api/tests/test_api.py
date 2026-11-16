@@ -5,6 +5,9 @@ Lancer depuis api/ :  pytest -v
 import os
 
 os.environ["API_KEY"] = "test-key"
+os.environ["LIMITE_IP_PAR_MIN"] = "100000"      # les tests de contrat ne doivent pas être freinés (test_protection.py teste les limites)
+os.environ["LIMITE_SCORE_PAR_MIN"] = "100000"
+os.environ["LIMITE_ECHECS_PAR_MIN"] = "100000"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
