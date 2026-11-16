@@ -12,7 +12,17 @@ IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/dss-api:$TAG"
 K8S="$(dirname "$0")/../k8s"
 
 echo "1/3 Construction de l'image $IMAGE (Cloud Build, rien à installer en local)"
-gcloud builds submit api --tag "$IMAGE" --project "$PROJECT_ID" --timeout=30m --machine-type=e2-highcpu-8
+# On fabrique et envoie nous-mêmes l'archive des sources, puis on construit depuis cette archive : « gcloud builds submit api »
+# interroge le bucket de sources d'une façon que le compte fédéré de la pipeline (sans clé) n'a pas le droit de faire.
+# Mêmes exclusions que api/.gcloudignore (le dossier model/ avec les poids EST inclus).
+SOURCES="gs://${PROJECT_ID}_cloudbuild/source/dss-api-${TAG}.tgz"
+ARCHIVE="$(mktemp -t dss-api-XXXXXX).tgz"
+COPYFILE_DISABLE=1 tar -czf "$ARCHIVE" -C api \
+  --exclude=__pycache__ --exclude='*.pyc' --exclude=./tests --exclude=./deploy --exclude=./export_model.py \
+  --exclude=./requirements-dev.txt --exclude=./README.md --exclude=./.pytest_cache --exclude=./pytest.ini --exclude=./k8s .
+gcloud storage cp "$ARCHIVE" "$SOURCES" --project "$PROJECT_ID"
+rm -f "$ARCHIVE"
+gcloud builds submit "$SOURCES" --tag "$IMAGE" --project "$PROJECT_ID" --timeout=30m --machine-type=e2-highcpu-8
 
 echo "2/3 Application des manifests Kubernetes"
 IP="$(gcloud compute addresses describe dss-ip --global --format='value(address)')"
