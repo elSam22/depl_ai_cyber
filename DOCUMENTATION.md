@@ -599,7 +599,7 @@ Cloud Logging GKE collecte automatiquement la sortie standard des pods. Ligne ty
 
 ### 6.6 Pipeline de sécurité et déploiement continu
 
-Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request** sur le dépôt public. Elle comprend **six jobs** : cinq contrôles, puis le déploiement, qui ne démarre que si les cinq sont verts.
+Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request** sur le dépôt public. Elle comprend **sept jobs** : six contrôles, puis le déploiement, qui ne démarre que si les six sont verts.
 
 | Job | Outil | Pourquoi ce choix | Résultat |
 |---|---|---|---|
@@ -607,20 +607,22 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 | **Code** | `bandit`, échec dès la sévérité moyenne | Détecte les motifs dangereux en Python sans exécuter le code. | Vert après correction (voir ci-dessous). |
 | **Conformité IA Act** | `outils/verifier_model_card.py` | Le TP2 impose un `model_card.json` : on contrôle ses champs, que la catégorie de risque soit l'un des 4 niveaux du règlement et justifiée, et **qu'aucune affirmation ne soit faite sans preuve** (par exemple `bias_detected: false` sans évaluation décrite est refusé). | Vert. La fiche déclare `bias_detected: null` (non évalué) avec la raison. |
 | **Configuration Docker et Kubernetes** | `trivy`, échec dès la sévérité haute | Le Dockerfile et les manifestes de `api/k8s/` décident des protections réelles du conteneur : on les contrôle comme du code. | Vert, **sans aucune exception** (voir ci-dessous). |
-| **Tests et dépendances** | `pytest` ; `pip-audit` sur l'environnement installé | Rejoue la grille de sécurité (clé, validation d'entrée, anonymisation, CORS, réponse réduite) ; les versions sont libres (`fastapi>=0.115`), donc on audite ce que `pip` a réellement résolu. | 17 tests passent (modèle factice) ; « No known vulnerabilities found ». |
+| **Image Docker** (ajouté le 16 nov.) | `trivy image`, échec dès la sévérité haute, failles avec correctif disponible | La configuration saine ne dit rien des paquets que l'image contient : on construit l'image et on l'analyse. | Rouge au premier essai (`zlib1g`, 2 failles hautes), vert après la mise à jour des paquets système dans le Dockerfile. |
+| **Tests et dépendances** | `pytest` ; `pip-audit` sur l'environnement installé | Rejoue la grille de sécurité (clé, validation d'entrée, anonymisation, CORS, réponse réduite) ; les versions sont libres (`fastapi>=0.115`), donc on audite ce que `pip` a réellement résolu. | 29 tests passent (modèle factice), dont ceux de la limitation de débit ; « No known vulnerabilities found ». |
 | **Déploiement** | Cloud Build, Kubernetes | Voir ci-dessous. | Vert depuis le 16 novembre à 10:14 UTC. |
 
 **Ce que la pipeline a trouvé.**
 - `bandit` : (1) `torch.load` sans `weights_only=True` dans `api/scorer.py` et `api/modeles.py` : un fichier de poids piégé pourrait exécuter du code au chargement. **Corrigé.** (2) et (3) `from_pretrained` « sans révision épinglée » : **faux positifs** justifiés (dossier local embarqué, rien n'est téléchargé), marqués `# nosec B615`.
 - `trivy` : le conteneur n'avait pas `readOnlyRootFilesystem: true` (KSV-0014, sévérité haute) : un attaquant maître du conteneur pouvait y déposer un exécutable. D'abord **accepté avec sa raison** dans `.trivyignore` (non testable sans remplacer les pods), puis **corrigé et déployé** le 16 novembre avec deux volumes temporaires en mémoire. Le fichier d'exceptions est maintenant vide.
 - **Les tests ont détecté une régression RGPD** au moment de réconcilier le code d'Enzo : sa normalisation anti-évasion « corrigeait » le leetspeak (3 en e, 1 en i, 0 en o…) **avant** l'anonymisation. Un numéro de téléphone ou une adresse IP collés à un mot (`me:0612345678`) devenait du texte illisible et **n'était plus reconnu : il traversait l'anonymisation**. Correctif : le dé-leet passe **après** l'anonymisation, quand les données personnelles sont déjà des balises ; la défense contre l'évasion fonctionne toujours.
+- `trivy image` : **2 failles de sévérité haute dans `zlib1g`** (bibliothèque système de l'image de base Debian), avec correctif publié. La pipeline a refusé la pull request ; `apt-get upgrade` ajouté au Dockerfile, contrôle repassé au vert (exécutions 43858297183 puis 43858725549).
 - Un échec de la première exécution, gardé volontairement : les tests importaient `pandas`, absent des dépendances de test. Cela montre que la pipeline détecte ce qui passe inaperçu sur une machine de développement.
 
 ![Première exécution de la pipeline (échec sur les tests, secrets et code au vert), GitHub Actions, 16 novembre](supervision/images/ci_premiere_execution.png)
 
 **Le déploiement automatique, et pourquoi il est sûr.**
-- **Déclenchement** : push sur les branches de déploiement (`ci`, `Enzo`) quand `api/` a changé, ou à la demande ; **jamais sur une pull request** (le code peut venir d'un tiers). Un seul déploiement à la fois.
-- **Aucune clé stockée.** GitHub prouve son identité à Google par un jeton OIDC (*Workload Identity Federation*). Le fournisseur d'identité est limité à **ce dépôt et à ces deux branches** ; le compte de service dédié n'a que les rôles nécessaires (construire, déployer, lire la clé d'API et les poids), aucun rôle d'administrateur du projet.
+- **Déclenchement** : push sur la branche `ci` (la branche `Enzo` en a été retirée le 16 novembre) quand `api/` a changé, ou à la demande ; **jamais sur une pull request** (le code peut venir d'un tiers). Un seul déploiement à la fois.
+- **Aucune clé stockée.** GitHub prouve son identité à Google par un jeton OIDC (*Workload Identity Federation*). Le fournisseur d'identité est limité à **ce dépôt** et à deux branches, dont seule `ci` déclenche un déploiement ; le compte de service dédié n'a que les rôles nécessaires (construire, déployer, lire la clé d'API et les poids), aucun rôle d'administrateur du projet.
 - **Poids du modèle dans un bucket privé** (accès public interdit, lecture seule pour la pipeline) : ils ne sont pas dans git, et c'est ce qui rend le déploiement reproductible depuis le seul dépôt.
 - **Avant de construire** : test du **vrai** modèle (un modèle factice ne passe pas).
 - **Après le déploiement**, un contrôle de 11 vérifications (`api/deploy/verifier_deploiement.py`) : `/health` répond sans rien révéler ; tous les pods annoncent la **même version** (le remplacement est progressif, anciens et nouveaux pods répondent tour à tour) ; le modèle n'est **pas** `dummy-…` (l'incident du 13 novembre) ; un texte toxique est jugé toxique et un texte neutre non ; la réponse ne contient que `score` et `toxique` ; 401 sans clé et avec une mauvaise clé ; `/version` exige la clé ; `/docs` répond 404.
@@ -638,7 +640,18 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 **Choix assumés et limites.**
 - **`main` est protégé** : une fusion n'y est acceptée que si **les contrôles sont verts**. Les administrateurs peuvent contourner la règle en urgence ; les poussées forcées sont interdites.
 - **Le déploiement part de la branche `ci`, pas de `main`**, parce que `main` contient l'API locale de développement et non le code déployé. Cette branche est **protégée depuis le 16 novembre** : pull request obligatoire, les 6 contrôles verts obligatoires (branche à jour), pas de poussée forcée ni de suppression, règles valables aussi pour les administrateurs. Le déploiement n'est plus possible depuis aucune autre branche (la branche `Enzo` en a été retirée).
-- **Non couvert :** test dynamique de l'API en ligne ; (l'image Docker est désormais analysée et les actions GitHub sont référencées par empreinte, § 6.8) ; mise à jour automatique des dépendances.
+- **Ajouté le 16 novembre (§ 6.8)** : analyse de l'image Docker, actions GitHub référencées par empreinte de commit, Dependabot (mises à jour des dépendances et des actions proposées en pull request), détection de secrets au push, droits du jeton GitHub réduits à la lecture.
+- **Non couvert :** test dynamique de l'API en ligne dans la pipeline (le contrôle en 11 points après déploiement s'en approche mais ne cherche pas de failles) ; une seule clé d'API pour tous les clients.
+
+**Journal d'exécution** (GitHub Actions, dépôt public `elSam22/depl_ai_cyber`, onglet Actions ; chaque numéro s'ouvre à `https://github.com/elSam22/depl_ai_cyber/actions/runs/<numéro>`, les journaux détaillés de chaque job y sont consultables) :
+
+| Numéro | Heure (UTC, 16 nov.) | Branche et événement | Résultat | Ce qu'il montre |
+|---|---|---|---|---|
+| 43845955880 | 10:07 | `ci`, push | Succès | Premier déploiement entièrement automatique (contrôles verts, build, 11 vérifications) |
+| 43848111995 | 10:21 | `ci`, push | Succès | Déploiement de l'API réconciliée (réponse réduite, `/docs` fermé) |
+| 43858285417 et 43858297183 | 11:30 | `durcissement`, push et pull request | **Échec** | `trivy image` : 2 failles hautes dans `zlib1g` ; **le déploiement n'a pas démarré** (job ignoré) |
+| 43858717055 et 43858725549 | 11:32 | `durcissement`, push et pull request | Succès | Après correction, 6 contrôles verts, déploiement ignoré (pull request) |
+| 43859230303 | 11:36 | `ci`, fusion de la pull request | **Succès, 7 jobs** | 6 contrôles verts puis déploiement réel, vérifié en 11 points |
 - Chaque déploiement remplace les pods en service et consomme du crédit Google Cloud.
 
 
