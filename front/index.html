@@ -314,7 +314,7 @@
         <input type="url" id="url" placeholder="https://&lt;ip&gt;.sslip.io" autocomplete="off"></div>
       <div><label class="field-label" for="cle">Clé d'API</label>
         <input type="password" id="cle" placeholder="••••••••" autocomplete="off"></div>
-      <p class="note">API déployée sur Google Cloud (routes <code>/score</code> et <code>/health</code>, clé dans l'en-tête <code>X-API-Key</code>). Ton texte part en HTTPS vers ce serveur, qui l'anonymise avant l'analyse ; il n'est ni stocké ni journalisé. Une seule version du modèle (DistilBERT). Le serveur renvoie le texte anonymisé et nettoyé (affichés, et seuls gardés dans l'historique de l'onglet) ; pas de vue « Pipeline », qui demande les positions des éléments masqués. La clé reste dans ce champ, elle n'est jamais enregistrée.</p>
+      <p class="note">API déployée sur Google Cloud (routes <code>/score</code> et <code>/health</code>, clé dans l'en-tête <code>X-API-Key</code>). Ton texte part en HTTPS vers ce serveur, qui l'anonymise avant l'analyse ; il n'est ni stocké ni journalisé. Une seule version du modèle (DistilBERT). Le serveur renvoie volontairement très peu (le score arrondi à la dizaine et le verdict : cela rend le vol du modèle plus difficile) : pas de probabilités par label, pas de vue « Pipeline », et un historique seulement si l'API renvoie le texte anonymisé. La clé reste dans ce champ, elle n'est jamais enregistrée.</p>
     </div>
     <div class="modelbar">
       <span class="field-label">Modèle</span>
@@ -594,7 +594,8 @@ function entetes() {
 }
 
 /* ---------- API déployée sur GKE (Enzo) : /score et /health ---------- */
-// Réponse de /score : { score, labels:{label:proba}, seuils:{label:seuil}, toxique, labels_detectes:[…], model_version }
+// Réponse de /score : version actuelle { score (arrondi à la dizaine), toxique } ; anciennes versions : + labels, seuils,
+// labels_detectes, model_version, texte_anonymise, texte_nettoye. Le front accepte les deux.
 // On la convertit au format de l'API locale pour réutiliser tout l'affichage.
 function convertirReponseDistante(r, tempsMs) {
   const detectes = new Set(r.labels_detectes || []);
@@ -603,6 +604,7 @@ function convertirReponseDistante(r, tempsMs) {
     labels[k] = { probabilite: p, seuil: (r.seuils || {})[k] ?? 0.5, score: Math.round(p * 100), detecte: detectes.has(k) };
   }
   return { modele: "distilbert", version_modele: r.model_version, score_global: r.score, toxique: !!r.toxique, labels,
+           minimal: !r.labels,      // réponse réduite : pas de probabilités à afficher
            etapes: null, temps_ms: tempsMs, distant: true,
            // L'API renvoie le texte anonymisé et nettoyé (jamais l'original) : de quoi montrer le prétraitement et garder un historique
            apercu: typeof r.texte_anonymise === "string"
@@ -886,6 +888,8 @@ const jauge1 = creerJauge($("g1")), jauge2 = creerJauge($("g2"));
 jauge1.pose(0, $("verdict")); jauge2.pose(0, $("p-verdict"));
 
 function resumeDetail(d) {
+  if (d.minimal) return d.toxique ? "Verdict du serveur : toxique (au moins un label au-dessus de son seuil). Score arrondi à la dizaine."
+                                  : "Verdict du serveur : sain (aucun label au-dessus de son seuil). Score arrondi à la dizaine.";
   const vrais = Object.entries(d.labels).filter(([, v]) => v.detecte).map(([k]) => LABELS[k].toLowerCase());
   return vrais.length
     ? vrais.length + (vrais.length > 1 ? " labels détectés : " : " label détecté : ") + vrais.join(", ")
@@ -907,7 +911,7 @@ function construireLabels(d, liste, meta) {
   }
   const t = d.temps_ms >= 1000 ? fr(d.temps_ms / 1000, 2) + " s" : Math.round(d.temps_ms) + " ms";
   meta.textContent = d.distant
-    ? "Modèle : " + (NOMS_MODELE[d.modele] || d.modele) + " (" + d.version_modele + ") · réponse en " + t + ", réseau inclus"
+    ? "Modèle : " + (NOMS_MODELE[d.modele] || d.modele) + (d.version_modele ? " (" + d.version_modele + ")" : "") + " · réponse en " + t + ", réseau inclus"
     : "Modèle : " + (NOMS_MODELE[d.modele] || d.modele) + " · analysé en " + t + (d.avertissement ? " · ⚠ " + d.avertissement : "");
   return lignes;
 }
@@ -994,6 +998,7 @@ async function lectureClassique(d, id) {
   }
 
   ["score", "labels"].forEach((s) => $(s).classList.remove("hidden"));
+  if (d.minimal) $("labels").classList.add("hidden");   // API déployée à réponse réduite : aucune probabilité à montrer
   jauge1.pose(0, $("verdict"));
   $("detail").textContent = "";
   const lignes = construireLabels(d, $("liste"), $("meta"));

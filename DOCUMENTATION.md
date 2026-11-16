@@ -186,7 +186,7 @@ Déployé par Enzo (scripts dans `api/deploy/`, manifestes dans `api/k8s/` de la
 | **Ressources par pod** : 2 CPU et 4 Go au départ (dimensionné pour LAYA, 421 M de paramètres), ramenées à **1 CPU et 2 Go** par Enzo le 12 novembre (dimensionné pour DistilBERT, 66 M de paramètres) | Autopilot facture les ressources demandées : on ne paie pas pour LAYA si on déploie DistilBERT. | Pods à 91-99 % de leur CPU pendant la montée : le CPU est saturé. Le déploiement demande **1 CPU et 2 Go** (vérifié le 12 novembre). C'est le ReplicaSet `69798c4847`, actif pendant tous nos tests : **les mesures de l'étape 5 ont été faites à 1 CPU et 2 Go par pod**, soit ≈ 4 requêtes/s par CPU. |
 | **Un seul worker uvicorn par pod** | Raison **non écrite dans le code**. | Un pod traite un commentaire à la fois : ≈ 4 requêtes/s par pod. |
 
-**Faiblesses constatées** (non corrigées) : `/docs` est public, pas de limitation de débit, bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6).
+**Faiblesses constatées** : pas de limitation de débit (non corrigée, voir § 6.7), bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6). `/docs` était public : **fermé le 16 novembre** après l'attaque décrite au § 6.7.
 
 **Redéployer l'API (leçons du 13 novembre).** Les poids du modèle ne sont **pas dans Git** (trop lourds, `api/model/` est ignoré) : l'image Docker n'embarque le modèle que si `api/model/` est rempli **sur la machine qui lance le déploiement**. Séquence correcte, depuis une machine qui possède `models/distilbert` :
 
@@ -205,16 +205,16 @@ Deux pièges rencontrés, qui ont chacun coûté un déploiement raté :
 
 ### 3.3 Utiliser l'API : exemples de requêtes et réponses
 
-Exemples **réels**, relevés le 12 novembre 2026 sur le cluster (modèle `distilbert-2026-11-12`). `<domaine>` et `<CLE_API>` sont à remplacer : la clé n'est jamais écrite dans le dépôt, qui est public.
+Exemples **réels**, relevés le 16 novembre 2026 à 10:40 UTC sur le cluster (modèle `distilbert-2026-11-16`). `<domaine>` et `<CLE_API>` sont à remplacer : la clé n'est jamais écrite dans le dépôt, qui est public.
 
-**Santé** (sans clé)
+**Santé** (sans clé) : volontairement muette, elle ne révèle ni version ni détail.
 
 ```bash
 curl https://<domaine>.sslip.io/health
 ```
 
 ```json
-{"status":"ok","model_version":"distilbert-2026-11-12","preprocessing_version":"1.0"}
+{"status":"ok"}
 ```
 
 **Commentaire neutre**
@@ -226,10 +226,7 @@ curl -X POST https://<domaine>.sslip.io/score \
 ```
 
 ```json
-{"score":2,"labels":{"toxic":0.0157,"severe_toxic":0.0025,"obscene":0.0092,"threat":0.0057,"insult":0.0057,"identity_hate":0.0052},
- "toxique":false,"labels_detectes":[],
- "seuils":{"toxic":0.92,"severe_toxic":0.97,"obscene":0.94,"threat":0.97,"insult":0.94,"identity_hate":0.96},
- "model_version":"distilbert-2026-11-12"}
+{"score":0,"toxique":false}
 ```
 
 **Commentaire toxique**
@@ -241,29 +238,42 @@ curl -X POST https://<domaine>.sslip.io/score \
 ```
 
 ```json
-{"score":99,"labels":{"toxic":0.9919,"severe_toxic":0.8882,"obscene":0.9896,"threat":0.6518,"insult":0.9849,"identity_hate":0.8672},
- "toxique":true,"labels_detectes":["toxic","obscene","insult"],
- "seuils":{"toxic":0.92,"severe_toxic":0.97,"obscene":0.94,"threat":0.97,"insult":0.94,"identity_hate":0.96},
- "model_version":"distilbert-2026-11-12"}
+{"score":100,"toxique":true}
 ```
 
-| Champ               | Signification                                                                                                                                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `score`           | Entier de 0 à 100 : moyenne des scores des labels détectés, sinon score de `toxic`. Ci-dessus : (99,19 + 98,96 + 98,49) / 3 ≈ 99 ; pour le texte neutre, aucun label détecté, donc le score de `toxic`, 1,57 arrondi à 2. |
-| `labels`          | Probabilité de chacun des 6 labels (entre 0 et 1).                                                                                                                                                                                  |
-| `seuils`          | Seuil de décision de chaque label (§ 2.2).                                                                                                                                                                                         |
-| `labels_detectes` | Labels dont la probabilité atteint le seuil.                                                                                                                                                                                        |
-| `toxique`         | `true` si au moins un label est détecté.                                                                                                                                                                                         |
-| `model_version`   | Version du modèle (la route `/health` donne aussi `preprocessing_version`, la version du prétraitement).                                                                                                                       |
+**Commentaire déguisé** (leetspeak) : la normalisation avant le modèle le ramène à `you are a idiot`.
+
+```json
+{"score":100,"toxique":true}
+```
+
+**Version du modèle** (route **réservée à la clé** : le contrôle après déploiement s'en sert pour refuser le modèle factice)
+
+```bash
+curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"
+```
+
+```json
+{"model_version":"distilbert-2026-11-16","preprocessing_version":"1.0"}
+```
+
+| Champ | Signification |
+| --- | --- |
+| `score` | Entier de 0 à 100, **arrondi à la dizaine** (0, 10, 20… 100). En interne : moyenne des probabilités des labels détectés, sinon probabilité de `toxic`, multipliée par 100. |
+| `toxique` | `true` si au moins un des 6 labels dépasse son seuil de décision (§ 2.2). |
+
+**Pourquoi une réponse aussi pauvre.** Jusqu'au 16 novembre, la réponse contenait aussi les 6 probabilités à 4 décimales, les seuils de décision, la version du modèle et les textes prétraités. Ce détail aide un attaquant : il peut chercher le texte qui passe juste sous un seuil (évasion) ou entraîner un clone du modèle sur nos réponses (vol de modèle par distillation). Nous gardons donc un score (la sortie centrale du TP) mais **arrondi**, et le verdict ; probabilités et seuils restent internes (journaux et métriques). Le compromis a un coût : un client perd le détail par label.
+
+**Documentation interactive fermée en production.** `/docs`, `/redoc` et `/openapi.json` répondent **404** depuis le 16 novembre à 10:31 UTC, après qu'un client a téléchargé le schéma complet de l'API puis envoyé 94 000 requêtes sur `/docs` (§ 6.7).
 
 **Erreurs**
 
-| Cas                                                                | Code          | Corps de la réponse                                                                                                                                 |
-| ------------------------------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clé absente ou fausse                                             | **401** | `{"detail":"Clé API absente ou invalide"}`                                                                                                        |
-| Texte vide                                                         | **422** | `{"detail":[{"type":"string_too_short","loc":["body","text"],"msg":"String should have at least 1 character","input":"","ctx":{"min_length":1}}]}` |
-| Champ `text` absent                                              | **422** | `{"detail":[{"type":"missing","loc":["body","text"],"msg":"Field required","input":{}}]}`                                                          |
-| Texte de plus de 5 000 caractères, ou corps qui n'est pas du JSON | **422** | même format `detail`                                                                                                                              |
+| Cas | Code | Corps de la réponse |
+| --- | --- | --- |
+| Clé absente ou fausse | **401** | `{"detail":"Clé API absente ou invalide"}` |
+| Texte vide | **422** | `{"detail":[{"type":"string_too_short","loc":["body","text"],"msg":"String should have at least 1 character","input":""}]}` |
+| Champ `text` absent | **422** | `{"detail":[{"type":"missing","loc":["body","text"],"msg":"Field required","input":{}}]}` |
+| Texte de plus de 5 000 caractères, ou corps qui n'est pas du JSON | **422** | même format `detail` |
 
 **Autres points.** Le texte reçu est anonymisé avant le modèle et n'est jamais stocké ni journalisé. L'API locale de ce dépôt est différente : route `/predire`, champ `texte`, choix du modèle, et la réponse contient en plus `etapes` (texte original, anonymisé, nettoyé) et les durées.
 
@@ -508,7 +518,7 @@ Grille complète : Annexe A.
 | S3 — appel en HTTP | 301 vers HTTPS |
 | S4 — texte vide, trop long (> 5 000 caractères) ou corps non JSON | 422 |
 | S5 — le texte reçu n'apparaît pas dans les journaux | **Vérifié** : un texte avec un nom, une adresse IP et un mot unique a été envoyé ; la recherche de ces trois éléments dans Cloud Logging ne renvoie rien (voir 6.4) |
-| S6 — `/docs` accessible sans clé | 200 : documentation publique (constat) |
+| S6 — `/docs` accessible sans clé | 200 : publique le 12 nov. ; **404 depuis le 16 nov.** (voir § 6.7) |
 | S7 — rafale de requêtes invalides | Service légitime maintenu (voir 6.5) |
 | S8 — limitation de débit | Aucune : aucun refus 429 (constat, voir 6.5) |
 
@@ -565,7 +575,7 @@ Grille complète : Annexe A.
 - **L'autoscaler réagit trop tard pour une montée brutale** (déjà mesuré à l'étape 5, visible ici) : justifie un minimum de pods plus élevé avant un pic annoncé.
 - **La supervision consomme de la place sur un cluster partagé** : au moment de l'essai, Google n'avait plus de machine disponible dans la zone (« GCE out of resources ») et Grafana est resté bloqué en attente. On a retiré **Alertmanager** (aucun canal de notification n'est configuré) pour libérer de la mémoire. Les règles d'alerte peuvent se lire dans Prometheus, mais aucune notification n'est envoyée.
 - Grafana a dû être ramené en version 10.4.2 : en version 13, l'interface ne se chargeait pas à travers l'aperçu web de Cloud Shell (fichier JavaScript non transmis par le relais).
-- Pas de limitation de débit et `/docs` public : points faibles non corrigés (voir grille S6, S8).
+- Pas de limitation de débit : point faible non corrigé (grille S8, § 6.7). `/docs` public : corrigé le 16 novembre (grille S6).
 
 ![Tableau de bord Kubernetes prêt à l'emploi : panneaux d'usage vides](supervision/images/grafana_dashboard_pods.png)
 
@@ -587,33 +597,83 @@ Cloud Logging GKE collecte automatiquement la sortie standard des pods. Ligne ty
 
 2 minutes, 8 attaquants (sans clé, mauvaise clé, texte trop long, JSON invalide) et 2 utilisateurs légitimes. **5 812 requêtes d'attaque (≈ 49/s) toutes refusées avec le bon code (401 ou 422), médiane 25 ms** : un refus est environ 4 fois moins coûteux qu'un vrai calcul (90 ms). Les légitimes n'ont subi **aucune erreur** (276 requêtes, P95 170 ms). Limites : charge faible, et la comparaison avec des légitimes seuls n'a pas été faite avec les mêmes textes. **Aucune limitation de débit** : l'API répond à ≈ 49 requêtes/s d'un même client sans jamais envoyer de 429, donc une attaque plus forte consommerait le CPU sans être freinée (amélioration proposée : limite par clé ou par IP). Et le bogue de clé à accent (S2b) permet de produire des erreurs 500, que cette rafale n'a pas utilisées.
 
-### 6.6 Pipeline de sécurité (intégration continue)
+### 6.6 Pipeline de sécurité et déploiement continu
 
-Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement est un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request**, sur le dépôt public, sans aucun secret ni droit sur Google Cloud.
+Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request** sur le dépôt public. Elle comprend **six jobs** : cinq contrôles, puis le déploiement, qui ne démarre que si les cinq sont verts.
 
-| Contrôle (job) | Outil | Pourquoi ce choix | Résultat sur GitHub |
+| Job | Outil | Pourquoi ce choix | Résultat |
 |---|---|---|---|
-| **Recherche de secrets** | `gitleaks`, sur **tout l'historique** git | Une clé retirée d'un fichier reste lisible dans les anciens commits : c'est exactement ce qui est arrivé (clé d'API dans `frontend/index.html`, branche Eliana). Un contrôle du seul état courant ne l'aurait pas vue. | « no leaks found ». En local, l'outil retrouve bien l'ancienne clé (révoquée le 13 novembre) : elle est déclarée dans `.gitleaksignore` pour que la pipeline ne signale que les **nouvelles** fuites. |
-| **Analyse du code** | `bandit`, échec dès la sévérité moyenne | Détecte les motifs dangereux en Python sans exécuter le code. | « No issues identified » après correction (voir ci-dessous). |
-| **Configuration Docker et Kubernetes** | `trivy` (mode `config`), échec dès la sévérité haute | Le Dockerfile et les manifestes de `api/k8s/` décident des protections réelles du conteneur : on les contrôle comme du code. | Passe, avec **une exception acceptée** (voir ci-dessous). |
-| **Tests de l'API** | `pytest` (15 tests) | Rejoue automatiquement la grille de tests de sécurité : clé absente ou fausse (401), texte vide ou trop long (422), format de la réponse, texte non journalisé. | « 15 passed, 1 skipped » (le test ignoré compare avec les données nettoyées, absentes du dépôt). |
-| **Audit des dépendances** | `pip-audit`, sur l'environnement réellement installé | Les versions sont libres (`fastapi>=0.115`) : on audite ce que `pip` a effectivement résolu, pas le fichier. `pip` est mis à jour avant l'audit. | « No known vulnerabilities found ». Seul `en-core-web-sm` n'est pas auditable (il vient d'une URL GitHub, pas de PyPI). |
+| **Secrets** | `gitleaks`, sur **tout l'historique** git | Une clé retirée d'un fichier reste lisible dans les anciens commits : c'est ce qui est arrivé (clé d'API dans `frontend/index.html`, branche Eliana). Un contrôle du seul état courant ne l'aurait pas vue. | Vert. Retrouve l'ancienne clé en local ; elle est révoquée depuis le 13 novembre et déclarée dans `.gitleaksignore` pour que seules les **nouvelles** fuites soient signalées. |
+| **Code** | `bandit`, échec dès la sévérité moyenne | Détecte les motifs dangereux en Python sans exécuter le code. | Vert après correction (voir ci-dessous). |
+| **Conformité IA Act** | `outils/verifier_model_card.py` | Le TP2 impose un `model_card.json` : on contrôle ses champs, que la catégorie de risque soit l'un des 4 niveaux du règlement et justifiée, et **qu'aucune affirmation ne soit faite sans preuve** (par exemple `bias_detected: false` sans évaluation décrite est refusé). | Vert. La fiche déclare `bias_detected: null` (non évalué) avec la raison. |
+| **Configuration Docker et Kubernetes** | `trivy`, échec dès la sévérité haute | Le Dockerfile et les manifestes de `api/k8s/` décident des protections réelles du conteneur : on les contrôle comme du code. | Vert, **sans aucune exception** (voir ci-dessous). |
+| **Tests et dépendances** | `pytest` ; `pip-audit` sur l'environnement installé | Rejoue la grille de sécurité (clé, validation d'entrée, anonymisation, CORS, réponse réduite) ; les versions sont libres (`fastapi>=0.115`), donc on audite ce que `pip` a réellement résolu. | 17 tests passent (modèle factice) ; « No known vulnerabilities found ». |
+| **Déploiement** | Cloud Build, Kubernetes | Voir ci-dessous. | Vert depuis le 16 novembre à 10:14 UTC. |
 
-**Ce que la pipeline a déjà trouvé, avant même de tourner sur GitHub.** `bandit` signalait 3 alertes de sévérité moyenne dans `api/scorer.py` : (1) `torch.load` sans `weights_only=True` : un fichier de poids piégé pourrait exécuter du code au chargement. **Corrigé** (`weights_only=True`, sans effet sur le fonctionnement). (2) et (3) `from_pretrained` « sans épingler de révision » : **faux positifs**, car le modèle est un dossier local embarqué dans l'image (`HF_HUB_OFFLINE=1`), rien n'est téléchargé. Marqués `# nosec B615` avec la justification en commentaire.
-
-**Ce que `trivy` a trouvé.** Un défaut réel dans `api/k8s/deployment.yaml` : le conteneur n'a pas `readOnlyRootFilesystem: true` (KSV-0014, sévérité haute). Un système de fichiers en lecture seule empêche un attaquant qui aurait pris le contrôle du conteneur d'y déposer un exécutable. **Nous ne l'avons pas corrigé** : il faut vérifier que l'API n'écrit rien ailleurs que dans `/tmp` (à monter en volume `emptyDir`), et nous ne pouvons pas le tester sans remplacer les pods en service. Le risque est donc **accepté et écrit avec sa raison dans `.trivyignore`**, plutôt que supprimé de la pipeline. Les autres protections sont en place : utilisateur non-root, capacités retirées, pas d'élévation de privilèges. Les alertes de sévérité moyenne ou basse (profil seccomp non défini, pas de `HEALTHCHECK` Docker, espace de noms `default`) ne bloquent pas.
-
-**Un échec de la première exécution, gardé volontairement.** Le premier lancement était rouge : les tests importaient `pandas`, absent des dépendances de test. Ce n'est pas un défaut de sécurité, mais cela montre que la pipeline détecte une dépendance manquante qui serait passée inaperçue sur une machine de développement (où elle était installée). Correction : ajout de `pandas` à `api/requirements-dev.txt`.
+**Ce que la pipeline a trouvé.**
+- `bandit` : (1) `torch.load` sans `weights_only=True` dans `api/scorer.py` et `api/modeles.py` : un fichier de poids piégé pourrait exécuter du code au chargement. **Corrigé.** (2) et (3) `from_pretrained` « sans révision épinglée » : **faux positifs** justifiés (dossier local embarqué, rien n'est téléchargé), marqués `# nosec B615`.
+- `trivy` : le conteneur n'avait pas `readOnlyRootFilesystem: true` (KSV-0014, sévérité haute) : un attaquant maître du conteneur pouvait y déposer un exécutable. D'abord **accepté avec sa raison** dans `.trivyignore` (non testable sans remplacer les pods), puis **corrigé et déployé** le 16 novembre avec deux volumes temporaires en mémoire. Le fichier d'exceptions est maintenant vide.
+- **Les tests ont détecté une régression RGPD** au moment de réconcilier le code d'Enzo : sa normalisation anti-évasion « corrigeait » le leetspeak (3 en e, 1 en i, 0 en o…) **avant** l'anonymisation. Un numéro de téléphone ou une adresse IP collés à un mot (`me:0612345678`) devenait du texte illisible et **n'était plus reconnu : il traversait l'anonymisation**. Correctif : le dé-leet passe **après** l'anonymisation, quand les données personnelles sont déjà des balises ; la défense contre l'évasion fonctionne toujours.
+- Un échec de la première exécution, gardé volontairement : les tests importaient `pandas`, absent des dépendances de test. Cela montre que la pipeline détecte ce qui passe inaperçu sur une machine de développement.
 
 ![Première exécution de la pipeline (échec sur les tests, secrets et code au vert), GitHub Actions, 16 novembre](supervision/images/ci_premiere_execution.png)
 
-Les deux jobs `gitleaks` et `bandit` sont au vert dès la première exécution ; la deuxième exécution, après le correctif, est entièrement verte (l'ajout de `trivy` a lui aussi demandé deux essais : étiquette de version de l'action inexistante, puis échec d'installation de l'outil avec une version trop ancienne de l'action) (les journaux sont dans l'onglet Actions du dépôt ; GitHub ne les affiche qu'aux personnes connectées, d'où les extraits ci-dessus).
+**Le déploiement automatique, et pourquoi il est sûr.**
+- **Déclenchement** : push sur les branches de déploiement (`ci`, `Enzo`) quand `api/` a changé, ou à la demande ; **jamais sur une pull request** (le code peut venir d'un tiers). Un seul déploiement à la fois.
+- **Aucune clé stockée.** GitHub prouve son identité à Google par un jeton OIDC (*Workload Identity Federation*). Le fournisseur d'identité est limité à **ce dépôt et à ces deux branches** ; le compte de service dédié n'a que les rôles nécessaires (construire, déployer, lire la clé d'API et les poids), aucun rôle d'administrateur du projet.
+- **Poids du modèle dans un bucket privé** (accès public interdit, lecture seule pour la pipeline) : ils ne sont pas dans git, et c'est ce qui rend le déploiement reproductible depuis le seul dépôt.
+- **Avant de construire** : test du **vrai** modèle (un modèle factice ne passe pas).
+- **Après le déploiement**, un contrôle de 11 vérifications (`api/deploy/verifier_deploiement.py`) : `/health` répond sans rien révéler ; tous les pods annoncent la **même version** (le remplacement est progressif, anciens et nouveaux pods répondent tour à tour) ; le modèle n'est **pas** `dummy-…` (l'incident du 13 novembre) ; un texte toxique est jugé toxique et un texte neutre non ; la réponse ne contient que `score` et `toxique` ; 401 sans clé et avec une mauvaise clé ; `/version` exige la clé ; `/docs` répond 404.
+- **Retour arrière automatique** si le déploiement échoue, **seulement si un déploiement a réellement eu lieu** (comparaison du numéro de révision). Sans cette condition, une première version de la pipeline a fait reculer la production d'une version alors que rien n'avait été déployé : défaut trouvé et corrigé le jour même.
+
+**Les obstacles rencontrés** (le premier déploiement réussi a demandé une dizaine d'exécutions) :
+
+| Exécutions | Échec | Cause et correction |
+|---|---|---|
+| 1 à 5 | `gcloud builds submit` : « forbidden from accessing the bucket » | Le compte limité n'a pas les droits que cette commande exige sur le bucket de sources. Droits ajoutés (lecture du bucket, puis administration de ce seul bucket) : sans effet. |
+| 6 | Idem, avec une archive des sources déjà envoyée par le script | La commande revérifie quand même le bucket. **Contournement :** `--no-source`, le build lit lui-même l'archive. |
+| 7 et 8 | Le build réussit mais la commande échoue : lecture des journaux refusée | Réservée aux *Viewer* du projet ; `--suppress-logs` ne suffit pas. |
+| 9 | **Succès** | Soumission asynchrone puis lecture du **statut** du build (permis). |
 
 **Choix assumés et limites.**
-- **`main` est protégé** : une fusion n'y est acceptée que si les **quatre contrôles sont verts** (réglage GitHub « branch protection »). Sans cela la pipeline ne ferait qu'avertir. Les administrateurs peuvent contourner la règle en cas d'urgence, et les poussées forcées sont interdites.
-- **Intégration seulement, pas de déploiement automatique.** Déployer depuis GitHub demande de lui donner des droits sur le projet Google Cloud (via *Workload Identity Federation*, sans clé stockée), et les poids du modèle ne sont **pas dans git** : la pipeline ne pourrait pas construire l'image. Chaque déploiement remplace aussi les pods en service et consomme du crédit. Le déploiement reste donc manuel, avec le contrôle de `model_version` décrit au § 3.2.
-- **Elle contrôle le code de l'API déployée** (branches `Enzo`, `cors`, `ci`). Sur `main`, `api/` contient l'API locale de développement, sans tests : le job de tests est alors ignoré (vérification faite après le `checkout`, car `hashFiles` n'est pas autorisé au niveau d'un job).
-- **Non couvert :** analyse de l'image Docker construite (les vulnérabilités de ses paquets système), test dynamique de l'API en ligne, contrôle que `model_version` n'est pas `dummy-…` après déploiement, et les tests qui utilisent le **modèle factice** faute de poids dans git (ils ne détecteraient pas un modèle cassé). Ce dernier garde-fou aurait évité l'incident du 13 novembre : amélioration proposée.
+- **`main` est protégé** : une fusion n'y est acceptée que si **les contrôles sont verts**. Les administrateurs peuvent contourner la règle en urgence ; les poussées forcées sont interdites.
+- **Le déploiement part de la branche `ci`, pas de `main`**, parce que `main` contient l'API locale de développement et non le code déployé. Cette branche n'est **pas protégée** : toute personne ayant le droit d'écrire dans le dépôt peut y pousser et donc déclencher un déploiement. Le risque est limité à l'équipe, mais une protection de branche (relecture obligatoire) serait la suite logique.
+- **Non couvert :** analyse de l'**image** Docker construite (les failles des paquets système), test dynamique de l'API en ligne, actions GitHub référencées par version et non par empreinte, mise à jour automatique des dépendances.
+- Chaque déploiement remplace les pods en service et consomme du crédit Google Cloud.
+
+
+### 6.7 Attaque réelle du 16 novembre (incident I-001)
+
+Le 16 novembre, l'API a reçu du trafic hostile. Le détail complet (chronologie, méthode, corrections) est dans le registre `supervision/INCIDENTS.md` ; voici l'essentiel.
+
+![Trafic reçu par l'API le 16 novembre : première rafale à 08:25, vague à 191 req/s à 10:10, déploiements et fermeture de /docs](supervision/images/incident_i001_debit.png)
+
+**Ce qui s'est passé.** Un seul client a envoyé **94 161 des 94 306 requêtes** de la période (99,85 %), de 08:21 à 10:20 UTC, en enchaînant les étapes classiques d'une attaque :
+
+| Étape | Observé | Heure (UTC) |
+|---|---|---|
+| **Reconnaissance** | Téléchargement de `/openapi.json` (le plan complet de l'API) ; recherche d'autres emplacements du schéma | 08:21 à 08:23 |
+| **Énumération** | Chemins sensibles (`.git/config`, `.env`, `phpinfo.php`, `server-status`, `xmlrpc.php`) : tous 404 | 08:25, 09:23 |
+| **Usage de la clé** | 5 appels `/score` **réussis avec la clé valide**, un sans clé (401) ; essai de la route `/predict` (404) | 08:21 à 09:59 |
+| **Détection de ports** | Requêtes mal formées typiques de `nmap` (`/nice ports,/Trinity.txt.bak`, `HELP`, `0?`) | 10:07 |
+| **Inondation** | **90 022 requêtes sur `/docs`** ; pic de 191 req/s (225 req/s sur une minute selon Prometheus) | 10:03 à 10:11 |
+
+**Impact : aucune erreur 5xx, 2 pods sur 2, CPU à 0,22 cœur sur 2.** Mais l'effet sur `/score` **n'a pas pu être mesuré** : personne ne l'a appelé pendant la vague. Et la page `/docs` coûte 4 ms : 225 req/s ne prouvent rien, alors qu'un calcul de score coûte environ 100 ms et que notre limite mesurée est d'**environ 8 requêtes/s**. Une inondation de `/score` avec la clé, que ce client possède, serait la suite logique.
+
+**Qui ?** L'adresse n'est pas identifiable. Les indices (progression en étapes, usage de la clé, arrivée peu après la remise de l'adresse au professeur) correspondent à l'agent de test du professeur, **sans preuve technique**. Nous n'avons donc pas bloqué cette adresse : si c'est le test, la bloquer neutraliserait l'évaluation.
+
+**Détection : manquée en temps réel.** Aucune alerte n'existe : nous n'avons vu l'attaque que parce que quelqu'un regardait Grafana. Prometheus localise la route et l'heure ; seuls les journaux du load balancer donnent l'adresse, l'outil et les chemins ; **les journaux de l'application ne voient rien** (accès désactivés, refus non journalisés).
+
+| Correction | État |
+|---|---|
+| `/docs`, `/redoc` et `/openapi.json` fermés en production | **Fait**, déployé le 16 nov. à 10:31 (404 vérifié) |
+| Réponse réduite (score arrondi à la dizaine, verdict) | **Fait** (§ 3.3) |
+| Normalisation anti-évasion avant le modèle | **Fait**, avec un défaut d'anonymisation corrigé en route (§ 6.6) |
+| Tableau de bord Grafana « Détection d'attaque », script d'analyse des journaux, registre | **Fait** (`supervision/`) |
+| **Limitation de débit** : module écrit (`api/limiteur_debit.py`) mais **non branché** ; Cloud Armor au niveau du load balancer non fait | **Non fait : principal risque restant** |
+| Alertes Prometheus, journalisation des refus, clés distinctes par client | Non fait |
+
+**Leçon principale.** Une défense qui n'est pas en service n'existe pas : le limiteur et la fermeture de `/docs` étaient écrits avant l'attaque, mais aucun des deux n'était déployé.
 
 ---
 
@@ -686,7 +746,7 @@ La **clé API** est stockée dans Secret Manager et injectée en variable d'envi
 - Pas de chiffrement interne (load balancer → pods).
 - Pas de `NetworkPolicy` dans les manifestes.
 - Une seule clé partagée — impossible d'identifier un appelant ou de révoquer un accès individuellement.
-- `/docs` public.
+- ~~`/docs` public~~ : fermé le 16 novembre (§ 6.7).
 
 ### 7.5 Tableau de synthèse des choix techniques
 
@@ -753,7 +813,7 @@ Légende : **OK** = vérifié sur le cluster ; **code** = prévu dans le code (t
 | S4b | Texte de 6 000 caractères (> 5 000) | 422 | 422 | **OK** |
 | S4c | Corps qui n'est pas du JSON | 422 | 422 | **OK** |
 | S5 | Les logs ne contiennent pas le texte reçu | aucun texte ni IP dans Cloud Logging | Texte envoyé : un nom, une IP et un mot unique (`ZEBRAXYZ123`). Recherche dans Cloud Logging (30 min) : **aucun résultat**. Les lignes du journal ont toutes la forme `score=60 longueur=67 duree_ms=80.2` (jamais le texte). | **OK** |
-| S6 | `/docs` (Swagger) accessible sans clé | à décider | **200 : publique** | constat |
+| S6 | `/docs` (Swagger) accessible sans clé | à décider | **200 : publique** le 12 nov. ; **404 depuis le 16 nov.** | corrigé après l'attaque (§ 6.7) |
 | S7 | Rafale de requêtes invalides (sans clé, mauvaise clé, texte trop long, JSON invalide) pendant que des utilisateurs légitimes travaillent | le service légitime continue | 2 min, 2 légitimes + 8 attaquants (`loadtest/attaque.py`). **5 812 requêtes d'attaque (≈ 49/s), toutes refusées avec le bon code** (401 ou 422), médiane 25 ms. **Utilisateurs légitimes : 276 requêtes, 0 erreur, médiane 90 ms, P95 170 ms, maximum 391 ms.** | **OK** (limite : pas de mesure « légitimes seuls » avec les mêmes textes, donc la comparaison n'est qu'indicative) |
 | S8 | Limitation de débit | requêtes refusées (429) au-delà d'un seuil | Aucun 429 : les ≈ 49 requêtes/s d'un même client ont toutes été traitées jusqu'au refus (401/422). Une attaque plus forte consommerait du CPU sans être freinée. | constat : non implémentée (amélioration proposée : limite par clé ou par IP au niveau du load balancer) |
 
