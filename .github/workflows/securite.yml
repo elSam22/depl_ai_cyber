@@ -34,6 +34,21 @@ jobs:
       # -ll : échoue à partir de la sévérité moyenne. Les tests et le dossier model/ (poids) sont exclus.
       - run: bandit -r api -x api/tests,api/model -ll
 
+  configuration:
+    name: Configuration Docker et Kubernetes (trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Analyse le Dockerfile et les manifestes k8s de api/ (rien à analyser sur main : l'API locale n'en a pas).
+      # Échoue à partir de la sévérité haute ; les risques acceptés sont listés avec leur raison dans .trivyignore.
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: api
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          trivyignores: .trivyignore
+
   tests-et-dependances:
     name: Tests de l'API et audit des dépendances (pip-audit)
     runs-on: ubuntu-latest
