@@ -1,0 +1,38 @@
+{
+  "model_name": "Digital Social Score v2",
+  "description": "Détection de propos toxiques dans un commentaire en anglais : score de toxicité de 0 à 100 et probabilité de chacun des 6 labels (toxic, severe_toxic, obscene, threat, insult, identity_hate). Le système évalue un TEXTE, jamais une personne : aucun score n'est associé à un auteur ni agrégé par utilisateur.",
+  "risk_level": "limited",
+  "risk_justification": "Hors des usages à haut risque de l'annexe III du règlement (emploi, crédit, éducation, forces de l'ordre, migration, justice). Hors pratique interdite de notation sociale (art. 5, 1, c) tant que le score ne qualifie que des commentaires et n'entraîne aucun traitement défavorable d'une personne : cette condition est une règle de conception du projet, à ne pas lever. Risque limité retenu : modération automatisée de contenu, avec obligation d'informer les utilisateurs qu'un système automatique analyse leurs textes.",
+  "intended_use": "Aide à la modération de commentaires en anglais, avec relecture humaine avant toute décision.",
+  "out_of_scope": [
+    "Décision automatique sans relecture humaine",
+    "Évaluation, classement ou sanction d'une personne",
+    "Textes dans une autre langue que l'anglais"
+  ],
+  "architecture": "DistilBERT (distilbert-base-uncased, 66 M de paramètres) affiné en classification multi-label, seuils de décision réglés par label sur un jeu de validation",
+  "data_source": "Toxic Comment Classification Challenge (Jigsaw, Kaggle) : commentaires de pages de discussion Wikipédia en anglais. Entraînement sur 30 000 lignes stratifiées après anonymisation (regex et NER spaCy) ; test officiel de 10 000 lignes jamais utilisées pour régler le modèle.",
+  "privacy_measures": [
+    "anonymisation des données d'entraînement et de chaque texte reçu (regex et NER spaCy, balises xxx_tag)",
+    "texte reçu jamais stocké ni journalisé (le journal contient score, longueur et durée)",
+    "pas de journal d'accès (adresses IP des clients non conservées)",
+    "journaux Cloud Logging conservés 30 jours, chiffrés au repos par Google Cloud",
+    "chiffrement en transit (HTTPS, certificat géré) et authentification par clé d'API (Secret Manager)",
+    "hébergement dans l'Union européenne (région europe-west9, Paris)"
+  ],
+  "metrics_test": {
+    "jeu": "10 000 lignes du test officiel Kaggle, macro-moyenne sur les 6 labels, seuils optimisés sur la validation",
+    "roc_auc": 0.9771,
+    "precision": 0.4932,
+    "rappel": 0.6927,
+    "f1": 0.5577
+  },
+  "bias_detected": null,
+  "bias_note": "NON ÉVALUÉ : aucune mesure d'équité (taux de faux positifs selon les groupes cités) n'a été faite. Le jeu Jigsaw est connu pour associer à tort certains termes d'identité à la toxicité : un biais est plausible et doit être mesuré avant tout usage réel.",
+  "limitations": [
+    "Précision faible (0,49) : un commentaire signalé n'est pas forcément toxique, d'où la relecture humaine",
+    "Contournable par du texte déguisé (leetspeak, espaces, homoglyphes) : sur un petit échantillon de 6 textes toxiques, le rappel passe de 1,0 à 0,33 (voir attack/ sur la branche Enzo)",
+    "Anglais uniquement ; l'anonymisation par NER laisse passer certains noms (par exemple des personnalités publiques)"
+  ],
+  "version": "distilbert-2026-11-13",
+  "last_update": "2026-11-16"
+}

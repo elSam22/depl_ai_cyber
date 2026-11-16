@@ -34,6 +34,15 @@ jobs:
       # -ll : échoue à partir de la sévérité moyenne. Les tests et le dossier model/ (poids) sont exclus.
       - run: bandit -r api -x api/tests,api/model -ll
 
+  conformite:
+    name: Conformité IA Act (model_card.json)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Champs imposés par le TP2, catégorie de risque parmi les 4 niveaux du règlement, et aucune affirmation sans preuve
+      # (par exemple « pas de biais » sans évaluation décrite).
+      - run: python3 outils/verifier_model_card.py
+
   configuration:
     name: Configuration Docker et Kubernetes (trivy)
     runs-on: ubuntu-latest
