@@ -14,25 +14,38 @@ client = TestClient(main.app)
 OK = {"X-API-Key": "test-key"}
 
 
-def test_health():
+def test_health_ne_revele_rien():
     r = client.get("/health")
-    assert r.status_code == 200 and r.json()["status"] == "ok"
+    assert r.status_code == 200 and r.json() == {"status": "ok"}      # ni version du modèle ni autre détail
+
+
+def test_version_reservee_a_la_cle():
+    assert client.get("/version").status_code == 401
+    corps = client.get("/version", headers=OK).json()
+    assert corps["model_version"] and "preprocessing_version" in corps
 
 
 def test_score_format():
     r = client.post("/score", json={"text": "Thanks for fixing the references."}, headers=OK)
     assert r.status_code == 200
     corps = r.json()
-    assert 0 <= corps["score"] <= 100
-    assert set(corps["labels"]) == {"toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"}
-    assert isinstance(corps["toxique"], bool) and set(corps["seuils"]) == set(corps["labels"])
-    assert set(corps["labels_detectes"]) <= set(corps["labels"])
+    # Réponse pauvre (défense contre l'extraction) : score arrondi à la dizaine et verdict, rien d'autre
+    assert set(corps) == {"score", "toxique"}
+    assert isinstance(corps["score"], int) and 0 <= corps["score"] <= 100 and corps["score"] % 10 == 0
+    assert isinstance(corps["toxique"], bool)
 
 
 def test_toxique_plus_haut_que_neutre():
     neutre = client.post("/score", json={"text": "Thanks for fixing the references."}, headers=OK).json()
     toxique = client.post("/score", json={"text": "You are a stupid idiot"}, headers=OK).json()
     assert toxique["score"] > neutre["score"]
+
+
+def test_cors_autorise_le_front():
+    r = client.options("/score", headers={"Origin": "null", "Access-Control-Request-Method": "POST",
+                                          "Access-Control-Request-Headers": "content-type,x-api-key"})
+    assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "*"
+    assert "x-api-key" in r.headers["access-control-allow-headers"].lower()
 
 
 def test_sans_cle_401():                                   # S1

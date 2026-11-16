@@ -1,0 +1,7 @@
+{
+  "cause": "P95 > 2000 ms pendant 10 s",
+  "utilisateurs": 20,
+  "t_s": 33,
+  "p95_fenetre_ms": 4800,
+  "heure_utc": "11:49:38"
+}

@@ -1,0 +1,5 @@
+palier (utilisateurs),requêtes,erreurs,requêtes/s,latence moyenne (ms)
+1,42,0,1.0,280
+10,443,0,7.5,569
+50,721,1,8.1,5088
+100,855,1,8.4,10808

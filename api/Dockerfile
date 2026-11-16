@@ -11,7 +11,7 @@ COPY requirements.txt .
 RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 
 # 2. Code + modèle (model/ contient les poids et meta.json, ou est vide -> modèle factice)
-COPY main.py preprocessing.py scorer.py ./
+COPY main.py preprocessing.py scorer.py defense_extraction.py ./
 COPY model/ ./model/
 
 # Cache Hugging Face DANS l'image (checkpoint LAYA pré-téléchargé par export_model.py),

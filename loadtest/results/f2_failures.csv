@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,POST /score,HTTPError('502 Server Error: Bad Gateway for url: POST /score'),1,2026-11-12T14:41:27Z,2026-11-12T14:41:27Z
