@@ -28,7 +28,7 @@ def appel(chemin, corps=None, cle=CLE):
     requete = urllib.request.Request(URL + chemin, data=json.dumps(corps).encode() if corps is not None else None,
                                      headers=entetes, method="POST" if corps is not None else "GET")
     try:
-        with urllib.request.urlopen(requete, timeout=30) as r:   # nosec B310 : schéma vérifié plus haut
+        with urllib.request.urlopen(requete, timeout=30) as r:   # nosec B310
             return r.status, json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         return e.code, {}

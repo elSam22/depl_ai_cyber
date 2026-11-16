@@ -153,6 +153,10 @@ jobs:
         env:
           METRICS_PORT: "0"
         run: pytest -v tests/test_modele_reel.py
+      - name: Noter la révision en service avant de déployer
+        id: avant
+        if: steps.changement.outputs.deployer == 'true'
+        run: echo "revision=$(kubectl get deployment dss-api -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')" >> "$GITHUB_OUTPUT"
       - name: Construire l'image et déployer (le script contrôle l'API à la fin)
         if: steps.changement.outputs.deployer == 'true'
         env:
@@ -161,5 +165,11 @@ jobs:
       - name: Retour arrière automatique si le déploiement a échoué
         if: failure() && steps.changement.outputs.deployer == 'true'
         run: |
-          kubectl rollout undo deployment/dss-api
-          kubectl rollout status deployment/dss-api --timeout=10m
+          # Seulement si un déploiement a réellement eu lieu : sinon « undo » ferait reculer une version saine.
+          apres="$(kubectl get deployment dss-api -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')"
+          if [ "$apres" != "${{ steps.avant.outputs.revision }}" ]; then
+            kubectl rollout undo deployment/dss-api
+            kubectl rollout status deployment/dss-api --timeout=10m
+          else
+            echo "Aucun déploiement n'a eu lieu (révision $apres) : pas de retour arrière."
+          fi
