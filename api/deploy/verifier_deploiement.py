@@ -17,6 +17,8 @@ URL = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("API_URL", "")).rstr
 CLE = os.environ.get("API_KEY", "")
 if not URL or not CLE:
     sys.exit("Usage : API_KEY=<clé> python verifier_deploiement.py https://<adresse>")
+if not URL.startswith(("https://", "http://")):       # urlopen accepterait aussi file:// : on refuse tout autre schéma
+    sys.exit("L'adresse doit commencer par https:// (ou http:// en test local)")
 
 
 def appel(chemin, corps=None, cle=CLE):
@@ -26,7 +28,7 @@ def appel(chemin, corps=None, cle=CLE):
     requete = urllib.request.Request(URL + chemin, data=json.dumps(corps).encode() if corps is not None else None,
                                      headers=entetes, method="POST" if corps is not None else "GET")
     try:
-        with urllib.request.urlopen(requete, timeout=30) as r:
+        with urllib.request.urlopen(requete, timeout=30) as r:   # nosec B310 : schéma vérifié plus haut
             return r.status, json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         return e.code, {}
