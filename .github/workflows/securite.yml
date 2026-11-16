@@ -1,0 +1,59 @@
+# Pipeline de sécurité et de qualité (TP2, étape 5) : s'exécute à chaque push et pull request.
+# Elle ne déploie rien : le déploiement reste manuel (api/deploy/deploy_gke.sh).
+name: Sécurité et tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Recherche de secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # tout l'historique : une clé retirée d'un fichier reste lisible dans les anciens commits
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  code:
+    name: Analyse statique du code (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install bandit
+      # -ll : échoue à partir de la sévérité moyenne. Les tests et le dossier model/ (poids) sont exclus.
+      - run: bandit -r api -x api/tests,api/model -ll
+
+  tests-et-dependances:
+    name: Tests de l'API et audit des dépendances (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements-dev.txt
+      - name: Installer les dépendances de l'API (torch en version CPU)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r api/requirements-dev.txt
+      - name: Tests (clé, validation d'entrée, format de réponse, RGPD)
+        working-directory: api
+        env:
+          METRICS_PORT: "0"          # pas de serveur de métriques pendant les tests
+        run: pytest -v
+      - name: Audit des dépendances installées (vulnérabilités connues)
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable

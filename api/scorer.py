@@ -67,7 +67,7 @@ class BiLSTMScorer:
                 return self.sortie(self.dropout(h.max(dim=1).values))
 
         self.model = BiLSTM(len(self.vocab), meta["emb_dim"], meta["hidden"], len(LABELS))
-        self.model.load_state_dict(torch.load(model_dir / "bilstm.pt", map_location="cpu"))
+        self.model.load_state_dict(torch.load(model_dir / "bilstm.pt", map_location="cpu", weights_only=True))
         self.model.eval()
 
     def _encoder(self, texts: list[str]):
@@ -94,8 +94,9 @@ class DistilBertScorer:
         self.torch = torch
         self.version = meta["model_version"]
         self.max_len = meta["max_len"]
-        self.tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+        # Dossier LOCAL embarqué dans l'image (HF_HUB_OFFLINE=1) : aucun téléchargement, donc pas de révision à épingler
+        self.tokenizer = AutoTokenizer.from_pretrained(model_dir)  # nosec B615
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_dir)  # nosec B615
         self.model.eval()
 
     def predict(self, texts: list[str]) -> list[dict[str, float]]:
