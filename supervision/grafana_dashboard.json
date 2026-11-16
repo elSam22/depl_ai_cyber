@@ -2,7 +2,7 @@
   "title": "Digital Social Score : supervision de l'API",
   "uid": "dss-api-supervision",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 1,
   "tags": [
     "dss-api"
   ],
@@ -509,32 +509,19 @@
       }
     },
     {
-      "id": 10,
-      "type": "row",
-      "title": "Détection d'attaque (quelle route, quel code, quand)",
-      "collapsed": false,
+      "id": 30,
+      "type": "timeseries",
+      "title": "Requêtes refusées par la protection (par motif)",
+      "description": "debit_ip / debit_score : limite par adresse ; cle_invalide : clé fausse ; echecs_cle : adresse bloquée après trop de clés fausses ; trop_gros : corps > 40 Ko ; surcharge : 503, plus de place de calcul.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "gridPos": {
-        "x": 0,
-        "y": 27,
+        "h": 8,
         "w": 24,
-        "h": 1
-      },
-      "panels": []
-    },
-    {
-      "id": 11,
-      "type": "timeseries",
-      "title": "Requêtes par seconde et par route",
-      "description": "Une rafale sur une seule route saute aux yeux (ex. /docs à 63 req/s le 16 novembre). « none » = pages inconnues (sondes de scanner : /xmlrpc.php, /stats…).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
         "x": 0,
-        "y": 28,
-        "w": 12,
-        "h": 8
+        "y": 300
       },
       "targets": [
         {
@@ -542,485 +529,31 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(http_requests_total{namespace=\"default\",pod=~\"dss-api.*\"}[1m])) by (handler)",
-          "legendFormat": "{{handler}}",
+          "expr": "sum(rate(dss_refus_total{namespace=\"default\"}[1m])) by (motif)",
+          "legendFormat": "{{motif}}",
           "refId": "A"
         }
       ],
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "max",
-            "mean"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
           "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 40,
-            "stacking": {
-              "mode": "normal"
-            }
+            "lineWidth": 2,
+            "fillOpacity": 10
           }
         },
         "overrides": []
-      }
-    },
-    {
-      "id": 12,
-      "type": "timeseries",
-      "title": "Requêtes refusées (4xx) par route",
-      "description": "401 (mauvaise clé), 422 (texte invalide ou trop long) et 404 (page inconnue) sont tous « 4xx » : pour les distinguer, voir les journaux du load balancer.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
       },
-      "gridPos": {
-        "x": 12,
-        "y": 28,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(rate(http_requests_total{namespace=\"default\",pod=~\"dss-api.*\",status=\"4xx\"}[1m])) by (handler)",
-          "legendFormat": "{{handler}}",
-          "refId": "A"
-        }
-      ],
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "max",
-            "mean"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
+          "displayMode": "list",
+          "placement": "bottom"
         }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 40,
-            "stacking": {
-              "mode": "normal"
-            }
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 13,
-      "type": "timeseries",
-      "title": "Débit par famille de code (2xx, 3xx, 4xx, 5xx)",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 36,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(rate(http_requests_total{namespace=\"default\",pod=~\"dss-api.*\"}[1m])) by (status)",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "max",
-            "mean"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 40,
-            "stacking": {
-              "mode": "normal"
-            }
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 14,
-      "type": "timeseries",
-      "title": "Part des requêtes refusées (%)",
-      "description": "Proche de 0 % en temps normal. Une montée brutale = essais de clés, sondes ou requêtes malformées.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 36,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "100 * sum(rate(http_requests_total{namespace=\"default\",pod=~\"dss-api.*\",status=\"4xx\"}[1m])) / sum(rate(http_requests_total{namespace=\"default\",pod=~\"dss-api.*\"}[1m]))",
-          "legendFormat": "% de 4xx",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "max",
-            "mean"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 15,
-            "stacking": {
-              "mode": "none"
-            }
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 15,
-      "type": "timeseries",
-      "title": "Latence P95 par route (plafonnée à 1 s)",
-      "description": "Les intervalles par défaut s'arrêtent à 1 s : au-delà, la courbe reste collée à 1 s (limite connue, voir la documentation).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 44,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"default\",pod=~\"dss-api.*\"}[1m])) by (le, handler))",
-          "legendFormat": "{{handler}}",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "max",
-            "mean"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 15,
-            "stacking": {
-              "mode": "none"
-            }
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 16,
-      "type": "stat",
-      "title": "Pic /docs sur 3 h (req/s)",
-      "description": "Revoit une rafale passée sans régler la période du graphique.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 44,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max_over_time(sum(rate(http_requests_total{handler=\"/docs\",namespace=\"default\"}[1m]))[3h:1m])",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "area"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 5
-              },
-              {
-                "color": "red",
-                "value": 30
-              }
-            ]
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 17,
-      "type": "stat",
-      "title": "Pages inconnues (req/s)",
-      "description": "Sondes de scanner : /xmlrpc.php, /phpinfo.php, /server-status…",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 16,
-        "y": 44,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(rate(http_requests_total{namespace=\"default\",pod=~\"dss-api.*\",handler=\"none\"}[5m]))",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "area"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.2
-              }
-            ]
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 18,
-      "type": "stat",
-      "title": "Refus d'authentification et de validation (4xx sur /score, req/s)",
-      "description": "Essais de clés, textes trop longs, JSON invalide sur la route principale.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 20,
-        "y": 44,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum(rate(http_requests_total{namespace=\"default\",pod=~\"dss-api.*\",handler=\"/score\",status=\"4xx\"}[5m]))",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "area"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.2
-              },
-              {
-                "color": "red",
-                "value": 2
-              }
-            ]
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 19,
-      "type": "stat",
-      "title": "Pods prêts (rappel)",
-      "description": "Une attaque qui tue des pods se voit ici (seuil rouge sous 2).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 48,
-        "w": 12,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "kube_deployment_status_replicas_ready{deployment=\"dss-api\"}",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "area"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 2
-              },
-              {
-                "color": "green",
-                "value": 3
-              }
-            ]
-          }
-        },
-        "overrides": []
       }
     }
   ],
   "annotations": {
     "list": []
   },
-  "description": "Tableau de bord de l'API dss-api (GKE). Requêtes sur Prometheus. La latence P95 n'y figure pas : les intervalles de mesure par défaut plafonnent la courbe à 1 s. Section « Détection d'attaque » ajoutée le 16 novembre (routes, codes, refus, pages inconnues)."
+  "description": "Tableau de bord de l'API dss-api (GKE). Requêtes sur Prometheus. La latence P95 n'y figure pas : les intervalles de mesure par défaut plafonnent la courbe à 1 s."
 }

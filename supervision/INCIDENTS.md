@@ -57,7 +57,7 @@ La vague n'a rien coûté parce que `/docs` est une page statique très légère
 ### Ce qui est établi, et ce qui ne l'est pas
 
 - **Établi :** un seul client, des outils variés (`curl`, `python-httpx`, `nmap`), des étapes enchaînées, et **l'usage de la clé d'API valide** (5 appels `/score` réussis et 1 refusé sans clé).
-- **Très probable, non prouvé :** qu'il s'agisse de l'agent de test du professeur. Les indices concordent : l'attaque commence peu après la remise de l'adresse et de la clé, elle suit exactement la progression annoncée (reconnaissance, essais variés, charge), et son auteur **détient la clé**. Aucun élément technique ne le prouve : seule une confirmation du professeur le ferait.
+- **Confirmé par le professeur** : il était le client entre 10 h et 10 h 30 UTC et a présenté les résultats de ses tests aux équipes. Avant cette confirmation, aucun élément technique ne le prouvait.
 - **Conséquence pratique :** **ne pas bloquer cette adresse.** Si c'est le test du professeur, la bloquer reviendrait à neutraliser l'évaluation.
 
 ### Détection : ce qui a fonctionné et ce qui a manqué
@@ -108,3 +108,7 @@ Entre le 15 novembre 21:39 et le 16 novembre 07:45, **181 requêtes** ont reçu 
 - `Python-urllib/3.14` : le contrôle après déploiement (`verifier_deploiement.py`), qui envoie volontairement une requête sans clé et une avec une mauvaise clé (401 attendus).
 - `python-requests/2.33.1` : 72 requêtes `POST /score` toutes en 200, une seule minute : probablement un script de l'équipe (attaque d'évasion d'Enzo) ; **à confirmer avec lui**.
 - Les `curl` et les tests de charge Locust de l'équipe.
+
+
+## Corrections déployées après le bilan du professeur (16 novembre, 11 h 36 UTC)
+Limites de débit par adresse (429), blocage après clés fausses, plafond de 3 calculs simultanés par pod (503 au lieu d'une latence de 30 s), corps limité à 40 Ko, en-têtes de sécurité, 7 alertes Prometheus, journalisation des refus (adresse pseudonymisée), branche `ci` protégée, image Docker analysée. Détail, preuves et limites : DOCUMENTATION.md § 6.8.

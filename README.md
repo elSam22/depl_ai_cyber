@@ -51,4 +51,4 @@ Si l'API ne répond pas : le cluster est parfois mis en pause pour économiser l
 
 ## Limites connues
 
-Elles sont détaillées dans la documentation : **pas de limitation de débit en service** (le module existe mais n'est pas branché : c'est le principal risque restant, voir § 6.7), une clé d'API partagée, trafic non chiffré entre le load balancer et les pods, latence du P95 non mesurable au-delà de 1 s dans Prometheus, et un compte Google Cloud limité (le remplacement d'un pod peut prendre plusieurs minutes).
+Elles sont détaillées dans la documentation : une limitation de débit **par pod** (pas globale : Cloud Armor refusé par le quota du projet, voir § 6.8), une clé d'API partagée, trafic non chiffré entre le load balancer et les pods, pas d'Alertmanager (les alertes se lisent à l'écran), et un compte Google Cloud limité (le remplacement d'un pod peut prendre plusieurs minutes).

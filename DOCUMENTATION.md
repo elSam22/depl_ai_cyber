@@ -186,7 +186,7 @@ Déployé par Enzo (scripts dans `api/deploy/`, manifestes dans `api/k8s/` de la
 | **Ressources par pod** : 2 CPU et 4 Go au départ (dimensionné pour LAYA, 421 M de paramètres), ramenées à **1 CPU et 2 Go** par Enzo le 12 novembre (dimensionné pour DistilBERT, 66 M de paramètres) | Autopilot facture les ressources demandées : on ne paie pas pour LAYA si on déploie DistilBERT. | Pods à 91-99 % de leur CPU pendant la montée : le CPU est saturé. Le déploiement demande **1 CPU et 2 Go** (vérifié le 12 novembre). C'est le ReplicaSet `69798c4847`, actif pendant tous nos tests : **les mesures de l'étape 5 ont été faites à 1 CPU et 2 Go par pod**, soit ≈ 4 requêtes/s par CPU. |
 | **Un seul worker uvicorn par pod** | Raison **non écrite dans le code**. | Un pod traite un commentaire à la fois : ≈ 4 requêtes/s par pod. |
 
-**Faiblesses constatées** : pas de limitation de débit (non corrigée, voir § 6.7), bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6). `/docs` était public : **fermé le 16 novembre** après l'attaque décrite au § 6.7.
+**Faiblesses constatées** : limitation de débit **ajoutée le 16 novembre** (§ 6.8), bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6). `/docs` était public : **fermé le 16 novembre** après l'attaque décrite au § 6.7.
 
 **Redéployer l'API (leçons du 13 novembre).** Les poids du modèle ne sont **pas dans Git** (trop lourds, `api/model/` est ignoré) : l'image Docker n'embarque le modèle que si `api/model/` est rempli **sur la machine qui lance le déploiement**. Séquence correcte, depuis une machine qui possède `models/distilbert` :
 
@@ -406,7 +406,7 @@ Ligne type : `score=87 longueur=142 duree_ms=14.2`
 | Désactivation des logs d'accès uvicorn | `--no-access-log` dans le CMD du `api/Dockerfile` — les logs uvicorn n'enregistrent aucune IP cliente                                                                                               | Implémentée            |
 | AIPD (Art. 35 RGPD)                 | Analyse d'impact requise si le score est utilisé dans un processus décisionnel à effet juridique                                                                                                         | À évaluer selon usage |
 
-**Limitation de débit :** non faite (une limite par clé API est proposée à l'étape 5). **Front de démonstration :** l'historique reste dans le `sessionStorage` de l'onglet et ne contient que le texte **anonymisé** ; la clé d'API saisie en mode « API distante » n'est jamais stockée ; la police DM Sans est chargée depuis Google Fonts (connexion du navigateur vers Google).
+**Limitation de débit :** en service depuis le 16 novembre (par adresse IP, voir § 6.8). **Front de démonstration :** l'historique reste dans le `sessionStorage` de l'onglet et ne contient que le texte **anonymisé** ; la clé d'API saisie en mode « API distante » n'est jamais stockée ; la police DM Sans est chargée depuis Google Fonts (connexion du navigateur vers Google).
 
 #### 4.1.10 Droits des personnes concernées
 
@@ -575,7 +575,7 @@ Grille complète : Annexe A.
 - **L'autoscaler réagit trop tard pour une montée brutale** (déjà mesuré à l'étape 5, visible ici) : justifie un minimum de pods plus élevé avant un pic annoncé.
 - **La supervision consomme de la place sur un cluster partagé** : au moment de l'essai, Google n'avait plus de machine disponible dans la zone (« GCE out of resources ») et Grafana est resté bloqué en attente. On a retiré **Alertmanager** (aucun canal de notification n'est configuré) pour libérer de la mémoire. Les règles d'alerte peuvent se lire dans Prometheus, mais aucune notification n'est envoyée.
 - Grafana a dû être ramené en version 10.4.2 : en version 13, l'interface ne se chargeait pas à travers l'aperçu web de Cloud Shell (fichier JavaScript non transmis par le relais).
-- Pas de limitation de débit : point faible non corrigé (grille S8, § 6.7). `/docs` public : corrigé le 16 novembre (grille S6).
+- Limitation de débit : absente pendant ces mesures, ajoutée le 16 novembre (§ 6.8, grille S8). `/docs` public : corrigé le 16 novembre (grille S6).
 
 ![Tableau de bord Kubernetes prêt à l'emploi : panneaux d'usage vides](supervision/images/grafana_dashboard_pods.png)
 
@@ -637,8 +637,8 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 
 **Choix assumés et limites.**
 - **`main` est protégé** : une fusion n'y est acceptée que si **les contrôles sont verts**. Les administrateurs peuvent contourner la règle en urgence ; les poussées forcées sont interdites.
-- **Le déploiement part de la branche `ci`, pas de `main`**, parce que `main` contient l'API locale de développement et non le code déployé. Cette branche n'est **pas protégée** : toute personne ayant le droit d'écrire dans le dépôt peut y pousser et donc déclencher un déploiement. Le risque est limité à l'équipe, mais une protection de branche (relecture obligatoire) serait la suite logique.
-- **Non couvert :** analyse de l'**image** Docker construite (les failles des paquets système), test dynamique de l'API en ligne, actions GitHub référencées par version et non par empreinte, mise à jour automatique des dépendances.
+- **Le déploiement part de la branche `ci`, pas de `main`**, parce que `main` contient l'API locale de développement et non le code déployé. Cette branche est **protégée depuis le 16 novembre** : pull request obligatoire, les 6 contrôles verts obligatoires (branche à jour), pas de poussée forcée ni de suppression, règles valables aussi pour les administrateurs. Le déploiement n'est plus possible depuis aucune autre branche (la branche `Enzo` en a été retirée).
+- **Non couvert :** test dynamique de l'API en ligne ; (l'image Docker est désormais analysée et les actions GitHub sont référencées par empreinte, § 6.8) ; mise à jour automatique des dépendances.
 - Chaque déploiement remplace les pods en service et consomme du crédit Google Cloud.
 
 
@@ -660,7 +660,7 @@ Le 16 novembre, l'API a reçu du trafic hostile. Le détail complet (chronologie
 
 **Impact : aucune erreur 5xx, 2 pods sur 2, CPU à 0,22 cœur sur 2.** Mais l'effet sur `/score` **n'a pas pu être mesuré** : personne ne l'a appelé pendant la vague. Et la page `/docs` coûte 4 ms : 225 req/s ne prouvent rien, alors qu'un calcul de score coûte environ 100 ms et que notre limite mesurée est d'**environ 8 requêtes/s**. Une inondation de `/score` avec la clé, que ce client possède, serait la suite logique.
 
-**Qui ?** L'adresse n'est pas identifiable. Les indices (progression en étapes, usage de la clé, arrivée peu après la remise de l'adresse au professeur) correspondent à l'agent de test du professeur, **sans preuve technique**. Nous n'avons donc pas bloqué cette adresse : si c'est le test, la bloquer neutraliserait l'évaluation.
+**Qui ?** Le professeur a ensuite confirmé qu'il était le client entre 10 h et 10 h 30 UTC et a présenté en cours le bilan de ses tests sur toutes les équipes. Techniquement, l'adresse seule ne le prouvait pas ; nous ne l'avons pas bloquée, ce qui était le bon choix : la bloquer aurait neutralisé l'évaluation.
 
 **Détection : manquée en temps réel.** Aucune alerte n'existe : nous n'avons vu l'attaque que parce que quelqu'un regardait Grafana. Prometheus localise la route et l'heure ; seuls les journaux du load balancer donnent l'adresse, l'outil et les chemins ; **les journaux de l'application ne voient rien** (accès désactivés, refus non journalisés).
 
@@ -670,10 +670,35 @@ Le 16 novembre, l'API a reçu du trafic hostile. Le détail complet (chronologie
 | Réponse réduite (score arrondi à la dizaine, verdict) | **Fait** (§ 3.3) |
 | Normalisation anti-évasion avant le modèle | **Fait**, avec un défaut d'anonymisation corrigé en route (§ 6.6) |
 | Tableau de bord Grafana « Détection d'attaque », script d'analyse des journaux, registre | **Fait** (`supervision/`) |
-| **Limitation de débit** : module écrit (`api/limiteur_debit.py`) mais **non branché** ; Cloud Armor au niveau du load balancer non fait | **Non fait : principal risque restant** |
-| Alertes Prometheus, journalisation des refus, clés distinctes par client | Non fait |
+| **Limitation de débit** (module d'Eliana, `api/limiteur_debit.py`, branché dans `api/protection.py`) | **Fait**, déployé le 16 nov., testé en réel (§ 6.8) |
+| Alertes Prometheus, journalisation des refus (sans clé ni texte, adresse pseudonymisée) | **Fait** (§ 6.8) |
+| Clés distinctes par client ; Cloud Armor | Non fait (voir § 6.8) |
 
 **Leçon principale.** Une défense qui n'est pas en service n'existe pas : le limiteur et la fermeture de `/docs` étaient écrits avant l'attaque, mais aucun des deux n'était déployé.
+
+### 6.8 Corrections tirées du bilan du professeur (16 novembre, après-midi)
+
+Le professeur a présenté les résultats de ses tests sur 9 équipes (29 failles confirmées, déni de service réussi sur toutes les cibles testées). Nous n'en retenons que les **causes**, pas les personnes : chacune est une faille que notre API avait encore ou aurait pu avoir.
+
+| Constat chez d'autres équipes | Notre situation avant | Correction déployée le 16 nov. | Vérifié en réel |
+|---|---|---|---|
+| Inférence sans authentification | Clé obligatoire (déjà) | Blocage temporaire d'une adresse après 10 clés fausses par minute (brute-force) | 30 clés fausses : 16 × 401, puis 14 × 429 |
+| Scores par classe, seuil de détection et modèle exposés dans chaque réponse | Réponse déjà réduite (§ 3.3) | Inchangé ; pas d'en-tête `Server` ; en-têtes de sécurité | `{"score":100,"toxique":true}` seul |
+| Modèle extractible : 2 005 requêtes/min sans aucun frein | **Aucune limite** | Limite par adresse IP : 60 `/score` par minute et par pod (≈ 2 × plus avec 2 pods) | 150 requêtes séquentielles : 106 × 200, 44 × 429 |
+| 43 685 requêtes acceptées en 4 min, latence × 76 ; latence × 108 ; service cassé à 168 requêtes simultanées ; hôte tombé 10 min | Tout était accepté, la latence montait | **Au plus 3 calculs simultanés par pod** ; une requête de plus attend 1 s au maximum, puis reçoit 503 : on refuse vite plutôt que de répondre en 30 s | 80 requêtes simultanées : 26 × 200, 54 × 503, `/health` toujours 200, aucun pod redémarré |
+| « L'attaque a réussi partout et personne ne l'a vue » | Aucune alerte | 7 règles Prometheus (`supervision/alertes.yaml`) : débit, refus, clés fausses, erreurs 5xx, P95 > 2 s, pods < 2, redémarrage ; métrique `dss_refus_total` par motif ; intervalles de latence élargis à 10 s (le P95 n'est plus bloqué à 1 s) | Règle chargée dans Prometheus |
+| Service cassé sous charge, pas de /docs public : bonne pratique | `/docs` déjà fermé | — | 404 |
+| Redirection HTTPS ajoutée pendant l'exercice | Déjà en place (FrontendConfig) | — | — |
+| Corps de requête non limité | 5 000 caractères, mais aucun plafond d'octets | Plafond de 40 Ko (413) ; délai du load balancer ramené à 15 s | Test automatique |
+
+**Choix et limites, à dire sans détour.**
+- **Les limites sont par pod** (mémoire locale). Avec 2 à 5 pods, la limite réelle par adresse est 2 à 5 fois plus haute. Une limite globale demanderait Redis ou Cloud Armor.
+- **Cloud Armor a été essayé et refusé** : le quota « politiques de sécurité » du projet étudiant est à 0 (`SECURITY_POLICIES`, limite 0). La limitation est donc faite dans l'API, après le load balancer : un flot de requêtes arrive toujours jusqu'au pod, qui le refuse en quelques millisecondes (429) au lieu de calculer.
+- **Adresse du client** : avant-dernière valeur de `X-Forwarded-For`, celle que le load balancer Google ajoute. Les valeurs plus à gauche sont inventées par le client et ignorées. Derrière un réseau partagé (le wifi de l'école), plusieurs personnes partagent une adresse et donc un quota : la limite de 60 par minute est volontairement large pour un usage normal (1 requête par seconde).
+- **RGPD** : une adresse IP est une donnée personnelle. Les journaux de refus n'en contiennent jamais : seulement une empreinte HMAC de 10 caractères (clé secrète du serveur), qui permet de reconnaître un client sans le nommer, et une seule ligne par minute et par client. Ni la clé ni le texte n'y figurent.
+- **Pas d'Alertmanager** : une alerte « firing » se lit dans Prometheus ou Grafana, elle n'envoie aucun message.
+- **Pipeline** (même jour) : branche `ci` protégée (pull request, 6 contrôles obligatoires, règles valables pour les administrateurs), déploiement possible depuis `ci` seulement, actions GitHub référencées par **empreinte de commit** (une étiquette de version peut être déplacée), analyse trivy de l'**image** Docker (a trouvé une faille de `zlib1g`, corrigée par la mise à jour des paquets système dans le Dockerfile), Dependabot, détection de secrets et blocage à la poussée activés sur le dépôt, droits par défaut du jeton GitHub réduits à la lecture.
+- **Reste non fait** : une clé par client (toujours une clé unique, à changer après la notation), test dynamique de l'API dans la pipeline, limite globale.
 
 ---
 
@@ -742,7 +767,7 @@ La **clé API** est stockée dans Secret Manager et injectée en variable d'envi
 
 **Manque :**
 
-- Des requêtes non authentifiées atteignent les pods (pas de WAF ni de limitation au niveau du load balancer).
+- Des requêtes non authentifiées atteignent les pods (ni WAF ni Cloud Armor : quota à 0 sur le projet) ; elles sont refusées par la limite applicative (§ 6.8).
 - Pas de chiffrement interne (load balancer → pods).
 - Pas de `NetworkPolicy` dans les manifestes.
 - Une seule clé partagée — impossible d'identifier un appelant ou de révoquer un accès individuellement.
@@ -815,7 +840,7 @@ Légende : **OK** = vérifié sur le cluster ; **code** = prévu dans le code (t
 | S5 | Les logs ne contiennent pas le texte reçu | aucun texte ni IP dans Cloud Logging | Texte envoyé : un nom, une IP et un mot unique (`ZEBRAXYZ123`). Recherche dans Cloud Logging (30 min) : **aucun résultat**. Les lignes du journal ont toutes la forme `score=60 longueur=67 duree_ms=80.2` (jamais le texte). | **OK** |
 | S6 | `/docs` (Swagger) accessible sans clé | à décider | **200 : publique** le 12 nov. ; **404 depuis le 16 nov.** | corrigé après l'attaque (§ 6.7) |
 | S7 | Rafale de requêtes invalides (sans clé, mauvaise clé, texte trop long, JSON invalide) pendant que des utilisateurs légitimes travaillent | le service légitime continue | 2 min, 2 légitimes + 8 attaquants (`loadtest/attaque.py`). **5 812 requêtes d'attaque (≈ 49/s), toutes refusées avec le bon code** (401 ou 422), médiane 25 ms. **Utilisateurs légitimes : 276 requêtes, 0 erreur, médiane 90 ms, P95 170 ms, maximum 391 ms.** | **OK** (limite : pas de mesure « légitimes seuls » avec les mêmes textes, donc la comparaison n'est qu'indicative) |
-| S8 | Limitation de débit | requêtes refusées (429) au-delà d'un seuil | Aucun 429 : les ≈ 49 requêtes/s d'un même client ont toutes été traitées jusqu'au refus (401/422). Une attaque plus forte consommerait du CPU sans être freinée. | constat : non implémentée (amélioration proposée : limite par clé ou par IP au niveau du load balancer) |
+| S8 | Limitation de débit | requêtes refusées (429) au-delà d'un seuil | Mesure du 12 nov. : aucun 429, les ≈ 49 requêtes/s d'un même client étaient toutes traitées. **Après correction (16 nov.)** : 150 requêtes séquentielles sur `/score` : 106 × 200 puis 44 × 429. | **OK** après correction (limite par IP et par pod, § 6.8) |
 
 ### Supervision (Prometheus et Grafana)
 
@@ -829,7 +854,7 @@ Charge de l'essai : montée progressive Locust lancée depuis un Mac, de 14:50 �
 | SU4 | Mémoire par pod | marge suffisante | 0,5 à 0,65 Go au repos, 1,43 Go au pic (limite 2 Gi), non rendue après la charge | **OK** |
 | SU5 | Débit de l'API | courbe proportionnelle à la charge | pic ≈ 12,5 requêtes/s, 0 après la fin | **OK** |
 | SU6 | Taux d'erreurs 5xx | visible s'il y en a | aucune série : **aucune erreur 5xx** renvoyée par les pods | **OK** |
-| SU7 | Latence P95 | monte avec la charge, alerte à 2 s | **courbe bloquée à 1 s** : les intervalles de mesure par défaut s'arrêtent à 1 s, alors que Locust mesurait 8 à 12 s à 50-100 utilisateurs. **Non exploitable au-dessus de 1 s.** | limite : à corriger (intervalles à élargir côté API) |
+| SU7 | Latence P95 | monte avec la charge, alerte à 2 s | **courbe bloquée à 1 s** au moment des mesures (intervalles par défaut). **Corrigé le 16 nov. : intervalles jusqu'à 10 s** (nouvelles mesures non refaites). | corrigé, à vérifier sous charge |
 | SU8 | Tableau de bord Grafana (Kubernetes / Compute Resources / Namespace) | CPU et mémoire par pod | « CPU Requests » affiché ; panneaux d'usage vides : GKE Autopilot ne laisse pas Prometheus lire les métriques kubelet/cAdvisor. Remplacé par les métriques du processus exposées par l'API (SU3, SU4). | contourné |
 | SU9 | Tableau de bord Grafana construit pour l'API (`grafana_dashboard.json`, importable) | indicateurs et courbes alimentés par Prometheus pendant une charge de 5 utilisateurs | 9 panneaux affichés : 2 pods prêts, ≈ 4,7 req/s, 0 erreur 5xx, CPU total ≈ 1,02 cœur (≈ 0,5 par pod), mémoire de 640 à 770 MiB par pod. L'autoscaler ne monte pas : 0,5 cœur par pod reste sous son seuil (70 % de 1 cœur). | **OK** |
 
