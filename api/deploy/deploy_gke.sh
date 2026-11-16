@@ -38,9 +38,19 @@ options:
   machineType: E2_HIGHCPU_8
 timeout: 1800s
 YAML
-# --suppress-logs : le compte de la pipeline n'a pas le droit de lire les journaux en direct (réservé aux Viewer du projet) ;
-# la commande attend quand même la fin du build et échoue si le build échoue. Journaux : console Cloud Build.
-gcloud builds submit --no-source --config "$CONFIG" --substitutions "_SOURCES=$SOURCES,_IMAGE=$IMAGE" --project "$PROJECT_ID" --suppress-logs
+# Soumission asynchrone puis suivi du statut : « gcloud builds submit » (même avec --suppress-logs) finit par lire les
+# journaux du build, ce que le compte de la pipeline n'a pas le droit de faire (réservé aux Viewer du projet).
+# Le statut, lui, est lisible. Journaux du build : console Cloud Build.
+BUILD_ID="$(gcloud builds submit --no-source --config "$CONFIG" --substitutions "_SOURCES=$SOURCES,_IMAGE=$IMAGE" --project "$PROJECT_ID" --async --format='value(id)')"
+echo "Build $BUILD_ID : https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=$PROJECT_ID"
+while true; do
+  STATUT="$(gcloud builds describe "$BUILD_ID" --project "$PROJECT_ID" --format='value(status)')"
+  case "$STATUT" in
+    SUCCESS) echo "Build terminé : SUCCESS"; break ;;
+    FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED) echo "ÉCHEC du build ($STATUT)"; rm -f "$CONFIG"; exit 1 ;;
+  esac
+  sleep 10
+done
 rm -f "$CONFIG"
 
 echo "2/3 Application des manifests Kubernetes"
