@@ -26,6 +26,8 @@ spec:
           env:
             - name: PORT
               value: "8080"
+            - name: ENV                       # prod -> ferme /docs, /redoc, /openapi.json
+              value: "prod"
             - name: API_KEY                   # clé lue dans un Secret Kubernetes, jamais dans le code
               valueFrom:
                 secretKeyRef: {name: dss-api-key, key: API_KEY}

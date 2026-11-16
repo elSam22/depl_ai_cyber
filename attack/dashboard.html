@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suivi d'attaque — évasion</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  [hidden] { display: none !important; }
+  img { max-width: 100%; }
+  /* Layout : bandeau de titre + bouton + rangée de 4 KPI + jauge avant/après + table des phrases */
+  :root {
+    --bg: #f4f5f7; --surface: #ffffff; --surface-2: #eef0f4;
+    --ink: #16181d; --ink-soft: #5a5f6b; --line: #dde0e6;
+    --safe: #1f8f5f; --safe-bg: #e7f5ee;
+    --danger: #d23b3b; --danger-bg: #fbe9e9;
+    --accent: #2a5ad6; --accent-ink: #ffffff; --warn: #c67b12;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121418; --surface: #1b1e24; --surface-2: #23272f;
+      --ink: #eceef2; --ink-soft: #9aa0ad; --line: #2d323c;
+      --safe: #3ecb8a; --safe-bg: #15291f;
+      --danger: #f16b6b; --danger-bg: #2c1618;
+      --accent: #6d97f0; --accent-ink: #0d1016; --warn: #e3a54a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121418; --surface: #1b1e24; --surface-2: #23272f;
+    --ink: #eceef2; --ink-soft: #9aa0ad; --line: #2d323c;
+    --safe: #3ecb8a; --safe-bg: #15291f;
+    --danger: #f16b6b; --danger-bg: #2c1618;
+    --accent: #6d97f0; --accent-ink: #0d1016; --warn: #e3a54a; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, sans-serif; line-height: 1.5;
+    margin: 0; font-variant-numeric: tabular-nums;
+  }
+  .wrap {
+    max-width: 960px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 28px 44px;
+  }
+  header h1 {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700;
+    font-size: clamp(1.5rem, 4vw, 2.1rem); margin: 0 0 6px; text-wrap: balance;
+    letter-spacing: -0.02em;
+  }
+  header .sub { color: var(--ink-soft); font-size: 0.95rem; margin: 0; max-width: 60ch; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;
+    font-size: 0.78rem; color: var(--ink-soft);
+  }
+  .meta span {
+    background: var(--surface-2); border: 1px solid var(--line);
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  .bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 24px 0 20px; }
+  .attaque-select {
+    display: flex; flex-direction: column; gap: 5px; font-size: 0.78rem;
+    color: var(--ink-soft); font-weight: 500;
+  }
+  .attaque-select select {
+    font-family: Inter, sans-serif; font-size: 0.88rem;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 8px; padding: 8px 10px; min-width: 260px;
+  }
+  .attaque-select select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button#run {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 1rem;
+    background: var(--accent); color: var(--accent-ink); border: none;
+    padding: 12px 22px; border-radius: 11px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 9px; transition: filter .15s, opacity .15s;
+  }
+  button#run:hover:not(:disabled) { filter: brightness(1.08); }
+  button#run:disabled { opacity: .6; cursor: progress; }
+  button#run svg { width: 16px; height: 16px; }
+  .status { font-size: 0.85rem; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 8px; }
+  .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+  .progress-wrap { display: flex; align-items: center; gap: 12px; margin: -8px 0 22px; }
+  .progress-track { flex: 1; height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .3s; }
+  .progress-txt { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); width: 64px; text-align: right; flex-shrink: 0; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px; }
+  @media (max-width: 620px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 16px 16px 14px; min-width: 0;
+  }
+  .kpi .label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-soft); font-weight: 600; margin-bottom: 8px;
+  }
+  .kpi .val { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.9rem; line-height: 1; }
+  .kpi .val .u { font-size: 1rem; color: var(--ink-soft); font-weight: 600; }
+  .kpi .note { font-size: 0.74rem; color: var(--ink-soft); margin-top: 6px; }
+  .kpi.bad .val { color: var(--danger); }
+  .kpi.good .val { color: var(--safe); }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px; margin-bottom: 22px;
+  }
+  .panel h2 { font-family: 'Space Grotesk', sans-serif; font-size: 1.05rem; margin: 0 0 4px; }
+  .panel .cap { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 18px; }
+
+  .gauge-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .gauge-row:last-child { margin-bottom: 0; }
+  .gauge-name { width: 128px; flex-shrink: 0; font-size: 0.85rem; font-weight: 500; }
+  .gauge-track { flex: 1; min-width: 0; height: 26px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+  .gauge-fill { height: 100%; width: 0; border-radius: 7px 0 0 7px; transition: width .4s; }
+  .gauge-fill.before { background: var(--safe); }
+  .gauge-fill.after { background: var(--danger); }
+  .gauge-val { width: 58px; flex-shrink: 0; text-align: right; font-family: var(--mono); font-weight: 500; font-size: 0.95rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  .table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .table-scroll table { border: none; }
+  .table-scroll thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
+  td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  .orig-text { color: var(--ink-soft); }
+  .piege-text { font-family: var(--mono); font-size: 0.8rem; word-break: break-word; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .chip.detecte { background: var(--safe-bg); color: var(--safe); }
+  .chip.passe { background: var(--danger-bg); color: var(--danger); }
+  .chip.sain { background: var(--surface-2); color: var(--ink-soft); }
+  .chip.erreur { background: var(--surface-2); color: var(--warn); }
+  tr.evaded td { background: color-mix(in srgb, var(--danger-bg) 55%, transparent); }
+  tr.fresh { animation: slidein .35s ease; }
+  @keyframes slidein { from { opacity: 0; transform: translateY(-5px); } }
+  @media (prefers-reduced-motion: reduce) { tr.fresh { animation: none; } }
+
+  .charge-form { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+  .charge-form label {
+    display: flex; flex-direction: column; gap: 5px; font-size: 0.78rem;
+    color: var(--ink-soft); font-weight: 500;
+  }
+  .charge-form input {
+    font-family: var(--mono); font-size: 0.95rem; width: 90px;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 8px; padding: 7px 9px;
+  }
+  .charge-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button#run-charge {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 0.92rem;
+    background: var(--surface-2); color: var(--ink); border: 1px solid var(--line);
+    padding: 10px 18px; border-radius: 11px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px; transition: filter .15s, opacity .15s;
+  }
+  button#run-charge:hover:not(:disabled) { filter: brightness(0.96); }
+  @media (prefers-color-scheme: dark) { button#run-charge:hover:not(:disabled) { filter: brightness(1.15); } }
+  button#run-charge:disabled { opacity: .6; cursor: progress; }
+  button#run-charge svg { width: 14px; height: 14px; color: var(--accent); }
+  button#stop-charge {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 0.92rem;
+    background: var(--danger-bg); color: var(--danger); border: 1px solid transparent;
+    padding: 10px 16px; border-radius: 11px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px; transition: filter .15s;
+  }
+  button#stop-charge:hover { filter: brightness(0.96); }
+  button#stop-charge svg { width: 12px; height: 12px; }
+
+  .chart-wrap { margin-top: 18px; border: 1px solid var(--line); border-radius: 10px; padding: 14px 14px 4px; background: var(--surface-2); }
+  .chart-bars { display: flex; align-items: flex-end; gap: 3px; height: 110px; overflow-x: auto; }
+  .chart-bar { width: 7px; flex-shrink: 0; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; transition: height .25s; }
+  .chart-bar.err { background: var(--danger); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 0.78rem; color: var(--ink-soft); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 11px; height: 11px; border-radius: 3px; }
+  .empty { color: var(--ink-soft); font-size: 0.9rem; text-align: center; padding: 30px 10px; }
+  footer { color: var(--ink-soft); font-size: 0.78rem; margin-top: 8px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="h-titre">Suivi de l'attaque par évasion</h1>
+    <p class="sub" id="h-sous">Des commentaires toxiques sont déguisés (leetspeak, lettres cyrilliques, caractères invisibles) pour passer sous la modération. L'API visée reste la même ; seul le texte change.</p>
+    <div class="meta">
+      <span>Cible&nbsp;<b id="m-cible">API de l'équipe adverse</b></span>
+      <span>Échantillon&nbsp;<b id="m-ech">—</b></span>
+    </div>
+  </header>
+
+  <div class="bar">
+    <label class="attaque-select">Groupe à attaquer
+      <select id="groupe-cible">
+        <option value="florentin_gilane">Florentin &amp; Gilane</option>
+        <option value="aurel_baunell">Aurel &amp; Baunell</option>
+        <option value="exauce_gilbert">Exauce &amp; Gilbert</option>
+      </select>
+    </label>
+    <label class="attaque-select">Type d'attaque
+      <select id="type-attaque">
+        <option value="deguisement">Déguisement (leet/homoglyphes/invisibles)</option>
+        <option value="noyage">Noyage (troncature du contexte)</option>
+        <option value="synonymes">Recherche de synonymes (≤ 15 req./phrase)</option>
+        <option value="mutation">Mutation aléatoire (≤ 15 req./phrase)</option>
+      </select>
+    </label>
+    <button id="run">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="4,3 13,8 4,13" fill="currentColor" stroke="none"/></svg>
+      Lancer l'attaque
+    </button>
+    <span class="status" id="status" hidden><span class="pulse"></span><span id="status-txt">Attaque en cours…</span></span>
+  </div>
+  <div class="progress-wrap" id="progress-wrap" hidden>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <span class="progress-txt" id="progress-txt">0 / 0</span>
+  </div>
+
+  <section class="kpis">
+    <div class="kpi good"><div class="label">Rappel avant</div><div class="val" id="k-avant">—</div><div class="note">toxiques détectés sans attaque</div></div>
+    <div class="kpi bad"><div class="label">Rappel après</div><div class="val" id="k-apres">—</div><div class="note">toxiques encore détectés</div></div>
+    <div class="kpi bad"><div class="label">Évasions</div><div class="val" id="k-evas">—</div><div class="note">toxiques qui passent</div></div>
+    <div class="kpi"><div class="label">Latence</div><div class="val" id="k-lat">—</div><div class="note">par commentaire</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Taux de détection des toxiques</h2>
+    <p class="cap">Part des commentaires toxiques encore signalés par le modèle.</p>
+    <div class="gauge-row">
+      <div class="gauge-name">Sans déguisement</div>
+      <div class="gauge-track"><div class="gauge-fill before" id="g-before"></div></div>
+      <div class="gauge-val" id="g-before-v">—</div>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge-name">Après déguisement</div>
+      <div class="gauge-track"><div class="gauge-fill after" id="g-after"></div></div>
+      <div class="gauge-val" id="g-after-v">—</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Détail des commentaires</h2>
+    <p class="cap">Score de toxicité (0–100) et verdict renvoyés par <strong>leur</strong> API, avant et après déguisement. Le texte affiché est exactement celui envoyé sur le réseau. Les lignes rouges sont les évasions réussies.</p>
+    <div class="table-scroll" id="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Commentaire original</th><th>Avant</th><th>Texte envoyé</th><th>Après</th></tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="4" class="empty">Clique sur « Lancer l'attaque » pour voir les résultats apparaître en direct.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--safe)"></span> détecté comme toxique</span>
+      <span><span class="dot" style="background:var(--danger)"></span> passé en « non toxique »</span>
+      <span><span class="dot" style="background:var(--ink-soft)"></span> commentaire sain (non déguisé)</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Test de charge</h2>
+    <p class="cap">Bornes validées au préalable avec les équipes adverses — plafond serveur : 2000 utilisateurs, 10 minutes, même si ces champs sont modifiés.</p>
+    <div class="charge-form">
+      <label>Utilisateurs
+        <input type="number" id="c-users" value="10" min="1" max="2000">
+      </label>
+      <label>Durée (s)
+        <input type="number" id="c-duree" value="60" min="5" max="600">
+      </label>
+      <button id="run-charge">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="4,3 13,8 4,13" fill="currentColor" stroke="none"/></svg>
+        Lancer le test de charge
+      </button>
+      <button id="stop-charge" hidden>
+        <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
+        Stop
+      </button>
+      <span class="status" id="c-status" hidden><span class="pulse"></span><span id="c-status-txt">En cours…</span></span>
+    </div>
+
+    <div class="kpis" style="margin-top:18px">
+      <div class="kpi"><div class="label">Requêtes envoyées</div><div class="val" id="c-k-env">—</div><div class="note" id="c-k-tps">0 / 0 s</div></div>
+      <div class="kpi bad"><div class="label">Taux d'erreur</div><div class="val" id="c-k-err">—</div><div class="note">4xx / 5xx / timeouts</div></div>
+      <div class="kpi"><div class="label">Latence moyenne</div><div class="val" id="c-k-lat">—</div><div class="note">fenêtre récente</div></div>
+      <div class="kpi"><div class="label">Latence P95</div><div class="val" id="c-k-p95">—</div><div class="note">pire cas sur 20</div></div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-bars" id="c-bars"></div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--accent)"></span> requêtes/s, par seconde écoulée</span>
+      <span><span class="dot" style="background:var(--danger)"></span> seconde avec au moins une erreur</span>
+    </div>
+  </section>
+
+  <footer>TP2 — étape 2. Attaque exécutée en local, aucune donnée ne quitte la machine.</footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const chip = (reel, det, erreur) => erreur ? `<span class="chip erreur" title="${esc(erreur)}">erreur</span>`
+    : !reel ? '<span class="chip sain">sain</span>'
+    : det ? '<span class="chip detecte">toxique</span>' : '<span class="chip passe">passé</span>';
+
+  const btn = $("run"), rows = $("rows"), status = $("status"), typeAttaque = $("type-attaque"), groupeCible = $("groupe-cible");
+
+  fetch("/groupes").then(r => r.json()).then(groupes => {
+    for (const opt of groupeCible.options) {
+      const g = groupes[opt.value];
+      if (g && !g.configure) opt.textContent += " (non configuré)";
+    }
+  }).catch(() => {});
+  const tableScroll = $("table-scroll"), progWrap = $("progress-wrap"), progFill = $("progress-fill"), progTxt = $("progress-txt");
+  let source = null, first = true, total = 0, recu = 0;
+
+  const TEXTES_ATTAQUE = {
+    deguisement: { titre: "Suivi de l'attaque par évasion", sous: "Des commentaires toxiques sont déguisés (leetspeak, lettres cyrilliques, caractères invisibles) pour passer sous la modération. L'API visée reste la même ; seul le texte change." },
+    noyage: { titre: "Suivi de l'attaque par noyage", sous: "Chaque commentaire toxique est noyé dans un grand pavé de texte neutre, pour sortir de la fenêtre de contexte que le modèle regarde réellement. Une seule requête par commentaire." },
+    synonymes: { titre: "Suivi de l'attaque par recherche de synonymes", sous: "Le script essaie, mot par mot, un synonyme ou une faute de frappe, et garde ce qui fait baisser le score — jusqu'à 15 requêtes par commentaire, ciblées sur leur API réelle." },
+    mutation: { titre: "Suivi de l'attaque par mutation aléatoire", sous: "Le script modifie un caractère au hasard, garde la mutation si le score baisse, recommence — jusqu'à 15 requêtes par commentaire." },
+  };
+
+  btn.addEventListener("click", () => {
+    if (source) source.close();
+    first = true; total = 0; recu = 0;
+    rows.innerHTML = "";
+    btn.disabled = true;
+    status.hidden = false;
+    const pulse = status.querySelector(".pulse");
+    pulse.style.background = "var(--danger)";
+    pulse.style.animation = "blink 1s infinite";
+    $("status-txt").textContent = "Connexion au serveur…";
+    progWrap.hidden = false;
+    progFill.style.width = "0%";
+    progTxt.textContent = "0 / 0";
+    ["k-avant", "k-apres", "k-evas", "k-lat"].forEach(id => $(id).textContent = "—");
+    $("g-before").style.width = "0%"; $("g-before-v").textContent = "—";
+    $("g-after").style.width = "0%"; $("g-after-v").textContent = "—";
+
+    const type = typeAttaque.value;
+    const txt = TEXTES_ATTAQUE[type] || TEXTES_ATTAQUE.deguisement;
+    $("h-titre").textContent = txt.titre;
+    $("h-sous").textContent = txt.sous;
+
+    source = new EventSource(`/lancer/${type}?groupe=${groupeCible.value}`);
+
+    source.addEventListener("debut", (e) => {
+      const d = JSON.parse(e.data);
+      total = d.total;
+      $("m-ech").textContent = `${d.total} phrases (${d.toxiques} toxiques)`;
+      if (d.groupe) $("m-cible").textContent = `${d.groupe} (${d.cible})`;
+      $("status-txt").textContent = `Attaque en cours… 0 / ${total}`;
+      progTxt.textContent = `0 / ${total}`;
+    });
+
+    source.addEventListener("erreur", (e) => {
+      const d = JSON.parse(e.data);
+      source.close(); source = null;
+      btn.disabled = false;
+      rows.innerHTML = `<tr><td colspan="4" class="empty">${esc(d.message)}</td></tr>`;
+      $("status-txt").textContent = "Impossible de lancer l'attaque.";
+      status.querySelector(".pulse").style.background = "var(--warn)";
+      status.querySelector(".pulse").style.animation = "none";
+    });
+
+    source.addEventListener("phrase", (e) => {
+      const d = JSON.parse(e.data);
+      if (first) { rows.innerHTML = ""; first = false; }
+      recu += 1;
+
+      const tr = document.createElement("tr");
+      tr.className = "fresh" + (d.evasion ? " evaded" : "");
+      const avantNum = d.score_avant ?? "—", apresNum = d.score_apres ?? "—";
+      tr.innerHTML =
+        `<td class="orig-text">${esc(d.texte)}</td>` +
+        `<td class="num">${avantNum}<br>${chip(d.toxique_reel, d.detecte_avant, d.erreur_avant)}</td>` +
+        `<td class="piege-text">${d.toxique_reel ? esc(d.piege) : '<span class="orig-text">(non déguisé)</span>'}</td>` +
+        `<td class="num">${apresNum}<br>${chip(d.toxique_reel, d.detecte_apres, d.erreur_apres)}</td>`;
+      rows.appendChild(tr);
+      tr.scrollIntoView({ block: "nearest", behavior: "smooth" });
+
+      const pct = total ? Math.round((recu / total) * 100) : 0;
+      progFill.style.width = pct + "%";
+      progTxt.textContent = `${recu} / ${total}`;
+      $("status-txt").textContent = `Attaque en cours… ${recu} / ${total}`;
+
+      $("k-avant").innerHTML = Math.round(d.rappel_avant * 100) + '<span class="u">&nbsp;%</span>';
+      $("k-apres").innerHTML = Math.round(d.rappel_apres * 100) + '<span class="u">&nbsp;%</span>';
+      $("k-evas").innerHTML = d.evasions + '<span class="u">&nbsp;évas.</span>';
+      $("k-lat").innerHTML = d.latence_moyenne + '<span class="u">&nbsp;ms</span>';
+      const ra = Math.round(d.rappel_avant * 100), rp = Math.round(d.rappel_apres * 100);
+      $("g-before").style.width = ra + "%"; $("g-before-v").textContent = ra + " %";
+      $("g-after").style.width = rp + "%"; $("g-after-v").textContent = rp + " %";
+    });
+
+    source.addEventListener("fin", (e) => {
+      const d = JSON.parse(e.data);
+      source.close(); source = null;
+      btn.disabled = false;
+      $("status-txt").textContent = `Terminé : ${d.evasions} évasions sur ${d.toxiques} toxiques.`;
+      status.querySelector(".pulse").style.background = "var(--safe)";
+      status.querySelector(".pulse").style.animation = "none";
+    });
+
+    source.onerror = () => {
+      if (source) { source.close(); source = null; }
+      btn.disabled = false;
+      status.hidden = false;
+      $("status-txt").textContent = "Connexion au serveur perdue. Lance d'abord : uvicorn attack.serveur:app --port 8050";
+      status.querySelector(".pulse").style.background = "var(--warn)";
+    };
+  });
+
+  // ----------------------- Test de charge -----------------------
+  const runCharge = $("run-charge"), stopCharge = $("stop-charge"), cStatus = $("c-status"), cBars = $("c-bars");
+  const MAX_USERS = 2000, MAX_DUREE = 600;
+  let sourceCharge = null, maxReqS = 1, erreursAvant = 0;
+
+  stopCharge.addEventListener("click", () => {
+    stopCharge.disabled = true;
+    $("c-status-txt").textContent = "Arrêt demandé…";
+    fetch("/charge/stop", { method: "POST" }).catch(() => {});
+  });
+
+  runCharge.addEventListener("click", () => {
+    if (sourceCharge) sourceCharge.close();
+    const users = Math.max(1, Math.min(parseInt($("c-users").value, 10) || 10, MAX_USERS));
+    const duree = Math.max(5, Math.min(parseInt($("c-duree").value, 10) || 60, MAX_DUREE));
+    $("c-users").value = users; $("c-duree").value = duree;
+
+    cBars.innerHTML = "";
+    maxReqS = 1; erreursAvant = 0;
+    runCharge.disabled = true;
+    stopCharge.hidden = false; stopCharge.disabled = false;
+    cStatus.hidden = false;
+    const pulse = cStatus.querySelector(".pulse");
+    pulse.style.background = "var(--danger)"; pulse.style.animation = "blink 1s infinite";
+    $("c-status-txt").textContent = "Connexion…";
+    ["c-k-env", "c-k-err", "c-k-lat", "c-k-p95"].forEach(id => $(id).textContent = "—");
+    $("c-k-tps").textContent = `0 / ${duree} s`;
+
+    sourceCharge = new EventSource(`/charge?utilisateurs=${users}&duree=${duree}&groupe=${groupeCible.value}`);
+
+    sourceCharge.addEventListener("debut", (e) => {
+      const d = JSON.parse(e.data);
+      $("c-status-txt").textContent = `En cours contre ${d.groupe || d.cible}…`;
+    });
+
+    sourceCharge.addEventListener("erreur", (e) => {
+      const d = JSON.parse(e.data);
+      sourceCharge.close(); sourceCharge = null;
+      runCharge.disabled = false; stopCharge.hidden = true;
+      $("c-status-txt").textContent = d.message;
+      pulse.style.background = "var(--warn)"; pulse.style.animation = "none";
+    });
+
+    sourceCharge.addEventListener("tick", (e) => {
+      const d = JSON.parse(e.data);
+      $("c-k-env").textContent = d.envoyees;
+      $("c-k-tps").textContent = `${d.ecoule} / ${d.duree} s`;
+      $("c-k-err").textContent = Math.round(d.taux_erreur * 100) + " %";
+      $("c-k-lat").innerHTML = d.latence_moyenne + '<span class="u">&nbsp;ms</span>';
+      $("c-k-p95").innerHTML = d.latence_p95 + '<span class="u">&nbsp;ms</span>';
+      $("c-status-txt").textContent = `En cours… ${d.ecoule} / ${d.duree} s`;
+
+      maxReqS = Math.max(maxReqS, d.reqs_par_s);
+      const bar = document.createElement("div");
+      bar.className = "chart-bar" + (d.erreurs > erreursAvant ? " err" : "");
+      erreursAvant = d.erreurs;
+      bar.style.height = Math.max(2, Math.round((d.reqs_par_s / maxReqS) * 100)) + "px";
+      bar.title = `${d.reqs_par_s} req/s à ${d.ecoule}s`;
+      cBars.appendChild(bar);
+      cBars.scrollLeft = cBars.scrollWidth;
+    });
+
+    sourceCharge.addEventListener("fin", (e) => {
+      const d = JSON.parse(e.data);
+      sourceCharge.close(); sourceCharge = null;
+      runCharge.disabled = false; stopCharge.hidden = true;
+      const prefixe = d.arretee ? "Arrêté manuellement" : "Terminé";
+      $("c-status-txt").textContent = `${prefixe} : ${d.envoyees} requêtes, ${d.erreurs} erreurs, P95 ${d.latence_p95} ms.`;
+      pulse.style.background = d.arretee ? "var(--warn)" : "var(--safe)"; pulse.style.animation = "none";
+    });
+
+    sourceCharge.onerror = () => {
+      if (sourceCharge) { sourceCharge.close(); sourceCharge = null; }
+      runCharge.disabled = false; stopCharge.hidden = true;
+      $("c-status-txt").textContent = "Connexion au serveur perdue.";
+      pulse.style.background = "var(--warn)"; pulse.style.animation = "none";
+    };
+  });
+</script>
+</body>
+</html>

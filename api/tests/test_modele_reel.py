@@ -18,5 +18,7 @@ def test_modele_reel_separe_toxique_et_neutre():
     client = TestClient(main.app)
     t = client.post("/score", json={"text": "You are a stupid idiot"}, headers=OK).json()
     n = client.post("/score", json={"text": "Thanks for fixing the references, great work."}, headers=OK).json()
-    assert not t["model_version"].startswith("dummy")
-    assert t["labels"]["toxic"] > 0.9 and n["labels"]["toxic"] < 0.3
+    version = client.get("/version", headers=OK).json()["model_version"]
+    assert not version.startswith("dummy")
+    assert t["toxique"] is True and t["score"] >= 90
+    assert n["toxique"] is False and n["score"] <= 30

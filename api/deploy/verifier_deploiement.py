@@ -52,33 +52,37 @@ for essai in range(30):
         pass
     time.sleep(10)
 verifie(sante.get("status") == "ok", "/health répond « ok »")
+verifie(set(sante) == {"status"}, "/health ne révèle rien d'autre (ni version, ni détail)")
 
-# Pendant le remplacement progressif des pods, anciens et nouveaux répondent tour à tour : on attend que tous les pods
-# annoncent la même version (6 réponses consécutives identiques) avant de juger.
+# 2. Version du modèle (route réservée à la clé). Pendant le remplacement progressif des pods, anciens et nouveaux
+# répondent tour à tour : on attend que tous annoncent la même version (6 réponses consécutives identiques).
 versions = set()
 for essai in range(30):
     versions = set()
     for _ in range(6):
         try:
-            versions.add(appel("/health")[1].get("model_version", ""))
+            versions.add(appel("/version")[1].get("model_version", ""))
         except OSError:
             versions.add("")
     if len(versions) == 1:
         break
     time.sleep(10)
 verifie(len(versions) == 1, f"tous les pods annoncent la même version du modèle ({', '.join(sorted(versions))})")
-version = sante.get("model_version", "") if len(versions) != 1 else next(iter(versions))
+version = next(iter(versions)) if len(versions) == 1 else ""
 verifie(bool(version) and not version.startswith("dummy"), f"modèle réel (model_version = « {version} », pas « dummy-… »)")
 
-# 2. Le modèle sépare un texte toxique d'un texte neutre (un modèle factice donne des scores fixes)
+# 3. Le modèle sépare un texte toxique d'un texte neutre (un modèle factice donne des scores fixes). La réponse ne
+# contient que le score arrondi à la dizaine et le verdict (défense contre l'extraction du modèle).
 _, toxique = appel("/score", {"text": "You are a stupid idiot"})
 _, neutre = appel("/score", {"text": "Thanks for fixing the references, great work."})
-p_t, p_n = toxique.get("labels", {}).get("toxic", -1), neutre.get("labels", {}).get("toxic", -1)
-verifie(p_t > 0.9 and p_n < 0.3, f"probabilité « toxic » : {p_t} (texte toxique, attendu > 0,9) contre {p_n} (texte neutre, attendu < 0,3)")
-verifie(toxique.get("model_version") == version, "/score et /health annoncent la même version du modèle")
+verifie(toxique.get("toxique") is True and toxique.get("score", 0) >= 90, f"texte toxique : {toxique} (attendu : toxique, score >= 90)")
+verifie(neutre.get("toxique") is False and neutre.get("score", 100) <= 30, f"texte neutre : {neutre} (attendu : non toxique, score <= 30)")
+verifie(set(toxique) == {"score", "toxique"} and toxique.get("score", 1) % 10 == 0, "la réponse ne contient que score (arrondi à la dizaine) et toxique")
 
-# 3. L'authentification est en place
-verifie(appel("/score", {"text": "hi"}, cle=None)[0] == 401, "sans clé : 401")
-verifie(appel("/score", {"text": "hi"}, cle="mauvaise")[0] == 401, "mauvaise clé : 401")
+# 4. Authentification et surface exposée
+verifie(appel("/score", {"text": "hi"}, cle=None)[0] == 401, "/score sans clé : 401")
+verifie(appel("/score", {"text": "hi"}, cle="mauvaise")[0] == 401, "/score avec une mauvaise clé : 401")
+verifie(appel("/version", cle=None)[0] == 401, "/version sans clé : 401")
+verifie(appel("/docs", cle=None)[0] == 404, "documentation /docs fermée en production (404)")
 
 sys.exit(1 if echecs else 0)
