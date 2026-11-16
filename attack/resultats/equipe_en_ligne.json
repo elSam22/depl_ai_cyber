@@ -1,0 +1,62 @@
+[
+  {
+    "perturbation": "aucune",
+    "toxiques_total": 6,
+    "toxiques_detectes": 6,
+    "rappel": 1.0,
+    "taux_evasion": 0.0,
+    "faux_positifs": 0.0,
+    "latence_med_ms": 407.0,
+    "latence_p95_ms": 425.0
+  },
+  {
+    "perturbation": "leet",
+    "toxiques_total": 6,
+    "toxiques_detectes": 2,
+    "rappel": 0.333,
+    "taux_evasion": 0.667,
+    "faux_positifs": 0.0,
+    "latence_med_ms": 432.0,
+    "latence_p95_ms": 474.0
+  },
+  {
+    "perturbation": "espaces",
+    "toxiques_total": 6,
+    "toxiques_detectes": 2,
+    "rappel": 0.333,
+    "taux_evasion": 0.667,
+    "faux_positifs": 0.0,
+    "latence_med_ms": 424.0,
+    "latence_p95_ms": 495.0
+  },
+  {
+    "perturbation": "homoglyphes",
+    "toxiques_total": 6,
+    "toxiques_detectes": 4,
+    "rappel": 0.667,
+    "taux_evasion": 0.333,
+    "faux_positifs": 0.0,
+    "latence_med_ms": 422.0,
+    "latence_p95_ms": 468.0
+  },
+  {
+    "perturbation": "invisibles",
+    "toxiques_total": 6,
+    "toxiques_detectes": 2,
+    "rappel": 0.333,
+    "taux_evasion": 0.667,
+    "faux_positifs": 0.0,
+    "latence_med_ms": 424.0,
+    "latence_p95_ms": 490.0
+  },
+  {
+    "perturbation": "combo",
+    "toxiques_total": 6,
+    "toxiques_detectes": 0,
+    "rappel": 0.0,
+    "taux_evasion": 1.0,
+    "faux_positifs": 0.0,
+    "latence_med_ms": 461.0,
+    "latence_p95_ms": 522.0
+  }
+]

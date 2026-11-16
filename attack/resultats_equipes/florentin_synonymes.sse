@@ -1,0 +1,96 @@
+event: debut
+data: {"total": 30, "toxiques": 15, "cible": "http://35.195.88.189", "groupe": "Florentin & Gilane", "attaque": "synonymes"}
+
+event: phrase
+data: {"i": 0, "texte": "You are a stupid idiot and everyone hates you", "toxique_reel": 1, "score_avant": 100, "detecte_avant": true, "erreur_avant": null, "piege": "You are a stuid idot and everyone haes you", "score_apres": 93, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.067, "rappel_apres": 0.067, "evasions": 0, "latence_moyenne": 1382.6}
+
+event: phrase
+data: {"i": 1, "texte": "Shut up you pathetic moron nobody cares about you", "toxique_reel": 1, "score_avant": 99, "detecte_avant": true, "erreur_avant": null, "piege": "Shut up you pathetic moron nobody cares about you", "score_apres": 99, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.133, "rappel_apres": 0.133, "evasions": 0, "latence_moyenne": 969.7}
+
+event: phrase
+data: {"i": 2, "texte": "What a worthless loser you really are", "toxique_reel": 1, "score_avant": 94, "detecte_avant": true, "erreur_avant": null, "piege": "What a wortless loer you really are", "score_apres": 73, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.2, "rappel_apres": 0.2, "evasions": 0, "latence_moyenne": 824.1}
+
+event: phrase
+data: {"i": 3, "texte": "Get lost you disgusting piece of garbage", "toxique_reel": 1, "score_avant": 99, "detecte_avant": true, "erreur_avant": null, "piege": "Get lost you disgusting piece of garbage", "score_apres": 99, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.267, "rappel_apres": 0.267, "evasions": 0, "latence_moyenne": 1020.8}
+
+event: phrase
+data: {"i": 4, "texte": "You people are all brainless fools", "toxique_reel": 1, "score_avant": 91, "detecte_avant": true, "erreur_avant": null, "piege": "You peole are all mindless fools", "score_apres": 82, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.333, "rappel_apres": 0.333, "evasions": 0, "latence_moyenne": 999.2}
+
+event: phrase
+data: {"i": 5, "texte": "I hope you fail miserably you useless clown", "toxique_reel": 1, "score_avant": 42, "detecte_avant": false, "erreur_avant": null, "piege": "I hope you fail miserably you useless clown", "score_apres": 42, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.333, "rappel_apres": 0.333, "evasions": 0, "latence_moyenne": 842.7}
+
+event: phrase
+data: {"i": 6, "texte": "Nobody wants you here you ugly freak", "toxique_reel": 1, "score_avant": 99, "detecte_avant": true, "erreur_avant": null, "piege": "Nobody wants you here you hideous weirdo", "score_apres": 75, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.4, "rappel_apres": 0.4, "evasions": 0, "latence_moyenne": 800.6}
+
+event: phrase
+data: {"i": 7, "texte": "You are too dumb to understand anything", "toxique_reel": 1, "score_avant": 90, "detecte_avant": true, "erreur_avant": null, "piege": "You are too slow to understand anything", "score_apres": 52, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.467, "rappel_apres": 0.467, "evasions": 0, "latence_moyenne": 782.6}
+
+event: phrase
+data: {"i": 8, "texte": "Stop talking you insufferable idiot", "toxique_reel": 1, "score_avant": 99, "detecte_avant": true, "erreur_avant": null, "piege": "Stp talking you insufferable fool", "score_apres": 80, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.533, "rappel_apres": 0.533, "evasions": 0, "latence_moyenne": 757.7}
+
+event: phrase
+data: {"i": 9, "texte": "Everyone thinks you are a complete joke", "toxique_reel": 1, "score_avant": 97, "detecte_avant": true, "erreur_avant": null, "piege": "Everyone thinks you are a compete farce", "score_apres": 72, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 735.5}
+
+event: phrase
+data: {"i": 10, "texte": "Thanks for fixing the references, great work", "toxique_reel": 0, "score_avant": 4, "detecte_avant": false, "erreur_avant": null, "piege": "Thanks for fixing the references, great work", "score_apres": 4, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 672.6}
+
+event: phrase
+data: {"i": 11, "texte": "I think the second paragraph could be clearer", "toxique_reel": 0, "score_avant": 3, "detecte_avant": false, "erreur_avant": null, "piege": "I think the second paragraph could be clearer", "score_apres": 3, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 619.6}
+
+event: phrase
+data: {"i": 12, "texte": "Good catch I had missed that detail", "toxique_reel": 0, "score_avant": 7, "detecte_avant": false, "erreur_avant": null, "piege": "Good catch I had missed that detail", "score_apres": 7, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 574.3}
+
+event: phrase
+data: {"i": 13, "texte": "Lets schedule a review for next week", "toxique_reel": 0, "score_avant": 4, "detecte_avant": false, "erreur_avant": null, "piege": "Lets schedule a review for next week", "score_apres": 4, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 544.5}
+
+event: phrase
+data: {"i": 14, "texte": "The documentation is really helpful thank you", "toxique_reel": 0, "score_avant": 13, "detecte_avant": false, "erreur_avant": null, "piege": "The documentation is really helpful thank you", "score_apres": 13, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 510.2}
+
+event: phrase
+data: {"i": 15, "texte": "Could you share the source for this claim", "toxique_reel": 0, "score_avant": 5, "detecte_avant": false, "erreur_avant": null, "piege": "Could you share the source for this claim", "score_apres": 5, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 492.5}
+
+event: phrase
+data: {"i": 16, "texte": "Nice work on the latest update", "toxique_reel": 0, "score_avant": 3, "detecte_avant": false, "erreur_avant": null, "piege": "Nice work on the latest update", "score_apres": 3, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 465.3}
+
+event: phrase
+data: {"i": 17, "texte": "I agree with your point about the design", "toxique_reel": 0, "score_avant": 11, "detecte_avant": false, "erreur_avant": null, "piege": "I agree with your point about the design", "score_apres": 11, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 450.8}
+
+event: phrase
+data: {"i": 18, "texte": "Let me know if you need any help", "toxique_reel": 0, "score_avant": 5, "detecte_avant": false, "erreur_avant": null, "piege": "Let me know if you need any help", "score_apres": 5, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 428.9}
+
+event: phrase
+data: {"i": 19, "texte": "This article is well written and balanced", "toxique_reel": 0, "score_avant": 9, "detecte_avant": false, "erreur_avant": null, "piege": "This article is well written and balanced", "score_apres": 9, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.6, "rappel_apres": 0.6, "evasions": 0, "latence_moyenne": 419.7}
+
+event: phrase
+data: {"i": 20, "texte": "You stupid idiot, contact me at john.doe@example.com and I'll destroy your reputation", "toxique_reel": 1, "score_avant": 95, "detecte_avant": true, "erreur_avant": null, "piege": "You stuid idot contact me at john.doe@example.com and I'll destroy your reputation", "score_apres": 48, "detecte_apres": false, "erreur_apres": null, "evasion": true, "rappel_avant": 0.667, "rappel_apres": 0.6, "evasions": 1, "latence_moyenne": 425.0}
+
+event: phrase
+data: {"i": 21, "texte": "Shut up moron, I know you live at 221B Baker Street London and I will find you", "toxique_reel": 1, "score_avant": 98, "detecte_avant": true, "erreur_avant": null, "piege": "Sht up moon I know you live at 221B Baker Street London and I will find you", "score_apres": 66, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.733, "rappel_apres": 0.667, "evasions": 1, "latence_moyenne": 438.3}
+
+event: phrase
+data: {"i": 22, "texte": "Call me at +33 6 12 34 56 78 you pathetic loser so I can curse you out", "toxique_reel": 1, "score_avant": 99, "detecte_avant": true, "erreur_avant": null, "piege": "Call me at +33 6 12 34 56 78 you sad loer so I can curse you out", "score_apres": 63, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.8, "rappel_apres": 0.733, "evasions": 1, "latence_moyenne": 437.5}
+
+event: phrase
+data: {"i": 23, "texte": "Worthless clown, my IP is 192.168.1.42 come fight me if you dare", "toxique_reel": 1, "score_avant": 88, "detecte_avant": true, "erreur_avant": null, "piege": "Worthless clown, my IP is 192.16.1.42 coe fiht me if you dare", "score_apres": 57, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.867, "rappel_apres": 0.8, "evasions": 1, "latence_moyenne": 461.4}
+
+event: phrase
+data: {"i": 24, "texte": "Hey @johnsmith99 you disgusting freak everyone on Wikipedia hates you", "toxique_reel": 1, "score_avant": 99, "detecte_avant": true, "erreur_avant": null, "piege": "Hey @johnsmith99 you disgusting freak everyone on Wikipedia hates you", "score_apres": 99, "detecte_apres": true, "erreur_apres": null, "evasion": false, "rappel_avant": 0.933, "rappel_apres": 0.867, "evasions": 1, "latence_moyenne": 469.5}
+
+event: phrase
+data: {"i": 25, "texte": "My email is contact.team@entreprise.fr, happy to discuss the proposal", "toxique_reel": 0, "score_avant": 4, "detecte_avant": false, "erreur_avant": null, "piege": "My email is contact.team@entreprise.fr, happy to discuss the proposal", "score_apres": 4, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.933, "rappel_apres": 0.867, "evasions": 1, "latence_moyenne": 453.4}
+
+event: phrase
+data: {"i": 26, "texte": "Please reach me at +33 1 45 67 89 10 if you have questions about the draft", "toxique_reel": 0, "score_avant": 2, "detecte_avant": false, "erreur_avant": null, "piege": "Please reach me at +33 1 45 67 89 10 if you have questions about the draft", "score_apres": 2, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.933, "rappel_apres": 0.867, "evasions": 1, "latence_moyenne": 438.0}
+
+event: phrase
+data: {"i": 27, "texte": "I used to live at 12 rue de la Paix in Paris, lovely neighborhood", "toxique_reel": 0, "score_avant": 8, "detecte_avant": false, "erreur_avant": null, "piege": "I used to live at 12 rue de la Paix in Paris, lovely neighborhood", "score_apres": 8, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.933, "rappel_apres": 0.867, "evasions": 1, "latence_moyenne": 423.4}
+
+event: phrase
+data: {"i": 28, "texte": "You can find my server logs at IP 10.0.0.5 in the attached report", "toxique_reel": 0, "score_avant": 4, "detecte_avant": false, "erreur_avant": null, "piege": "You can find my server logs at IP 10.0.0.5 in the attached report", "score_apres": 4, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.933, "rappel_apres": 0.867, "evasions": 1, "latence_moyenne": 410.1}
+
+event: phrase
+data: {"i": 29, "texte": "Ping @marie_dev on Slack, she reviewed the last commit", "toxique_reel": 0, "score_avant": 9, "detecte_avant": false, "erreur_avant": null, "piege": "Ping @marie_dev on Slack, she reviewed the last commit", "score_apres": 9, "detecte_apres": false, "erreur_apres": null, "evasion": false, "rappel_avant": 0.933, "rappel_apres": 0.867, "evasions": 1, "latence_moyenne": 397.6}
+
+event: fin
+data: {"evasions": 1, "toxiques": 15}
+

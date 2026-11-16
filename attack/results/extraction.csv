@@ -1,0 +1,9 @@
+condition,accord_clone_cible,exactitude_clone,faux_positifs_clone,n_requetes,duree_s
+sans_defense,0.9396,0.9606,0.0,100,1.8
+sans_defense,0.9402,0.9611,0.0001,500,7.2
+sans_defense,0.9415,0.9622,0.0002,1000,14.9
+sans_defense,0.9439,0.9628,0.0017,2000,36.0
+avec_defense,0.9396,0.9606,0.0,100,1.5
+avec_defense,0.9402,0.9609,0.0001,500,7.0
+avec_defense,0.9417,0.9622,0.0005,1000,16.4
+avec_defense,0.9437,0.9619,0.0031,2000,37.0
