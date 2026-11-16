@@ -1,7 +1,10 @@
-"""API Digital Social Score : reçoit un texte, renvoie un score de toxicité de 0 à 100.
+"""API Digital Social Score : reçoit un texte, renvoie un verdict de toxicité.
 
 Flux d'une requête : clé API -> validation -> anonymisation -> nettoyage -> modèle -> score.
 Le texte reçu n'est jamais journalisé ni stocké.
+Réponse volontairement minimale (toxique oui/non) : le score, les probabilités, les seuils
+et la version du modèle restent internes (logs/métriques) pour ne pas aider un attaquant à
+régler une évasion ni à extraire le modèle.
 """
 import logging
 import os
@@ -25,10 +28,18 @@ scorer = load_scorer()
 API_KEY = os.environ.get("API_KEY")          # injectée depuis Secret Manager (Secret Kubernetes), jamais dans le code
 MAX_CHARS = int(os.environ.get("MAX_CHARS", "5000"))
 
+# Doc publique désactivée (docs_url/redoc_url/openapi_url = None) : ne pas exposer le schéma
+# complet de l'API à un attaquant non authentifié.
+# Prod : doc fermée. Dev/staging : doc ouverte. Piloté par la variable d'env ENV.
+EST_PROD = os.environ.get("ENV", "dev").lower() == "prod"
+
 app = FastAPI(
     title="Digital Social Score API",
-    description="Score de toxicité (0-100) d'un texte. Le texte reçu est anonymisé et n'est jamais stocké.",
+    description="Score de toxicité d'un texte. Le texte reçu est anonymisé et n'est jamais stocké.",
     version="1.0.0",
+    docs_url=None if EST_PROD else "/docs",
+    redoc_url=None if EST_PROD else "/redoc",
+    openapi_url=None if EST_PROD else "/openapi.json",
 )
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -56,19 +67,15 @@ class Demande(BaseModel):
 
 
 class Reponse(BaseModel):
-    score: int = Field(..., ge=0, le=100,
-                       description="Moyenne x 100 des labels détectés, sinon probabilité de toxic x 100")
-    labels: dict[str, float]
+    # Réponse minimale : uniquement le verdict. Le détail (score, labels, seuils, version)
+    # reste interne pour ne pas donner de signal exploitable à un attaquant.
     toxique: bool = Field(..., description="Au moins un label dépasse son seuil de décision")
-    labels_detectes: list[str] = Field(..., description="Labels dont la probabilité dépasse le seuil")
-    seuils: dict[str, float] = Field(..., description="Seuils de décision du modèle, calibrés sur la validation")
-    model_version: str
 
 
 @app.get("/health")
 def health():
-    """Sonde de vie (load balancer, Kubernetes)."""
-    return {"status": "ok", "model_version": scorer.version, "preprocessing_version": PREPROCESSING_VERSION}
+    """Sonde de vie (load balancer, Kubernetes) : statut seul, sans révéler les versions."""
+    return {"status": "ok"}
 
 
 @app.post("/score", response_model=Reponse, dependencies=[Depends(verifier_cle)])
@@ -77,21 +84,16 @@ def score(demande: Demande):
         raise HTTPException(status_code=422, detail="Texte vide")
 
     t0 = time.perf_counter()
-    texte = preprocess(demande.text)            # MÊME traitement qu'à l'entraînement
+    texte = preprocess(demande.text)            # MÊME traitement qu'à l'entraînement (inclut la normalisation anti-évasion)
     probas = scorer.predict([texte])[0]
     duree_ms = 1000 * (time.perf_counter() - t0)
 
     detectes = [label for label in LABELS if probas[label] >= scorer.seuils[label]]
-    # Score 0-100 (DOCUMENTATION.md §4) : moyenne des labels détectés, sinon probabilité de toxic
+    # Score 0-100 (DOCUMENTATION.md §4) : moyenne des labels détectés, sinon probabilité de toxic.
+    # Calculé pour le LOG interne et la décision, mais PAS renvoyé au client.
     retenus = detectes or ["toxic"]
     score_final = round(100 * sum(probas[label] for label in retenus) / len(retenus))
-    # Log SANS le texte : longueur, score, durée (minimisation RGPD)
+    # Log SANS le texte : score, longueur, durée (minimisation RGPD). Le détail reste ici, pas dans la réponse.
     log.info("score=%d longueur=%d duree_ms=%.1f", score_final, len(demande.text), duree_ms)
-    return Reponse(
-        score=score_final,
-        labels={label: round(probas[label], 4) for label in LABELS},
-        toxique=bool(detectes),
-        labels_detectes=detectes,
-        seuils=scorer.seuils,
-        model_version=scorer.version,
-    )
+
+    return Reponse(toxique=bool(detectes))

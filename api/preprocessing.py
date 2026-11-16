@@ -11,6 +11,7 @@ nettoyage + entraînement, puis de redéployer l'API.
 """
 import ipaddress
 import re
+import unicodedata
 
 import spacy
 
@@ -333,6 +334,52 @@ def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()     # 4. espaces multiples et retours à la ligne -> un espace
 
 
+# =============================================================================
+# 5. DÉFENSE ANTI-ÉVASION (normalisation appliquée AVANT tout, à l'inférence)
+# =============================================================================
+# Annule les obfuscations d'une attaque d'évasion adversariale (leet, espacement,
+# homoglyphes, caractères invisibles) pour ramener le texte vers la forme apprise par le
+# modèle. Appliquée uniquement dans preprocess() (chemin API), AVANT anonymisation et
+# nettoyage : les homoglyphes et les caractères invisibles doivent partir avant le regex et
+# le NER, sinon ils cassent déjà ces étapes.
+# Ne change PAS PREPROCESSING_VERSION : sur un commentaire normal (ni homoglyphe ni
+# invisible), la normalisation est quasi neutre, donc la sortie reste identique pour la
+# distribution d'entraînement ; elle ne fait que dé-déguiser une entrée hostile.
+_HOMOGLYPHES_INV = {"\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0456": "i", "\u0441": "c", "\u0440": "p", "\u0443": "y", "\u0445": "x"}
+_LEET_INV = {"4": "a", "3": "e", "1": "i", "0": "o", "$": "s", "7": "t", "@": "a"}
+_INVISIBLES = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff"), None)
+_RE_LETTRES_ESPACEES = re.compile(r"\b(?:[a-zA-Z]\s){2,}[a-zA-Z]\b")
+_RE_A_UNE_LETTRE = re.compile(r"[a-zA-Z]")
+
+
+def _deleet(mot: str) -> str:
+    """Dé-leet conservateur : ne modifie un token que s'il contient au moins deux chiffres
+    leet, ou un chiffre strictement entre deux lettres. Un token purement numérique ("100")
+    ou un chiffre isolé en bord de mot ("3pm", "v2") est laissé intact (anti faux positif)."""
+    if not _RE_A_UNE_LETTRE.search(mot):
+        return mot
+    positions = [i for i, c in enumerate(mot) if c in _LEET_INV]
+    if not positions:
+        return mot
+    entre_lettres = any(0 < i < len(mot) - 1 and mot[i - 1].isalpha() and mot[i + 1].isalpha()
+                        for i in positions)
+    if len(positions) >= 2 or entre_lettres:
+        return "".join(_LEET_INV.get(c, c) for c in mot)
+    return mot
+
+
+def normaliser_defense(text: str) -> str:
+    """Normalise un texte pour annuler les obfuscations d'évasion adversariale."""
+    text = unicodedata.normalize("NFKC", text)                       # variantes typographiques
+    text = text.translate(_INVISIBLES)                               # caractères de largeur nulle
+    text = "".join(c for c in text if not unicodedata.combining(c))  # accents artificiels
+    text = "".join(_HOMOGLYPHES_INV.get(c, c) for c in text)         # homoglyphes cyrilliques
+    text = _RE_LETTRES_ESPACEES.sub(lambda m: m.group(0).replace(" ", ""), text)  # "i d i o t"
+    return " ".join(_deleet(mot) for mot in text.split())            # leetspeak
+
+
 def preprocess(text: str) -> str:
-    """Chaîne complète appliquée à chaque requête de l'API : anonymisation puis nettoyage."""
+    """Chaîne complète appliquée à chaque requête de l'API :
+    normalisation anti-évasion -> anonymisation -> nettoyage."""
+    text = normaliser_defense(text)             # 0. DÉFENSE : annule l'obfuscation AVANT tout
     return clean_text(anonymize(text))
