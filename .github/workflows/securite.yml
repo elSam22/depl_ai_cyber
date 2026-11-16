@@ -1,6 +1,6 @@
 # Pipeline de sécurité et de qualité (TP2, étape 5) : s'exécute à chaque push et pull request.
-# Les 5 premiers jobs contrôlent ; le job « deploiement » ne démarre que s'ils sont tous verts, sur les branches de
-# déploiement (ci, Enzo), et seulement si api/ a changé (ou à la demande). Voir DOCUMENTATION.md, § 6.6.
+# Les 6 premiers jobs contrôlent ; le job « deploiement » ne démarre que s'ils sont tous verts, sur la branche de
+# déploiement ci (protégée), et seulement si api/ a changé (ou à la demande). Voir DOCUMENTATION.md, § 6.6.
 name: Sécurité et tests
 
 on:
@@ -16,10 +16,10 @@ jobs:
     name: Recherche de secrets (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with:
           fetch-depth: 0            # tout l'historique : une clé retirée d'un fichier reste lisible dans les anciens commits
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -27,8 +27,8 @@ jobs:
     name: Analyse statique du code (bandit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5
         with:
           python-version: "3.12"
       - run: pip install bandit
@@ -39,7 +39,7 @@ jobs:
     name: Conformité IA Act (model_card.json)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
       # Champs imposés par le TP2, catégorie de risque parmi les 4 niveaux du règlement, et aucune affirmation sans preuve
       # (par exemple « pas de biais » sans évaluation décrite).
       - run: python3 outils/verifier_model_card.py
@@ -48,10 +48,10 @@ jobs:
     name: Configuration Docker et Kubernetes (trivy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
       # Analyse le Dockerfile et les manifestes k8s de api/ (rien à analyser sur main : l'API locale n'en a pas).
       # Échoue à partir de la sévérité haute ; les risques acceptés sont listés avec leur raison dans .trivyignore.
-      - uses: aquasecurity/trivy-action@v0.36.0
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25   # v0.36.0
         with:
           scan-type: config
           scan-ref: api
@@ -59,18 +59,44 @@ jobs:
           exit-code: "1"
           trivyignores: .trivyignore
 
+  image:
+    name: Analyse de l'image Docker (trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - name: Chercher le Dockerfile de l'API
+        id: presence
+        run: |
+          if [ -f api/Dockerfile ]; then echo "present=true" >> "$GITHUB_OUTPUT"; fi
+      # Construit l'image (sans poids : modèle factice, les paquets système et Python sont ceux de la vraie image) et
+      # cherche les vulnérabilités connues avec correctif disponible. Les poids ne changent pas ce résultat.
+      - name: Construire l'image
+        if: steps.presence.outputs.present == 'true'
+        run: |
+          mkdir -p api/model            # les poids ne sont pas dans Git : dossier vide, modèle factice
+          docker build -t dss-api:analyse api
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25   # v0.36.0
+        if: steps.presence.outputs.present == 'true'
+        with:
+          scan-type: image
+          image-ref: dss-api:analyse
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore
+
   tests-et-dependances:
     name: Tests de l'API et audit des dépendances (pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
       # Les tests et api/requirements-dev.txt appartiennent au code de l'API déployée (branches Enzo, cors, ci).
       # Sur main, api/ contient l'API locale de développement, sans tests : les étapes suivantes sont alors ignorées.
       - name: Chercher les tests de l'API
         id: presence
         run: |
           if [ -d api/tests ] && [ -f api/requirements-dev.txt ]; then echo "presents=true" >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5
         if: steps.presence.outputs.presents == 'true'
         with:
           python-version: "3.12"
@@ -95,16 +121,16 @@ jobs:
 
   deploiement:
     name: Déploiement sur GKE
-    needs: [secrets, code, conformite, configuration, tests-et-dependances]
-    # Jamais sur une pull request (le code vient peut-être d'un tiers) ; seulement sur les branches de déploiement.
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/Enzo')
+    needs: [secrets, code, conformite, configuration, image, tests-et-dependances]
+    # Jamais sur une pull request (le code vient peut-être d'un tiers) ; seulement sur la branche ci, protégée (pull request + contrôles obligatoires).
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/ci'
     runs-on: ubuntu-latest
     concurrency: deploiement        # un seul déploiement à la fois
     permissions:
       contents: read
       id-token: write               # jeton OIDC : GitHub prouve son identité à Google, aucune clé n'est stockée
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with:
           fetch-depth: 0
       - name: api/ a-t-il changé ?
@@ -117,22 +143,22 @@ jobs:
           else
             echo "Rien à déployer : api/ n'a pas changé."
           fi
-      - uses: google-github-actions/auth@v3
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093   # v3
         if: steps.changement.outputs.deployer == 'true'
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v3
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db   # v3
         if: steps.changement.outputs.deployer == 'true'
         with:
           install_components: gke-gcloud-auth-plugin
-      - uses: google-github-actions/get-gke-credentials@v3
+      - uses: google-github-actions/get-gke-credentials@3da1e46a907576cefaa90c484278bb5b259dd395   # v3
         if: steps.changement.outputs.deployer == 'true'
         with:
           cluster_name: dss-cluster
           location: europe-west9
           project_id: ${{ vars.GCP_PROJECT_ID }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5
         if: steps.changement.outputs.deployer == 'true'
         with:
           python-version: "3.12"

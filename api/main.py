@@ -6,20 +6,23 @@ Réponse volontairement pauvre : le score est ARRONDI À LA DIZAINE (défense co
 voir defense_extraction.py) et accompagné du verdict. Les probabilités, les seuils et les textes prétraités restent
 internes (logs/métriques) : ils aideraient un attaquant à régler une évasion ou à extraire le modèle.
 """
+import asyncio
 import logging
 import os
 import secrets
 import time
 
-from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from prometheus_client import start_http_server
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_fastapi_instrumentator import Instrumentator, metrics
 from pydantic import BaseModel, Field
 
 from defense_extraction import quantifier_score
 from preprocessing import PREPROCESSING_VERSION, preprocess
+from protection import ECHECS, Protection, ip_client, journaliser_refus
 from scorer import LABELS, load_scorer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -43,6 +46,9 @@ app = FastAPI(
     redoc_url=None if EST_PROD else "/redoc",
     openapi_url=None if EST_PROD else "/openapi.json",
 )
+# Protection en entrée (limites par IP, clés fausses, taille du corps, en-têtes de sécurité). Ajoutée AVANT le CORS :
+# le dernier middleware ajouté est le plus externe, donc les refus 429/413 portent aussi les en-têtes CORS.
+app.add_middleware(Protection)
 # CORS : le front de démonstration appelle l'API depuis le navigateur (page ouverte depuis un fichier, origine « null »).
 # Pas de cookies (la clé est dans l'en-tête X-API-Key) : "*" sans credentials ne réduit pas la sécurité de la clé.
 app.add_middleware(
@@ -58,17 +64,24 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 # Servies sur un port SÉPARÉ (9090), pas sur /metrics : le Service et l'Ingress n'exposent que le port 8080,
 # donc les métriques ne sont pas publiques. Prometheus les lit directement sur le pod (PodMonitor).
 # /health est exclu (appelé en continu par les sondes Kubernetes). METRICS_PORT=0 désactive (tests).
-Instrumentator(excluded_handlers=["/health"]).instrument(app)
+# Intervalles de latence élargis jusqu'à 10 s (par défaut 1 s : le P95 restait bloqué à 1 s, alerte « P95 > 2 s » impossible).
+Instrumentator(excluded_handlers=["/health"]).add(
+    metrics.default(latency_lowr_buckets=(0.1, 0.25, 0.5, 1, 2, 5, 10))
+).instrument(app)
 _port_metriques = int(os.environ.get("METRICS_PORT", "9090"))
 if _port_metriques:
     start_http_server(_port_metriques)
 
 
-def verifier_cle(cle: str | None = Security(api_key_header)) -> None:
-    """Refuse la requête si la clé API est absente ou fausse (401)."""
+async def verifier_cle(request: Request, cle: str | None = Security(api_key_header)) -> None:
+    """Refuse la requête si la clé API est absente ou fausse (401). Chaque refus est compté par adresse : au-delà de
+    LIMITE_ECHECS_PAR_MIN, Protection bloque l'adresse (anti brute-force) et le refus est journalisé sans la clé."""
     if API_KEY is None:
         raise HTTPException(status_code=500, detail="API_KEY non configurée sur le serveur")
     if cle is None or not secrets.compare_digest(cle, API_KEY):   # comparaison à temps constant
+        ip = ip_client(request.scope)
+        ECHECS.enregistrer(ip)
+        journaliser_refus("cle_invalide", request.url.path, ip)
         raise HTTPException(status_code=401, detail="Clé API absente ou invalide")
 
 
@@ -85,25 +98,28 @@ class Reponse(BaseModel):
 
 
 @app.get("/health")
-def health():
+async def health():
     """Sonde de vie (load balancer, Kubernetes) : statut seul, sans révéler les versions."""
     return {"status": "ok"}
 
 
 @app.get("/version", dependencies=[Depends(verifier_cle)])
-def version():
+async def version():
     """Version du modèle, RÉSERVÉE à la clé : le contrôle après déploiement s'en sert pour refuser le modèle factice
     (« dummy-… »), sans révéler la version à un client non authentifié."""
     return {"model_version": scorer.version, "preprocessing_version": PREPROCESSING_VERSION}
 
 
-@app.post("/score", response_model=Reponse, dependencies=[Depends(verifier_cle)])
-def score(demande: Demande):
-    if not demande.text.strip():
-        raise HTTPException(status_code=422, detail="Texte vide")
+# Au plus MAX_INFERENCES calculs en même temps par pod (1 CPU) ; une requête de plus attend ATTENTE_MAX_S au plus, puis
+# reçoit 503. Sans cela, 168 requêtes simultanées font monter la latence de ×76 à ×108 chez d'autres équipes : mieux vaut
+# refuser vite que répondre en 30 s. 3 calculs + 1 s d'attente gardent la latence sous le critère de 2 s de l'étape 5.
+INFERENCES = asyncio.Semaphore(int(os.environ.get("MAX_INFERENCES", "3")))
+ATTENTE_MAX_S = float(os.environ.get("ATTENTE_MAX_S", "1.0"))
 
+
+def _evaluer(texte_brut: str) -> Reponse:
     t0 = time.perf_counter()
-    texte = preprocess(demande.text)            # MÊME traitement qu'à l'entraînement (inclut la normalisation anti-évasion)
+    texte = preprocess(texte_brut)              # MÊME traitement qu'à l'entraînement (inclut la normalisation anti-évasion)
     probas = scorer.predict([texte])[0]
     duree_ms = 1000 * (time.perf_counter() - t0)
 
@@ -113,6 +129,20 @@ def score(demande: Demande):
     retenus = detectes or ["toxic"]
     score_final = round(100 * sum(probas[label] for label in retenus) / len(retenus))
     # Log SANS le texte : score, longueur, durée (minimisation RGPD). Le détail reste ici, pas dans la réponse.
-    log.info("score=%d longueur=%d duree_ms=%.1f", score_final, len(demande.text), duree_ms)
-
+    log.info("score=%d longueur=%d duree_ms=%.1f", score_final, len(texte_brut), duree_ms)
     return Reponse(score=quantifier_score(score_final), toxique=bool(detectes))
+
+
+@app.post("/score", response_model=Reponse, dependencies=[Depends(verifier_cle)])
+async def score(demande: Demande, request: Request):
+    if not demande.text.strip():
+        raise HTTPException(status_code=422, detail="Texte vide")
+    try:
+        await asyncio.wait_for(INFERENCES.acquire(), ATTENTE_MAX_S)
+    except asyncio.TimeoutError:
+        journaliser_refus("surcharge", "/score", ip_client(request.scope))
+        raise HTTPException(status_code=503, detail="Service saturé, réessayer", headers={"Retry-After": "1"})
+    try:
+        return await run_in_threadpool(_evaluer, demande.text)   # hors de la boucle : /health reste réactif
+    finally:
+        INFERENCES.release()

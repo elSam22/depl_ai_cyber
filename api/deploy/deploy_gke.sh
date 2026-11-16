@@ -57,7 +57,7 @@ echo "2/3 Application des manifests Kubernetes"
 IP="$(gcloud compute addresses describe dss-ip --global --format='value(address)')"
 DOMAIN="${IP//./-}.sslip.io"              # nom de domaine gratuit qui pointe vers l'IP (pour le certificat HTTPS)
 sed "s|IMAGE_URL|$IMAGE|" "$K8S/deployment.yaml" | kubectl apply -f -
-kubectl apply -f "$K8S/service.yaml" -f "$K8S/hpa.yaml"
+kubectl apply -f "$K8S/backendconfig.yaml" -f "$K8S/service.yaml" -f "$K8S/hpa.yaml"
 sed "s|DOMAIN|$DOMAIN|" "$K8S/ingress.yaml" | kubectl apply -f -
 
 echo "3/4 Attente du déploiement (pods prêts)"
