@@ -587,6 +587,30 @@ Cloud Logging GKE collecte automatiquement la sortie standard des pods. Ligne ty
 
 2 minutes, 8 attaquants (sans clé, mauvaise clé, texte trop long, JSON invalide) et 2 utilisateurs légitimes. **5 812 requêtes d'attaque (≈ 49/s) toutes refusées avec le bon code (401 ou 422), médiane 25 ms** : un refus est environ 4 fois moins coûteux qu'un vrai calcul (90 ms). Les légitimes n'ont subi **aucune erreur** (276 requêtes, P95 170 ms). Limites : charge faible, et la comparaison avec des légitimes seuls n'a pas été faite avec les mêmes textes. **Aucune limitation de débit** : l'API répond à ≈ 49 requêtes/s d'un même client sans jamais envoyer de 429, donc une attaque plus forte consommerait le CPU sans être freinée (amélioration proposée : limite par clé ou par IP). Et le bogue de clé à accent (S2b) permet de produire des erreurs 500, que cette rafale n'a pas utilisées.
 
+### 6.6 Pipeline de sécurité (intégration continue)
+
+Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement est un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request**, sur le dépôt public, sans aucun secret ni droit sur Google Cloud.
+
+| Contrôle (job) | Outil | Pourquoi ce choix | Résultat sur GitHub |
+|---|---|---|---|
+| **Recherche de secrets** | `gitleaks`, sur **tout l'historique** git | Une clé retirée d'un fichier reste lisible dans les anciens commits : c'est exactement ce qui est arrivé (clé d'API dans `frontend/index.html`, branche Eliana). Un contrôle du seul état courant ne l'aurait pas vue. | « no leaks found ». En local, l'outil retrouve bien l'ancienne clé (révoquée le 13 novembre) : elle est déclarée dans `.gitleaksignore` pour que la pipeline ne signale que les **nouvelles** fuites. |
+| **Analyse du code** | `bandit`, échec dès la sévérité moyenne | Détecte les motifs dangereux en Python sans exécuter le code. | « No issues identified » après correction (voir ci-dessous). |
+| **Tests de l'API** | `pytest` (15 tests) | Rejoue automatiquement la grille de tests de sécurité : clé absente ou fausse (401), texte vide ou trop long (422), format de la réponse, texte non journalisé. | « 15 passed, 1 skipped » (le test ignoré compare avec les données nettoyées, absentes du dépôt). |
+| **Audit des dépendances** | `pip-audit`, sur l'environnement réellement installé | Les versions sont libres (`fastapi>=0.115`) : on audite ce que `pip` a effectivement résolu, pas le fichier. `pip` est mis à jour avant l'audit. | « No known vulnerabilities found ». Seul `en-core-web-sm` n'est pas auditable (il vient d'une URL GitHub, pas de PyPI). |
+
+**Ce que la pipeline a déjà trouvé, avant même de tourner sur GitHub.** `bandit` signalait 3 alertes de sévérité moyenne dans `api/scorer.py` : (1) `torch.load` sans `weights_only=True` : un fichier de poids piégé pourrait exécuter du code au chargement. **Corrigé** (`weights_only=True`, sans effet sur le fonctionnement). (2) et (3) `from_pretrained` « sans épingler de révision » : **faux positifs**, car le modèle est un dossier local embarqué dans l'image (`HF_HUB_OFFLINE=1`), rien n'est téléchargé. Marqués `# nosec B615` avec la justification en commentaire.
+
+**Un échec de la première exécution, gardé volontairement.** Le premier lancement était rouge : les tests importaient `pandas`, absent des dépendances de test. Ce n'est pas un défaut de sécurité, mais cela montre que la pipeline détecte une dépendance manquante qui serait passée inaperçue sur une machine de développement (où elle était installée). Correction : ajout de `pandas` à `api/requirements-dev.txt`.
+
+![Première exécution de la pipeline (échec sur les tests, secrets et code au vert), GitHub Actions, 16 novembre](supervision/images/ci_premiere_execution.png)
+
+Les deux jobs `gitleaks` et `bandit` sont au vert dès la première exécution ; la deuxième exécution, après le correctif, est entièrement verte (les journaux sont dans l'onglet Actions du dépôt ; GitHub ne les affiche qu'aux personnes connectées, d'où les extraits ci-dessus).
+
+**Choix assumés et limites.**
+- **Intégration seulement, pas de déploiement automatique.** Déployer depuis GitHub demande de lui donner des droits sur le projet Google Cloud (via *Workload Identity Federation*, sans clé stockée), et les poids du modèle ne sont **pas dans git** : la pipeline ne pourrait pas construire l'image. Chaque déploiement remplace aussi les pods en service et consomme du crédit. Le déploiement reste donc manuel, avec le contrôle de `model_version` décrit au § 3.2.
+- **Elle contrôle le code de l'API déployée** (branches `Enzo`, `cors`, `ci`). Sur `main`, `api/` contient l'API locale de développement, sans tests : le job de tests est alors ignoré (vérification faite après le `checkout`, car `hashFiles` n'est pas autorisé au niveau d'un job).
+- **Non couvert :** analyse de l'image Docker et des manifestes Kubernetes (`trivy`), test dynamique de l'API en ligne, contrôle que `model_version` n'est pas `dummy-…` après déploiement. Ce dernier garde-fou aurait évité l'incident du 13 novembre : amélioration proposée.
+
 ---
 
 ## Étape 7 : Modélisation de l'infrastructure Cloud — Synthèse
