@@ -2,3 +2,4 @@
 pytest
 httpx
 locust
+pandas   # lu par tests/test_preprocessing.py (comparaison avec les données nettoyées, ignorée si absentes)
