@@ -6,19 +6,29 @@ Documentation interactive (pour tester dans le navigateur) : http://127.0.0.1:80
 
 RGPD : le texte reçu n'est ni enregistré ni écrit dans les logs. Il est anonymisé avant d'être donné au modèle.
 """
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from api import modeles
+from api.limiteur_debit import LimiteurDebit
 from api.preprocess import pretraiter_detail
+
+# Défense contre le vol de modèle (étape 3) : quota par identifiant, fenêtre glissante.
+# DEBIT_MAX_REQUETES=0 désactive la limite (pour comparer avec/sans, voir attack/debit.py).
+# En local il n'y a pas de clé API : on limite par IP, à défaut. En production (clé API),
+# limiter par clé serait plus juste (un client = une clé, pas une IP partagée).
+DEBIT_MAX_REQUETES = int(os.environ.get("DEBIT_MAX_REQUETES", "60"))
+DEBIT_FENETRE_S = float(os.environ.get("DEBIT_FENETRE_S", "60"))
+limiteur = LimiteurDebit(DEBIT_MAX_REQUETES, DEBIT_FENETRE_S) if DEBIT_MAX_REQUETES > 0 else None
 
 @asynccontextmanager
 async def demarrage(_app):
@@ -80,7 +90,13 @@ def sante():
 
 
 @app.post("/predire")
-def predire(requete: Requete):
+def predire(requete: Requete, request: Request):
+    if limiteur is not None:
+        cle = request.client.host if request.client else "inconnu"
+        autorise, attente_s = limiteur.autoriser(cle)
+        if not autorise:
+            raise HTTPException(status_code=429, detail="Trop de requêtes, réessayez plus tard",
+                                headers={"Retry-After": str(attente_s)})
     try:
         modele = modeles.obtenir(requete.modele)
     except modeles.ModeleIndisponible as e:
