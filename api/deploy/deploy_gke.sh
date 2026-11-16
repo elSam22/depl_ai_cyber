@@ -22,7 +22,24 @@ COPYFILE_DISABLE=1 tar -czf "$ARCHIVE" -C api \
   --exclude=./requirements-dev.txt --exclude=./README.md --exclude=./.pytest_cache --exclude=./pytest.ini --exclude=./k8s .
 gcloud storage cp "$ARCHIVE" "$SOURCES" --project "$PROJECT_ID"
 rm -f "$ARCHIVE"
-gcloud builds submit "$SOURCES" --tag "$IMAGE" --project "$PROJECT_ID" --timeout=30m --machine-type=e2-highcpu-8
+# --no-source : même avec une archive déjà dans un bucket, « gcloud builds submit » revérifie ce bucket avec des droits que
+# le compte fédéré de la pipeline n'a pas. Le build récupère donc lui-même l'archive (il tourne avec le compte de service
+# de Cloud Build, qui y a accès) puis construit l'image avec le Dockerfile.
+CONFIG="$(mktemp -t cloudbuild-XXXXXX).yaml"
+cat > "$CONFIG" <<'YAML'
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args: ["-c", "gcloud storage cp ${_SOURCES} /workspace/src.tgz && tar xzf /workspace/src.tgz -C /workspace"]
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+options:
+  machineType: E2_HIGHCPU_8
+timeout: 1800s
+YAML
+gcloud builds submit --no-source --config "$CONFIG" --substitutions "_SOURCES=$SOURCES,_IMAGE=$IMAGE" --project "$PROJECT_ID"
+rm -f "$CONFIG"
 
 echo "2/3 Application des manifests Kubernetes"
 IP="$(gcloud compute addresses describe dss-ip --global --format='value(address)')"
