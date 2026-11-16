@@ -1,11 +1,12 @@
 # Pipeline de sécurité et de qualité (TP2, étape 5) : s'exécute à chaque push et pull request.
-# Elle ne déploie rien : le déploiement reste manuel (api/deploy/deploy_gke.sh).
+# Les 5 premiers jobs contrôlent ; le job « deploiement » ne démarre que s'ils sont tous verts, sur les branches de
+# déploiement (ci, Enzo), et seulement si api/ a changé (ou à la demande). Voir DOCUMENTATION.md, § 6.6.
 name: Sécurité et tests
 
 on:
   push:
   pull_request:
-  workflow_dispatch:
+  workflow_dispatch:       # lancement à la main (onglet Actions) : force un déploiement
 
 permissions:
   contents: read
@@ -91,3 +92,74 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit --skip-editable
+
+  deploiement:
+    name: Déploiement sur GKE
+    needs: [secrets, code, conformite, configuration, tests-et-dependances]
+    # Jamais sur une pull request (le code vient peut-être d'un tiers) ; seulement sur les branches de déploiement.
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/ci' || github.ref == 'refs/heads/Enzo')
+    runs-on: ubuntu-latest
+    concurrency: deploiement        # un seul déploiement à la fois
+    permissions:
+      contents: read
+      id-token: write               # jeton OIDC : GitHub prouve son identité à Google, aucune clé n'est stockée
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: api/ a-t-il changé ?
+        id: changement
+        run: |
+          avant="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$avant" ] || [ "$avant" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$avant" 2>/dev/null || ! git diff --quiet "$avant" "${{ github.sha }}" -- api/; then
+            echo "deployer=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Rien à déployer : api/ n'a pas changé."
+          fi
+      - uses: google-github-actions/auth@v3
+        if: steps.changement.outputs.deployer == 'true'
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v3
+        if: steps.changement.outputs.deployer == 'true'
+        with:
+          install_components: gke-gcloud-auth-plugin
+      - uses: google-github-actions/get-gke-credentials@v3
+        if: steps.changement.outputs.deployer == 'true'
+        with:
+          cluster_name: dss-cluster
+          location: europe-west9
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+      - uses: actions/setup-python@v5
+        if: steps.changement.outputs.deployer == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements-dev.txt
+      - name: Récupérer les poids du modèle (bucket privé, hors de Git)
+        if: steps.changement.outputs.deployer == 'true'
+        run: |
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r api/requirements-dev.txt
+          mkdir -p models
+          gcloud storage cp -r "${{ vars.GCP_MODEL_BUCKET }}/distilbert" models/
+          gcloud storage cp "${{ vars.GCP_MODEL_BUCKET }}/seuils.json" models/seuils.json
+          python api/export_model.py --type distilbert
+          chmod a+r api/model/*       # le conteneur est non-root : il doit pouvoir lire les poids
+      - name: Test du vrai modèle (avant de construire l'image)
+        if: steps.changement.outputs.deployer == 'true'
+        working-directory: api
+        env:
+          METRICS_PORT: "0"
+        run: pytest -v tests/test_modele_reel.py
+      - name: Construire l'image et déployer (le script contrôle l'API à la fin)
+        if: steps.changement.outputs.deployer == 'true'
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+        run: bash api/deploy/deploy_gke.sh
+      - name: Retour arrière automatique si le déploiement a échoué
+        if: failure() && steps.changement.outputs.deployer == 'true'
+        run: |
+          kubectl rollout undo deployment/dss-api
+          kubectl rollout status deployment/dss-api --timeout=10m

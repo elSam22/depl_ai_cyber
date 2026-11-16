@@ -50,7 +50,22 @@ for essai in range(30):
         pass
     time.sleep(10)
 verifie(sante.get("status") == "ok", "/health répond « ok »")
-version = sante.get("model_version", "")
+
+# Pendant le remplacement progressif des pods, anciens et nouveaux répondent tour à tour : on attend que tous les pods
+# annoncent la même version (6 réponses consécutives identiques) avant de juger.
+versions = set()
+for essai in range(30):
+    versions = set()
+    for _ in range(6):
+        try:
+            versions.add(appel("/health")[1].get("model_version", ""))
+        except OSError:
+            versions.add("")
+    if len(versions) == 1:
+        break
+    time.sleep(10)
+verifie(len(versions) == 1, f"tous les pods annoncent la même version du modèle ({', '.join(sorted(versions))})")
+version = sante.get("model_version", "") if len(versions) != 1 else next(iter(versions))
 verifie(bool(version) and not version.startswith("dummy"), f"modèle réel (model_version = « {version} », pas « dummy-… »)")
 
 # 2. Le modèle sépare un texte toxique d'un texte neutre (un modèle factice donne des scores fixes)
