@@ -1,5 +1,1 @@
-# Risque accepté, à traiter (voir DOCUMENTATION.md, § 6.6) :
-# KSV-0014 : le conteneur n'a pas readOnlyRootFilesystem: true. Le passer à true demande de vérifier que l'API
-# n'écrit nulle part ailleurs que dans /tmp (à monter en volume emptyDir) ; non testé, donc non appliqué
-# sur le déploiement en service. Les autres protections sont en place (non-root, capacités retirées, pas d'élévation).
-KSV-0014
+# Aucun risque accepté pour l'instant (KSV-0014, readOnlyRootFilesystem, corrigé le 16 novembre).

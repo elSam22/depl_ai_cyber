@@ -2,6 +2,7 @@
 # Construit l'image (Cloud Build) puis la déploie sur le cluster GKE.
 # Usage (depuis la racine du repo) :  PROJECT_ID=mon-projet bash api/deploy/deploy_gke.sh
 set -euo pipefail
+# Avant de lancer : python api/export_model.py --type distilbert  puis  chmod a+r api/model/*  (les poids ne sont pas dans Git)
 
 PROJECT_ID="${PROJECT_ID:?Définir PROJECT_ID}"
 REGION="${REGION:-europe-west9}"
@@ -20,8 +21,13 @@ sed "s|IMAGE_URL|$IMAGE|" "$K8S/deployment.yaml" | kubectl apply -f -
 kubectl apply -f "$K8S/service.yaml" -f "$K8S/hpa.yaml"
 sed "s|DOMAIN|$DOMAIN|" "$K8S/ingress.yaml" | kubectl apply -f -
 
-echo "3/3 Attente du déploiement (pods prêts)"
+echo "3/4 Attente du déploiement (pods prêts)"
 kubectl rollout status deployment/dss-api --timeout=10m
+
+echo "4/4 Contrôle de l'API déployée (modèle réel, authentification)"
+API_KEY="$(gcloud secrets versions access latest --secret=dss-api-key --project "$PROJECT_ID")" \
+  python3 "$(dirname "$0")/verifier_deploiement.py" "https://$DOMAIN" \
+  || { echo "CONTRÔLE ÉCHOUÉ : revenir en arrière avec  kubectl rollout undo deployment/dss-api"; exit 1; }
 
 echo
 echo "API : https://$DOMAIN"
