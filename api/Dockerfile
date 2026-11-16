@@ -3,6 +3,9 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 
+# Correctifs de sécurité du système (l'image de base peut avoir quelques jours de retard : trivy a signalé zlib1g)
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # 1. Dépendances d'abord (couche mise en cache tant que requirements.txt ne change pas).
