@@ -153,14 +153,6 @@ jobs:
         env:
           METRICS_PORT: "0"
         run: pytest -v tests/test_modele_reel.py
-      - name: Diagnostic des droits (temporaire)
-        if: steps.changement.outputs.deployer == 'true'
-        continue-on-error: true
-        run: |
-          gcloud auth list
-          echo "--- bucket des sources de build"; gcloud storage buckets describe "gs://${{ vars.GCP_PROJECT_ID }}_cloudbuild" --format="value(name,location)" || true
-          echo "--- bucket des poids"; gcloud storage buckets describe "${{ vars.GCP_MODEL_BUCKET }}" --format="value(name,location)" || true
-          echo "--- écriture dans le bucket de build"; echo test | gcloud storage cp - "gs://${{ vars.GCP_PROJECT_ID }}_cloudbuild/source/diagnostic.txt" || true
       - name: Noter la révision en service avant de déployer
         id: avant
         if: steps.changement.outputs.deployer == 'true'
