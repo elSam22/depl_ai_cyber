@@ -38,7 +38,9 @@ options:
   machineType: E2_HIGHCPU_8
 timeout: 1800s
 YAML
-gcloud builds submit --no-source --config "$CONFIG" --substitutions "_SOURCES=$SOURCES,_IMAGE=$IMAGE" --project "$PROJECT_ID"
+# --suppress-logs : le compte de la pipeline n'a pas le droit de lire les journaux en direct (réservé aux Viewer du projet) ;
+# la commande attend quand même la fin du build et échoue si le build échoue. Journaux : console Cloud Build.
+gcloud builds submit --no-source --config "$CONFIG" --substitutions "_SOURCES=$SOURCES,_IMAGE=$IMAGE" --project "$PROJECT_ID" --suppress-logs
 rm -f "$CONFIG"
 
 echo "2/3 Application des manifests Kubernetes"
