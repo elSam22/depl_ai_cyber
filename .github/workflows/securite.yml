@@ -37,6 +37,9 @@ jobs:
   tests-et-dependances:
     name: Tests de l'API et audit des dépendances (pip-audit)
     runs-on: ubuntu-latest
+    # Les tests et api/requirements-dev.txt appartiennent au code de l'API déployée (branches Enzo, cors, ci) ;
+    # sur main, api/ contient l'API locale de développement, sans tests : le job est alors ignoré.
+    if: ${{ hashFiles('api/tests/*.py') != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
