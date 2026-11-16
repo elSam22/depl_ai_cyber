@@ -1,0 +1,37 @@
+[
+  {
+    "rembourrage_chars": 0,
+    "proba_sans_defense": 0.986,
+    "proba_avec_defense": 0.986,
+    "evasion_sans_defense_pct": 0,
+    "evasion_avec_defense_pct": 0
+  },
+  {
+    "rembourrage_chars": 500,
+    "proba_sans_defense": 0.904,
+    "proba_avec_defense": 0.904,
+    "evasion_sans_defense_pct": 0,
+    "evasion_avec_defense_pct": 0
+  },
+  {
+    "rembourrage_chars": 1000,
+    "proba_sans_defense": 0.096,
+    "proba_avec_defense": 0.926,
+    "evasion_sans_defense_pct": 100,
+    "evasion_avec_defense_pct": 0
+  },
+  {
+    "rembourrage_chars": 2000,
+    "proba_sans_defense": 0.096,
+    "proba_avec_defense": 0.942,
+    "evasion_sans_defense_pct": 100,
+    "evasion_avec_defense_pct": 0
+  },
+  {
+    "rembourrage_chars": 4000,
+    "proba_sans_defense": 0.096,
+    "proba_avec_defense": 0.917,
+    "evasion_sans_defense_pct": 100,
+    "evasion_avec_defense_pct": 0
+  }
+]

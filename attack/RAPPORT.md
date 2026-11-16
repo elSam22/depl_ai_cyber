@@ -256,3 +256,31 @@ Cette section n'est **pas** destinée aux autres groupes : c'est la lecture croi
 **Effet concret.** Sans limite, un attaquant obtient en 20 secondes largement de quoi entraîner un clone à 94 % de fidélité (le seuil de 100 requêtes est atteint en moins de 2 s). Avec la limite à 60 requêtes/minute, il lui faudrait environ **33 minutes** pour réunir les 2 000 requêtes utilisées par l'attaque reçue — largement le temps de détecter un usage anormal et de révoquer la clé, et ça empêche directement l'effet de surcharge (latence doublée, erreurs 502) observé lors de l'incident réel (§ 6, constat).
 
 **Limite assumée :** le quota ne rend pas le vol de modèle impossible (un attaquant patient sur plusieurs heures peut toujours réunir assez de requêtes), mais il le ralentit radicalement, le rend détectable, et supprime l'effet de surcharge du service — ce que la quantification du score (§ 6.2) ne faisait pas du tout.
+
+
+---
+
+## 7. Défense contre le noyage : fenêtres glissantes (étape 3)
+
+**Vulnérabilité identifiée (§ 5.2).** Notre modèle DistilBERT ne regarde que les **128 premiers tokens** d'un texte (troncature droite par défaut du tokenizer HuggingFace). L'attaque noyage envoie plusieurs milliers de caractères neutres *avant* la phrase toxique : le contenu toxique est alors coupé et le modèle ne voit que du neutre — il répond `toxique: false`.
+
+**Défense implémentée** (`api/modeles.py`, méthode `ModeleDistilBERT.probabilites` et `ModeleBiLSTM.probabilites`) : scan en **fenêtres glissantes** de 128 tokens (DistilBERT) ou 200 mots (BiLSTM). Pour un texte court (≤ seuil), une seule passe comme avant. Pour un texte long, on découpe en fenêtres consécutives sans chevauchement et on retourne la **probabilité maximale** observée sur toutes les fenêtres. Le contenu toxique est détecté peu importe sa position dans le texte.
+
+**Coût de la défense.** Sur les textes courants (< 128 tokens) il n'y a aucun surcost : une seule passe. Le nombre de passes croît linéairement avec la longueur uniquement pour les textes anormalement longs, qui représentent typiquement moins de 1 % du trafic réel.
+
+**Réexécution** (`attack/defense_noyage.py`) : 5 phrases toxiques, 5 niveaux de rembourrage neutre (0 → 4 000 caractères), mesuré localement sur DistilBERT.
+
+![Défense anti-noyage](results/defense_noyage.png)
+
+| Rembourrage neutre ajouté | Proba toxic sans défense | Proba toxic avec défense | Évasion sans défense | Évasion avec défense |
+|---|---|---|---|---|
+| 0 car. (texte normal) | **0,986** | **0,986** | 0 % | 0 % |
+| 500 car. | 0,904 | 0,904 | 0 % | 0 % |
+| 1 000 car. | 0,096 | **0,926** | **100 %** | **0 %** |
+| 2 000 car. | 0,096 | **0,942** | **100 %** | **0 %** |
+| 4 000 car. | 0,096 | **0,917** | **100 %** | **0 %** |
+
+**Interprétation.**
+- **L'attaque est neutralisée à partir de 1 000 caractères de rembourrage** : sans défense, la probabilité chute à 0,096 (sous le seuil 0,5, évasion = 100 %) ; avec défense, elle reste à 0,92-0,94 (évasion = 0 %) quel que soit le volume de rembourrage.
+- **Sous 500 caractères**, les deux donnent le même résultat (0,90) : à ce niveau, le texte toxique tient encore dans la fenêtre de 128 tokens et aucune défense n'est nécessaire.
+- **Le comportement normal est préservé** : sur un texte sans rembourrage (0 car.), la proba reste exactement à 0,986 — la défense ne dégrade pas la détection habituelle.
