@@ -1,0 +1,66 @@
+{
+ "vague": "v2_sondes_web",
+ "date_utc": "2026-11-17 16:03:52",
+ "resultats": {
+  "200 /health": {
+   "code": 200,
+   "manquants": [
+    "x-frame-options"
+   ],
+   "interdits": [],
+   "server": null
+  },
+  "404 /inconnu": {
+   "code": 404,
+   "manquants": [
+    "x-frame-options"
+   ],
+   "interdits": [],
+   "server": null
+  },
+  "401 /score sans clé": {
+   "code": 401,
+   "manquants": [
+    "x-frame-options"
+   ],
+   "interdits": [],
+   "server": null
+  },
+  "http_clair": {
+   "code": 301,
+   "location_https": true
+  },
+  "cors": {
+   "code": 200,
+   "allow_origin": "*",
+   "allow_credentials": null
+  },
+  "methodes": {
+   "PUT": 405,
+   "DELETE": 405,
+   "TRACE": 405
+  },
+  "waf": {
+   "xss": 200,
+   "sqli": 200,
+   "traversee": 200
+  },
+  "tls": {
+   "version": "TLSv1.3",
+   "chiffrement": "TLS_AES_256_GCM_SHA384",
+   "expire": "Feb  8 14:16:11 2027 GMT",
+   "emetteur": {
+    "countryName": "US",
+    "organizationName": "Google Trust Services",
+    "commonName": "WR3"
+   }
+  }
+ },
+ "ecarts": [
+  "200 /health : en-têtes manquants ['x-frame-options']",
+  "404 /inconnu : en-têtes manquants ['x-frame-options']",
+  "401 /score sans clé : en-têtes manquants ['x-frame-options']",
+  "pas de pare-feu applicatif (WAF) : charges XSS / SQLi transmises à l'API (risque connu, accepté)"
+ ],
+ "verdict": "4 écart(s)"
+}

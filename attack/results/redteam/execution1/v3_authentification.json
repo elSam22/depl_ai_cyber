@@ -1,0 +1,63 @@
+{
+ "vague": "v3_authentification",
+ "date_utc": "2026-11-17 16:10:21",
+ "variantes": {
+  "sans clé": 401,
+  "clé vide": 401,
+  "clé fausse": 401,
+  "clé non ASCII (S2b)": 401,
+  "clé de 8 000 caractères": 401,
+  "bonne clé + un caractère": 401,
+  "bonne clé tronquée": 401,
+  "clé dans l'URL": 401
+ },
+ "force_brute": {
+  "essais": 30,
+  "codes": [
+   401,
+   401,
+   401,
+   401,
+   401,
+   401,
+   401,
+   401,
+   401,
+   429,
+   429,
+   401,
+   429,
+   401,
+   429,
+   429,
+   429,
+   429,
+   429,
+   429,
+   429,
+   401,
+   429,
+   429,
+   429,
+   429,
+   429,
+   429,
+   429,
+   429
+  ],
+  "nb_401": 12,
+  "nb_429": 18,
+  "blocage_au_essai": 10
+ },
+ "client_legitime_meme_adresse": {
+  "pendant_blocage": [
+   429,
+   429,
+   429,
+   429
+  ],
+  "apres_70s": 200
+ },
+ "ecarts": [],
+ "verdict": "conforme"
+}

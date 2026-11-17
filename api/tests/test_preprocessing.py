@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from preprocessing import anonymize, clean_text, preprocess
+from preprocessing import anonymize, clean_text, normaliser_avant_anonymisation, preprocess
 
 RACINE = Path(__file__).resolve().parents[2]
 
@@ -44,3 +44,15 @@ def test_parite_avec_les_notebooks():
         attendu = propre.loc[i, "comment_text"]
         attendu = "" if pd.isna(attendu) else str(attendu)   # texte vide relu comme NaN par pandas
         assert clean_text(anonymize(str(brut.loc[i, "comment_text"]))) == attendu
+
+
+def test_lettres_separees_par_des_points():
+    """RedTeamIA, vague 6 : « i.d.i.o.t » échappait à la normalisation (6 sur 18 sur l'API déployée)."""
+    for deguise in ("you are an i.d.i.o.t", "you are an i-d-i-o-t", "you are an i_d_i_o_t", "you are an i*d*i*o*t",
+                    "you are an i d i o t"):
+        assert "idiot" in normaliser_avant_anonymisation(deguise)
+    # Ce qui ne doit pas bouger : abréviations de deux lettres, adresse IP, phrase normale
+    assert normaliser_avant_anonymisation("the U.S. and e.g. this") == "the U.S. and e.g. this"
+    assert normaliser_avant_anonymisation("a U.S citizen") == "a U.S citizen"      # séparateurs mélangés
+    assert "192.168.1.1" in normaliser_avant_anonymisation("server 192.168.1.1 is down")
+    assert "192.168.1.1" not in preprocess("server 192.168.1.1 is down")      # toujours anonymisée

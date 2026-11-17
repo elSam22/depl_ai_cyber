@@ -1,0 +1,105 @@
+{
+ "vague": "v4_fuite_information",
+ "date_utc": "2026-11-17 20:45:42",
+ "reponses_valides": {
+  "toxique": {
+   "code": 200,
+   "corps": {
+    "score": 100,
+    "toxique": true
+   },
+   "en_tetes": [
+    "alt-svc",
+    "cache-control",
+    "content-length",
+    "content-security-policy",
+    "content-type",
+    "date",
+    "referrer-policy",
+    "strict-transport-security",
+    "vary",
+    "via",
+    "x-content-type-options"
+   ]
+  },
+  "sain": {
+   "code": 200,
+   "corps": {
+    "score": 0,
+    "toxique": false
+   },
+   "en_tetes": [
+    "alt-svc",
+    "cache-control",
+    "content-length",
+    "content-security-policy",
+    "content-type",
+    "date",
+    "referrer-policy",
+    "strict-transport-security",
+    "vary",
+    "via",
+    "x-content-type-options"
+   ]
+  }
+ },
+ "corps_anormaux": {
+  "texte vide": {
+   "code": 422,
+   "taille_reponse": 144,
+   "indices_de_fuite": []
+  },
+  "texte nombre": {
+   "code": 422,
+   "taille_reponse": 108,
+   "indices_de_fuite": []
+  },
+  "texte liste": {
+   "code": 422,
+   "taille_reponse": 110,
+   "indices_de_fuite": []
+  },
+  "texte nul": {
+   "code": 422,
+   "taille_reponse": 109,
+   "indices_de_fuite": []
+  },
+  "champ en trop": {
+   "code": 200,
+   "taille_reponse": 27,
+   "indices_de_fuite": [],
+   "note": "champs inconnus ignorés (pas de 422) : sans effet sur le modèle choisi"
+  },
+  "JSON invalide": {
+   "code": 422,
+   "taille_reponse": 133,
+   "indices_de_fuite": []
+  },
+  "JSON imbriqué 5 000 niveaux": {
+   "code": 500,
+   "taille_reponse": 21,
+   "indices_de_fuite": []
+  },
+  "texte de 5 001 caractères": {
+   "code": 429,
+   "taille_reponse": 72,
+   "indices_de_fuite": []
+  },
+  "octet nul": {
+   "code": 200,
+   "taille_reponse": 28,
+   "indices_de_fuite": []
+  }
+ },
+ "version_avec_cle": {
+  "code": 200,
+  "corps": {
+   "model_version": "distilbert-2026-11-17",
+   "preprocessing_version": "1.0"
+  }
+ },
+ "ecarts": [
+  "JSON imbriqué 5 000 niveaux : erreur serveur 500"
+ ],
+ "verdict": "1 écart(s)"
+}

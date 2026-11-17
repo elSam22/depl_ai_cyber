@@ -94,6 +94,7 @@ def test_en_tetes_de_securite():
     for r in (c.get("/x"), c.get("/x")):            # réponse normale puis refus 429
         assert r.headers["x-content-type-options"] == "nosniff"
         assert "max-age" in r.headers["strict-transport-security"]
+        assert r.headers["x-frame-options"] == "DENY"
         assert r.headers["cache-control"] == "no-store"
 
 

@@ -57,6 +57,9 @@ EN_TETES_SECURITE = [
     (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
     (b"referrer-policy", b"no-referrer"),
     (b"content-security-policy", b"default-src 'none'; frame-ancestors 'none'"),
+    # Doublon de « frame-ancestors » pour les navigateurs anciens ; l'outil du professeur et RedTeamIA (vague 2) le
+    # vérifient explicitement.
+    (b"x-frame-options", b"DENY"),
 ]
 
 

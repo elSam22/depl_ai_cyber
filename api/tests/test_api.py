@@ -83,3 +83,10 @@ def test_cle_non_ascii_refusee_proprement():
     """S2b : une clé avec un caractère non ASCII provoquait une erreur 500 (TypeError dans compare_digest)."""
     r = client.get("/version", headers={"X-API-Key": "clé-fausse-é".encode("utf-8")})
     assert r.status_code == 401
+
+
+def test_json_trop_imbrique_refuse_proprement():
+    """RedTeamIA, vague 4 : un JSON imbriqué sur 5 000 niveaux provoquait une erreur 500 (RecursionError)."""
+    corps = ('{"text": ' + "[" * 5000 + "]" * 5000 + "}").encode()
+    r = client.post("/score", content=corps, headers={**OK, "Content-Type": "application/json"})
+    assert r.status_code == 422
