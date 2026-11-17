@@ -1,867 +1,912 @@
 # TP1 : API « Digital Social Score » — livrable
 
-**Membres** : NOUDEGBE Situ, OUEDRAOGO Eliana, CAKPOSSA Enzo
+**Membres** : CAKPOSSA Jean-Philippe, OUEDRAOGO Eliana, NOUDEGBE Situ — TP1, Déploiement de solutions IA et cybersécurité, ESIGELEC, novembre 2026
 
-API qui note la toxicité d'un commentaire de 0 à 100, en protégeant les données personnelles (RGPD), déployée sur Google Kubernetes Engine (Paris). Ce document est **le livrable unique du TP1** : il suit les **7 étapes de l'énoncé**, rappelle au début de chacune ce qui était demandé et où c'est fait, explique **pourquoi** chaque choix a été fait, ce que les chiffres montrent et ce qui reste faible. La fin du document reprend les **livrables globaux** et les **critères d'évaluation** (énoncé et grille du 12 novembre). Le TP2 a son propre livrable (`TP2_LIVRABLE.md`).
+API de détection de toxicité : de l'analyse de texte à une infrastructure cloud sécurisée, scalable et conforme. Ce document est **le livrable unique du TP1**. Il suit les **7 étapes de l'énoncé** (§ 2 à 8) ; chaque étape s'ouvre sur ce que l'énoncé demande et où c'est fait. Les **livrables globaux et les critères d'évaluation** sont au § 12, la grille de tests, le rapport de charge et le registre RGPD complets en annexes. Dépôt : `github.com/elSam22/depl_ai_cyber` (code déployé depuis la branche `ci`). Le TP2 a son propre livrable (`TP2_LIVRABLE.md`).
 
-| Objectif de l'énoncé | Réponse dans ce document |
-|---|---|
-| Détecter la toxicité d'un texte | Étape 2 (3 modèles comparés), DistilBERT déployé |
-| Score de 0 à 100 | § 2.5 |
-| RGPD : aucune donnée personnelle stockée en clair | Étapes 1 et 4 (anonymisation, registre) |
-| Varier d'échelle sans rupture | Étape 5 (charge, autoscaler, failover) |
-| Observable et auditable (logs, métriques, alertes) | Étape 6 |
-| Schéma d'architecture lisible et justifié | Étape 7 |
+## Synthèse en une page
 
-Données : *Toxic Comment Classification Dataset* (commentaires de pages de discussion Wikipédia ; colonne `comment_text` + 6 labels : toxic, severe_toxic, obscene, threat, insult, identity_hate).
-
-**Chaîne de traitement :** anonymisation → nettoyage → modèle → 6 probabilités → seuils par label → score 0-100.
-
-| Étape                          | Notebook / code                               |
-| ------------------------------- | --------------------------------------------- |
-| 1. Anonymisation                | `notebooks/anonyme_2.ipynb`   |
-| 2. Nettoyage                    | `notebooks/clean_text.ipynb` |
-| 3. Entraînement et comparaison | `notebooks/train.ipynb`           |
-| 4. API et front                 | `api/`, `front/index.html`                |
-
----
-
-## Étape 1 : Exploration, analyse et anonymisation des données
-
-**Ce que demande l'énoncé, et où c'est fait :**
-
-| Exercice | Où |
-|---|---|
-| Télécharger un jeu de données adapté | § 1.1 (Toxic Comment Classification) |
-| Anonymiser avec un algorithme NER (spaCy) | § 1.2 et 1.3 (regex + NER spaCy) |
-| Comparer la version initiale et anonymisée, justifier chaque choix | § 1.3 et 1.4 (choix, corrections après lecture des sorties), § 1.5 (limites) |
-| Documenter le registre de traitement | § 4.1 (registre fusionné : jeu de données et API) |
-
-
-### 1.1 Jeu de données retenu
-
-**Toxic Comment Classification Dataset** (Jigsaw / Google, 2017) — commentaires des pages de discussion Wikipédia en anglais.
-
-| Caractéristique  | Détail                                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------- |
-| Volume            | 159 571 commentaires (train) + 153 164 (test, dont 63 978 labellisés)                            |
-| Labels            | `toxic`, `severe_toxic`, `obscene`, `threat`, `insult`, `identity_hate` (multi-label) |
-| Licence textes    | CC-BY-SA 3.0 (texte Wikipédia)                                                                   |
-| Licence labels    | CC0 (domaine public)                                                                              |
-| Déséquilibre    | ≈ 10 % de positifs sur `toxic` ; `threat` et `identity_hate` < 1 %                         |
-| Biais identifiés | Corpus exclusivement anglophone ; biais culturels possibles sur `identity_hate`                 |
-
-Pourquoi ce dataset : tâche multi-label réaliste, volume suffisant pour comparer trois architectures, labels publics vérifiés par vote majoritaire d'annotateurs humains.
-
-### 1.2 Méthode d'anonymisation
-
-Deux passes en un seul parcours du texte (priorité au regex, pas de chevauchement) :
-
-- **Regex** pour ce qui a un format fixe : email, téléphone, URL, IP, pseudo (`@x`, `User:x`), adresse précise.
-- **NER spaCy** (`en_core_web_sm`) pour les noms de personnes (`PERSON`) et d'organisations (`ORG`).
-- Chaque élément est remplacé par une balise typée. Le regex est prioritaire sur le NER.
-
-| Balise               | Ce qu'elle remplace                |
-| -------------------- | ---------------------------------- |
-| `personne_tag`     | Noms de personnes (NER)            |
-| `organisation_tag` | Noms d'organisations (NER)         |
-| `email_tag`        | Adresses email                     |
-| `url_tag`          | URL                                |
-| `ip_tag`           | Adresses IP                        |
-| `telephone_tag`    | Numéros de téléphone            |
-| `pseudo_tag`       | `@pseudo`, `User:Pseudo`       |
-| `adresse_tag`      | Adresses précises (rue + numéro) |
-
-### 1.3 Pourquoi ces choix
-
-| Choix                                       | Justification                                                                                                                                 | Limite assumée                                                  |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Regex pour les formats fixes                | Fiable, déterministe, rapide.                                                                                                                | Ne trouve que ce qui respecte un format.                         |
-| NER pour les noms propres                   | Pas de format fixe : il faut le contexte.                                                                                                     | Faux positifs sur le jargon Wikipédia.                          |
-| `en_core_web_sm` (petit modèle)          | ≈ 3 ms/commentaire : 310 000 lignes en ≈ 20 min.                                                                                            | Moins précis que `md`, `lg`, `trf`.                       |
-| Seulement `PERSON` et `ORG`             | Ce sont elles qui identifient une personne ou son employeur.                                                                                  | `ORG` = source de faux positifs.                               |
-| Lieux non masqués (villes, pays)           | Non identifiants seuls ; un propos haineux peut viser un pays. Les masquer retirait du signal et créait des faux positifs (`US`, `POV`). | Risque faible de ré-identification par recoupement.             |
-| Mots toxiques non masqués                  | C'est le signal que le modèle doit apprendre. Ils sont retirés des entités NER avant masquage.                                             | Une insulte déformée (`m0ron`) peut être prise pour un nom. |
-| Adresse précise masquée, ville conservée | Une adresse identifie un foyer, une ville non.                                                                                                | Formats FR/UK/US seulement.                                      |
-| Balises typées plutôt que suppression     | Garde la structure de la phrase et le type d'information.                                                                                     | Révèle qu'une entité existait.                                |
-| Un seul passage sur le texte original       | Évite les décalages de positions entre remplacements.                                                                                       | —                                                               |
-
-### 1.4 Corrections après lecture des sorties
-
-Le NER masquait trop : insultes prises pour des noms (`moron` ×202), jargon (`Wikipedia` ≈ 19 % des ORG, `UTC`, `POV`), personnalités publiques (`Hitler`), mots courants (`hi` ×189). Corrections : listes de filtrage, règle « un mot isolé en minuscules n'est pas un nom », motif IPv4 corrigé (≈ 1 100 IP non masquées), faux positifs d'adresse retirés (années, `Way`, `Place`). Résultat sur un échantillon de 20 000 lignes : 1,45 balise par commentaire (contre 1,93) ; aucune insulte masquée par le NER.
-
-### 1.5 Ce que l'anonymisation ne garantit pas
-
-- Aucun jeu annoté à la main : **pas de précision/rappel chiffrés** pour l'anonymisation.
-- Les listes de filtrage sont faites à la main, donc non exhaustives.
-- Cas non couverts constatés en test : adresse avec nom de rue en minuscules (« 13 rue pierre 75000 Paris »), numéro à 9 chiffres, pseudos sans préfixe `User:` ou `@`.
-
-**Conclusion  : c'est de la pseudonymisation / minimisation, pas une anonymisation garantie.** Le texte original reste public sur Wikipédia, donc un auteur peut être ré-identifié par recoupement.
-
-### 1.6 Nettoyage du texte
-
-Minuscules → suppression des emojis → suppression de la ponctuation (`[^\w\s]`) → espaces ramenés à un seul.
-
-- **Pourquoi :** réduire le vocabulaire pour BiLSTM et DistilBERT (`distilbert-base-uncased` travaille déjà en minuscules).
-- **Détail voulu :** `\w` conserve le `_`, donc les balises `*_tag` ne sont pas détruites. Le notebook vérifie que chaque balise apparaît le même nombre de fois avant et après.
-- **Limite :** perdre les majuscules et la ponctuation (`!!!`) enlève un indice de colère. Accepté pour la simplicité.
-
----
-
-## Étape 2 : Préparation et entraînement d'un modèle IA
-
-**Ce que demande l'énoncé, et où c'est fait :**
-
-| Exercice | Où |
-|---|---|
-| Nettoyer les textes (ponctuation, emojis, casse) | § 1.6 |
-| Entraîner LSTM, BERT et LAYA | § 2.1 et 2.2 (BiLSTM, DistilBERT, LAYA en zéro-shot, et pourquoi) |
-| Comparer précision, rappel et temps de traitement | § 2.3 (même test de 10 000 lignes pour les trois), § 2.4 (choix du modèle déployé) |
-
-
-### 2.1 Protocole commun aux trois modèles
-
-| Jeu                  | Contenu                                                                                                         | Rôle                                       |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Entraînement commun | 30 000 lignes des 80 % de `train_clean.csv`, stratifiées sur la combinaison exacte des 6 labels (graine 42) | BiLSTM et DistilBERT (LAYA : non entrainé) |
-| Validation           | 20 % restants (31 915 lignes) ; 3 000 pour LAYA car trop lent                                                   | Choisir les seuils                          |
-| Test commun          | 10 000 lignes du test Kaggle, graine 42, regardées **une seule fois** à la fin                          | Comparaison finale                          |
-
-- **Pourquoi 30 000 lignes :** temps d'entraînement acceptable sur Mac M3 16 Go (DistilBERT : 64 min).
-- **Pourquoi stratifier :** les classes rares (`threat`) restent présentes dans l'échantillon.
-- **Pourquoi retirer les -1 du test :** elles ne sont pas évaluées par Kaggle (89 186 sur 153 164). Retirées **avant** toute prédiction ; il reste 63 978 lignes.
-- **Pourquoi un test séparé :** les seuils sont réglés sur la validation ; le test ne sert à aucun réglage, donc le résultat n'est pas optimiste.
-
-### 2.2 Choix de modélisation
-
-| Choix                                                                                | Justification                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 6 sorties sigmoïde (multi-label)                                                    | Un commentaire peut être à la fois `toxic`, `obscene` et `insult`.                                                                                                                                         |
-| `BCEWithLogitsLoss` avec `pos_weight = négatifs / positifs`                     | Sans lui, les classes rares (`threat`, `identity_hate`, `severe_toxic`) sont ignorées.<br />Contrepartie : les probabilités sont gonflées, d'où le réglage des seuils.                                  |
-| Seuil par label optimisé sur la validation (maximise le F1)                         | À 0,5, le rappel est très élevé et la précision très faible. Le seuil par label corrige l'effet du `pos_weight`.Limite : `threat` a peu de positifs, son seuil est moins stable.                         |
-| BiLSTM (embedding 128, 64 par sens, max-pooling, dropout 0,3, 3 époques, Adam 1e-3) | Référence légère, sans pré-entraînement. Hyperparamètres non imposés : choisis, non optimisés.                                                                                                            |
-| DistilBERT (`distilbert-base-uncased`, 2 époques, lr 2e-5, batch 16)              | Modèle pré-entraîné compact : bon compromis qualité / temps de calcul. Version « distillée » de BERT, plus rapide à entraîner et à servir.ou                                                            |
-| **LAYA en zéro-shot**                                                         | Fine-tuning complet (4-5 h sur 2 GPU T4) et `agent.fit` (≈ 7,6 s/ligne → 63 h pour 30 000 lignes) irréalistes sur notre machine. LAYA est un **plancher** évalué sans aucune donnée d'entraînement. |
-
-### 2.3 Résultats (macro-moyenne sur 6 labels, test = 10 000 lignes communes)
-
-| Modèle              | ROC-AUC val     | ROC-AUC test    | AUC-PR test     | F1 test (seuil 0,5) | Précision / rappel test (seuil optimisé) | F1 test (seuil optimisé) | Entraînement    | Inférence/commentaire |
-| -------------------- | --------------- | --------------- | --------------- | ------------------- | ------------------------------------------ | ------------------------- | ---------------- | ---------------------- |
-| BiLSTM               | 0,948           | 0,916           | 0,362           | 0,231               | 0,301 / 0,481                              | 0,358                     | 157 s            | 0,13 ms                |
-| **DistilBERT** | **0,985** | **0,977** | **0,590** | 0,308               | 0,493 / 0,693                              | **0,558**           | 3 860 s (64 min) | 8,1 ms                 |
-| LAYA (zéro-shot)    | 0,965           | 0,969           | —              | 0,328               | 0,366 / 0,740                              | 0,476                     | 0                | 700 ms                 |
-
-Détail par label : `models/resultats_par_label.csv`. Tableau complet : `models/resultats.csv`.
-
-### 2.4 Pourquoi DistilBERT est le modèle déployé
-
-- Meilleur ROC-AUC (0,977) **et** meilleur F1 (0,558) sur le test commun.
-- Inférence de 8 ms : compatible avec une API en ligne (LAYA : 700 ms, ≈ 90 fois plus lent).
-- BiLSTM le plus rapide mais AUC-PR 36 % contre 59 % : trop faible pour le service principal.
-- LAYA sans entraînement atteint 0,969 de ROC-AUC : intéressant, mais inutilisable en production.
-
-L'**AUC-PR** est l'indicateur principal : elle ne dépend pas du seuil et pénalise les faux positifs, contrairement au ROC-AUC qui se laisse gonfler par les vrais négatifs sur un dataset déséquilibré (≈ 10 % de positifs).
-
-### 2.5 Score de 0 à 100
-
-- Score d'un label = **probabilité × 100**.
-- Un label est « détecté » si sa probabilité ≥ **son seuil** (optimisé sur la validation).
-- Score global = **moyenne des scores des labels détectés** ; si aucun n'est détecté, score de `toxic`.
-
-**Pourquoi la moyenne sur les labels détectés seulement :** inclure tous les labels effacerait le signal. Un commentaire très `toxic` (probabilité 0,95) avec cinq autres labels à 0,02 donnerait un score de ~19 au lieu de 95 si on moyennait tout. En ne retenant que les labels dont la probabilité franchit leur seuil, le score reflète l'intensité de ce qui a été détecté, pas le bruit des labels non déclenchés.
-
-**Limites :** ce n'est pas une probabilité calibrée (le `pos_weight` la gonfle) ; 50 n'est pas la frontière « toxique » ; la moyenne peut baisser le score quand un label faiblement détecté s'ajoute à un label très fort.
-
----
-
-## Étape 3 : Déploiement du modèle en API Cloud
-
-**Ce que demande l'énoncé, et où c'est fait :**
-
-| Exercice | Où |
-|---|---|
-| Exporter le modèle et le déployer dans le Cloud | § 3.2 (GKE Autopilot, image Docker, poids hors de Git) |
-| Créer une API qui reçoit un texte et renvoie un score | § 3.1 et 2.5 (FastAPI, `POST /score`) |
-| Tester plusieurs exemples de requêtes | § 3.3 (requêtes et réponses réelles sur l'API déployée) |
-
-
-### 3.1 Choix de l'API et du front
-
-| Choix                                                                     | Justification                                                                                                                                                   |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FastAPI                                                                   | Validation d'entrée intégrée, documentation `/docs` automatique.                                                                                           |
-| Même anonymisation + nettoyage qu'à l'entraînement                     | Le modèle ne doit voir que des textes du même format que ceux appris.                                                                                         |
-| Texte ni enregistré ni écrit dans les logs                              | Minimisation RGPD : le service n'a pas besoin de garder le texte.                                                                                               |
-| Entrée validée (1 à 5 000 caractères, modèle dans une liste fermée) | Limite les abus et les erreurs.                                                                                                                                 |
-| DistilBERT et BiLSTM préchargés, LAYA chargé à la demande             | Première requête rapide ; LAYA (800 Mo, ≈ 1 min de chargement) rarement utilisé.                                                                            |
-| Front en un seul fichier HTML                                             | Aucune installation pour présenter le projet.                                                                                                                  |
-| Historique du front : texte **anonymisé** seulement, dans l'onglet | Jamais le texte original ; effacé à la fermeture.                                                                                                             |
-| Version « Pipeline » animée                                            | Pédagogique. **C'est une mise en scène des vraies données**, pas un suivi en direct : l'analyse est un seul appel à l'API, rejoué étape par étape. |
-| Durées affichées (prétraitement, modèle, total)                       | Rendre visible le coût de chaque étape.                                                                                                                       |
-
-**Deux API existent.** L'API locale de ce dépôt (`api/`, route `/predire`, sans clé) sert au développement et à la démonstration. L'API **déployée sur GKE** (route `/score`, clé API, HTTPS) est celle d'Enzo ; c'est elle qui est testée en charge (§ 5).
-
-### 3.2 Déploiement sur GKE : choix techniques
-
-Déployé par Enzo (scripts dans `api/deploy/`, manifestes dans `api/k8s/` de la branche `Enzo`). Les justifications ci-dessous reprennent les raisons écrites dans son code ; la colonne de droite dit ce que nos mesures en ont montré.
-
-| Choix | Justification | Ce que les mesures montrent |
+| Étape | Résultat clé | Preuve |
 |---|---|---|
-| **GKE Autopilot** | Google gère les machines ; moins d'administration. Il facture les ressources demandées par les pods : d'où le script de pause pour économiser le crédit. | Un pod neuf met 5 min 29 s à être prêt (Autopilot prépare une machine). |
-| **Région `europe-west9` (Paris)** | Données hébergées dans l'UE (RGPD). | — |
-| **Image construite avec Cloud Build** | Rien à installer en local. | — |
-| **torch version CPU** | Image d'environ 200 Mo au lieu de 2 Go pour la version GPU. | Le CPU est le goulot : ≈ 4 requêtes/s par pod. |
-| **Modèle embarqué dans l'image**, Hugging Face en mode hors ligne | Aucun téléchargement au démarrage d'un pod, aucun appel à un service externe en production. | — |
-| **Conteneur non-root**, privilèges retirés (`drop ALL`, pas d'élévation) | Bonne pratique de sécurité : limite les dégâts si le conteneur est compromis. | — |
-| **Clé API dans Secret Manager, puis Secret Kubernetes** ; comparaison à temps constant | La clé n'est jamais dans le code ni dans Git ; la comparaison à temps constant évite de la deviner par mesure du temps de réponse. | Sans clé ou avec une mauvaise clé : 401 (grille de tests, S1 et S2). |
-| **HTTPS forcé** (Ingress Google, certificat géré, redirection) ; domaine `<ip>.sslip.io` | Chiffrement en transit ; le domaine gratuit permet d'obtenir le certificat sans acheter de nom. | HTTP redirigé vers HTTPS (S3). |
-| **CORS ouvert (`*`) sans cookies** (branche `cors`, déployé le 13 novembre) | Le front de démonstration appelle l'API depuis le navigateur (page ouverte depuis un fichier, origine `null`). La clé est dans l'en-tête `X-API-Key`, pas dans un cookie : autoriser toutes les origines (sans `credentials`) n'affaiblit pas l'authentification. Méthodes limitées à `GET` et `POST`, en-têtes limités à `X-API-Key` et `Content-Type`. | Avant : le front affichait « bloquée par le navigateur » ; après : la requête de vérification renvoie 200 et le front affiche le score. |
-| **Logs d'accès désactivés** (`--no-access-log`) | Pas d'adresse IP des clients dans les journaux (RGPD). | — |
-| **2 pods minimum** | Redondance : si l'un tombe, l'autre continue. | Failover : 0 erreur (testé avec 5 pods, étape 5). |
-| **Autoscaler 2 à 5 pods à 70 % de CPU** | Absorber les pics ; le plafond de 5 limite le coût (crédits étudiants). | Atteint 5 pods, mais trop lentement pour une montée de 5 minutes. |
-| **Trois sondes sur `/health`** | `startupProbe` : laisse le temps de charger spaCy et le modèle ; `readinessProbe` : un pod pas prêt est retiré du load balancer ; `livenessProbe` : un pod bloqué est redémarré. | Pod de remplacement créé immédiatement après suppression. |
-| **Ressources par pod** : 2 CPU et 4 Go au départ (dimensionné pour LAYA, 421 M de paramètres), ramenées à **1 CPU et 2 Go** par Enzo le 12 novembre (dimensionné pour DistilBERT, 66 M de paramètres) | Autopilot facture les ressources demandées : on ne paie pas pour LAYA si on déploie DistilBERT. | Pods à 91-99 % de leur CPU pendant la montée : le CPU est saturé. Le déploiement demande **1 CPU et 2 Go** (vérifié le 12 novembre). C'est le ReplicaSet `69798c4847`, actif pendant tous nos tests : **les mesures de l'étape 5 ont été faites à 1 CPU et 2 Go par pod**, soit ≈ 4 requêtes/s par CPU. |
-| **Un seul worker uvicorn par pod** | Raison **non écrite dans le code**. | Un pod traite un commentaire à la fois : ≈ 4 requêtes/s par pod. |
+| 1. Anonymisation | Regex (e-mails, téléphones, IP, URL, pseudos, adresses) + NER spaCy, 8 balises ; limites mesurées et dites (le NER laisse passer certains noms) | § 2.2 à 2.5 |
+| 2. Modèles | 3 modèles sur les **mêmes** 30 000 lignes et le **même** test de 10 000 lignes : DistilBERT ROC-AUC **0,977**, F1 **0,56** ; BiLSTM 0,916 / 0,36 ; LAYA (zéro-shot, entraînement mesuré irréaliste) 0,969 / 0,48 | § 3.3 |
+| 3. API Cloud | FastAPI sur GKE Autopilot (Paris), HTTPS, `POST /score` → `{"score": 100, "toxique": true}` ; requêtes et réponses réelles | § 4.2, 4.4 |
+| 4. Sécurité et RGPD | Clé d'API (Secret Manager, comparaison à temps constant), HTTPS forcé, IAM au moindre privilège, texte jamais stocké ni journalisé, registre article 30 complet | § 5.1 à 5.5, Annexe C |
+| 5. Charge | ≈ **8 requêtes/s** avec 2 pods (le calcul limite : pods à 91-99 % de CPU) ; rupture (P95 > 2 s) à **20 utilisateurs** ; failover : **0 erreur** sur 1 192 requêtes ; un pod neuf met 5 min 29 s | Annexe B |
+| 6. Supervision | Prometheus + Grafana (tableau de bord à nous) ; panne brutale : 1 erreur sur 771 ; **attaque réelle** de 94 000 requêtes détectée et analysée dans les journaux | § 7 |
+| 7. Architecture | Schéma des composants, flux, authentification, chiffrement, approche zero trust | § 8 |
 
-**Faiblesses constatées** : limitation de débit **ajoutée le 16 novembre** (livrable du TP2, étape 3), bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6). `/docs` était public : **fermé le 16 novembre** après l'attaque décrite au § 6.6.
+**Ce qui reste faible, dit sans détour** : précision de 0,49 (une alerte sur deux à tort, d'où la relecture humaine), trois comptes humains `Owner` sur le projet, une seule clé d'API, trafic non chiffré entre le load balancer et les pods, autoscaler trop lent pour une montée brutale, objectif « des milliers d'utilisateurs » non atteint en volume (§ 11).
 
-**Redéployer l'API (leçons du 13 novembre).** Les poids du modèle ne sont **pas dans Git** (trop lourds, `api/model/` est ignoré) : l'image Docker n'embarque le modèle que si `api/model/` est rempli **sur la machine qui lance le déploiement**. Séquence correcte, depuis une machine qui possède `models/distilbert` :
+## Résumé
 
-```bash
-python api/export_model.py --type distilbert          # copie les poids dans api/model/
-chmod a+r api/model/*                                 # le conteneur est non-root (USER 1000)
-PROJECT_ID=<projet> bash api/deploy/deploy_gke.sh     # build Cloud Build + déploiement
-curl https://<adresse>/health                         # doit indiquer distilbert-…, jamais dummy-0
+Nous avons conçu, entraîné, déployé et sécurisé une API qui reçoit un commentaire et renvoie un **score de toxicité de 0 à 100**. Le texte est **anonymisé avant le modèle** (regex + spaCy NER) et n'est **jamais stocké ni journalisé**.
+
+- **Modèle** : trois modèles comparés sur le même jeu de test (BiLSTM, DistilBERT, LAYA en zéro-shot). **DistilBERT** est déployé : meilleure AUC-PR (0,590) et meilleur F1 (0,558) ; inférence de 8 ms sur un Mac M3, ≈ 100 ms par requête complète (anonymisation comprise) dans un pod à 1 CPU.
+- **Infrastructure** : GKE Autopilot à Paris (europe-west9), HTTPS géré par Google, clé d'API dans Secret Manager, conteneur non-root, 2 à 5 pods avec autoscaler.
+- **Mesures** : environ 4 requêtes/s par pod ; rupture de latence (P95 > 2 s) à 20 utilisateurs ; perte d'un pod sur 2 sans erreur.
+- **Incident réel** : le 16 novembre, l'API a reçu 94 000 requêtes hostiles. Nous l'avons détectée, analysée et corrigée le jour même ; 7 règles d'alerte en sont issues.
+- **Ce qui reste faible**, dit sans détour : trois comptes `Owner` sur le projet, une seule clé d'API partagée, une anonymisation non garantie. (Le bogue de la clé non ASCII, signalé dans une première version, est corrigé.)
+
+### Correspondance avec la grille d'évaluation
+
+
+| **Critère de la grille** | **Où le trouver** |
+| --- | --- |
+| Fonctionnalités et qualité du code (code structuré, API fonctionnelle) | § 3 Modèles, § 4 Déploiement et API, § 4.5 Structure du code et tests |
+| Sécurité et RGPD (NER, RGPD documenté, authentification, chiffrement / HTTPS / IAM) | § 2 Anonymisation, § 5 Sécurité (STRIDE, IAM § 5.3), § 5.5 et registre complet en Annexe C |
+| Scalabilité et performance (simulation, métriques, améliorations) | § 4.3 Dimensionnement, § 6 Montée en charge, Annexe B |
+| Supervision et observabilité (métriques exposées, visualisation) | § 7 Supervision, alertes et incidents |
+| Architecture et documentation (schéma, exécution, README, justification) | Principes de choix (§ 1), tableaux de justification de chaque section, § 8 Architecture, index des choix § 8.5, `README.md` du dépôt |
+| Originalité et curiosité technique | § 9 (section dédiée) |
+
+### Périmètre : TP1 et TP2
+
+Ce rapport décrit l'API **telle qu'elle est en service** (branche `ci`, dernière version déployée le 17 novembre). Quelques mesures de cette version viennent du TP2 (réponse réduite à un score arrondi, normalisation anti-évasion, pipeline DevSecOps, model card IA Act). Elles sont signalées **[TP2]** et ne sont pas détaillées ici : leur démarche (attaque, défense, preuves) fait l'objet du rendu TP2.
+
+## 1. Introduction
+
+**Objectif.** Le sujet demande une API qui détecte la toxicité d'un texte (injure, racisme, harcèlement, propos haineux), lui attribue un score de 0 à 100, respecte le RGPD, tient la charge, est observable et documentée par un schéma d'architecture justifié.
+
+**Démarche.** Nous avons suivi les 7 étapes du sujet dans l'ordre, en mesurant chaque choix. Chaque section donne le choix retenu, l'alternative écartée, la raison et ce que nos mesures en ont montré. Ce que nous n'avons pas fait ou pas prouvé est écrit comme tel.
+
+**Chaîne de traitement.** anonymisation → nettoyage → modèle → 6 probabilités → seuils par label → score 0-100.
+
+### Nos principes de choix
+
+Tous nos choix découlent de cinq principes. Les tableaux de justification des sections suivantes y renvoient (P1 à P5) au lieu de répéter le raisonnement.
+
+
+| **Principe** | **Ce qu'il veut dire concrètement** |
+| --- | --- |
+| **P1 — Un outil spécialisé par tâche** | Pour chaque problème, l'outil le plus simple qui le résout bien. Une regex pour un format fixe, un modèle statistique pour ce qui demande du contexte. Pas d'outil universel qui fait tout moyennement |
+| **P2 — Mesurer, puis vérifier en charge** | Un choix est fait sur une mesure (temps, qualité, mémoire), puis confirmé ou corrigé par les tests de l'étape 5. Un réglage sans mesure est signalé comme tel |
+| **P3 — Minimiser les données (RGPD dès la conception)** | Ce qui n'est pas collecté ou pas stocké ne peut pas fuiter. Le texte est anonymisé avant le modèle et n'est jamais écrit |
+| **P4 — Refuser tôt et à bas coût** | Les contrôles les moins chers (taille, débit, clé, format) passent avant les traitements coûteux (NER, modèle) : un attaquant doit coûter plus cher à l'API qu'il ne lui coûte |
+| **P5 — Tenir dans un budget étudiant** | Un Mac M3 16 Go pour l'entraînement, des crédits Google Cloud limités et un quota de 12 CPU pour le projet. Chaque ressource demandée est facturée |
+
+Chaque tableau de justification suit le même fil : **besoin** (fonctionnel), **choix**, **raison technique**, **alternative écartée**, et quand elle existe, **la mesure qui a validé le choix**.
+
+
+| **Étape** | **Fichiers** |
+| --- | --- |
+| 1. Anonymisation | `notebooks/anonyme_2.ipynb`, `api/preprocessing.py` |
+| 2. Nettoyage | `notebooks/clean_text.ipynb` |
+| 3. Entraînement et comparaison | `notebooks/train.ipynb` |
+| 4. API et déploiement | `api/main.py`, `api/k8s/`, `api/deploy/` |
+| 5. Tests de charge | `loadtest/` |
+| 6. Supervision | `supervision/` |
+
+## 2. Données et anonymisation (étape 1)
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Télécharger un jeu de données adapté | § 2.1 |
+| Anonymiser avec un algorithme NER (spaCy) | § 2.2 |
+| Comparer la version initiale et anonymisée, justifier chaque choix | § 2.3 (exemples exécutés), § 2.4 (corrections), § 2.5 (limites) |
+| Documenter le registre de traitement | § 5.5 et Annexe C (registre complet) |
+
+
+### 2.1 Jeu de données
+
+**Toxic Comment Classification Dataset** (Jigsaw / Google, 2017) : commentaires des pages de discussion de Wikipédia en anglais.
+
+
+| **Caractéristique** | **Détail** |
+| --- | --- |
+| Volume | 159 571 commentaires d'entraînement ; 153 164 de test, dont 63 978 labellisés |
+| Labels (multi-label) | toxic, severe_toxic, obscene, threat, insult, identity_hate |
+| Licences | Texte : CC-BY-SA 3.0 (Wikipédia) ; labels : CC0 |
+| Déséquilibre | ≈ 10 % de positifs sur toxic ; threat et identity_hate < 1 % |
+| Biais | Corpus uniquement anglophone ; biais culturels possibles sur identity_hate |
+
+**Pourquoi ce jeu plutôt que GameTox.** Une tâche multi-label réaliste, un volume suffisant pour comparer trois architectures, des labels issus d'un vote majoritaire d'annotateurs humains.
+
+### 2.2 Méthode : regex puis NER, en un seul passage
+
+**Le besoin.** Fonctionnellement, le sujet impose qu'aucune donnée personnelle ne soit conservée en clair et que l'on utilise un NER. Techniquement, les données personnelles d'un commentaire sont de deux natures très différentes. Certaines ont une **forme fixe** (une adresse e-mail a toujours un `@` et un domaine, une IPv4 a quatre nombres séparés par des points). D'autres n'en ont **aucune** : « Paris » peut être une personne, une ville ou un nom d'hôtel, et seul le contexte de la phrase le dit.
+
+**Pourquoi deux outils plutôt qu'un (P1).**
+
+- **La regex** est exacte et explicable sur les formats fixes : elle trouve chaque e-mail bien formé, en quelques microsecondes, et l'on sait toujours pourquoi elle a masqué un mot. En revanche, elle est incapable de reconnaître un nom propre.
+- **Le NER de spaCy** lit le contexte et reconnaît « John Smith » comme une personne. Mais `en_core_web_sm` n'a **pas d'étiquette pour les e-mails, les IP ou les téléphones** : seul, il laisserait passer précisément les identifiants les plus directs.
+- **Ensemble**, chacun couvre l'angle mort de l'autre. La regex est prioritaire en cas de chevauchement, parce qu'elle est déterministe : on préfère sa réponse sûre à une probabilité du NER.
+
+**Pourquoi un traitement local (P3).** spaCy tourne dans le conteneur. Un service d'anonymisation en ligne (API de détection de données personnelles d'un fournisseur cloud, ou un LLM) obligerait à **envoyer le texte brut à un tiers pour le protéger**, ce qui contredit la finalité même de l'étape. Un LLM coûterait en plus des centaines de millisecondes par commentaire, contre 3 ms ici.
+
+**Comment ça marche.**
+
+- **Regex** pour ce qui a un format fixe : e-mail, téléphone, URL, adresse IP, pseudo (`@x`, `User:x`), adresse postale précise.
+- **spaCy** `en_core_web_sm` pour ce qui n'a pas de format : noms de personnes (`PERSON`) et d'organisations (`ORG`).
+- La regex est **prioritaire** : on fusionne les deux listes de positions, puis on remplace en **un seul passage** sur le texte d'origine. Remplacer en plusieurs passes décalerait les positions.
+- Chaque élément devient une **balise typée** : `personne_tag`, `organisation_tag`, `email_tag`, `url_tag`, `ip_tag`, `telephone_tag`, `pseudo_tag`, `adresse_tag`.
+
+
+| **Besoin** | **Choix** | **Raison technique** | **Alternative écartée** | **Limite assumée** |
+| --- | --- | --- | --- | --- |
+| Traiter 310 000 lignes en un temps raisonnable, puis chaque requête de l'API sans ralentir la réponse | `en_core_web_sm` (P2, P5) | Mesuré à ≈ 3 ms par commentaire sur Mac M3 : 20 min pour tout le jeu. En production, la requête complète (anonymisation + modèle) coûte ≈ 100 ms médiane sur 1 CPU (journaux de l'API) | `trf` (transformer) : plus précis, mais ≈ 100 fois plus lent sur CPU, et il doublerait la mémoire du pod | Moins précis sur les noms rares |
+| Masquer ce qui identifie une personne, sans détruire le sens | PERSON et ORG seulement | Un nom identifie une personne, une organisation peut identifier son employeur | Masquer aussi les lieux (GPE, LOC) | ORG produit des faux positifs (jargon Wikipédia) |
+| Garder le signal de identity_hate | Villes et pays conservés (P1 appliqué à la finalité) | Seuls, ils n'identifient personne ; or « les gens de [pays] » est exactement ce que le modèle doit apprendre. Les masquer créait en plus des faux positifs (`US`, `POV`) | Tout masquer | Ré-identification possible par recoupement |
+| Ne pas effacer ce que le modèle doit apprendre | Mots toxiques retirés des entités NER avant masquage | Une insulte prise pour un nom (« moron ») et masquée rendrait le commentaire neutre pour le modèle | Faire confiance au NER | Une insulte déformée peut encore passer pour un nom |
+| Que le modèle comprenne la phrase après masquage | Balise typée (`personne_tag`) | La phrase garde sa structure, et « insulte + personne_tag » reste distinct de « insulte + organisation_tag » | Supprimer l'entité, ou une balise unique `[MASK]` | Révèle qu'une entité existait |
+| Exactitude des positions | Un seul passage, regex prioritaire | Remplacer en plusieurs passes décale les positions trouvées ensuite | Enchaîner `re.sub` puis NER | — |
+| Même traitement à l'entraînement et en production | Code partagé (`api/preprocessing.py`, version de prétraitement exposée par `/version`) | Un modèle qui voit en production des textes formatés autrement qu'à l'entraînement se trompe sans prévenir | Réécrire le prétraitement dans l'API | Le notebook et l'API doivent rester synchronisés |
+
+### 2.3 Avant / après : exemples exécutés
+
+Exécutés le 17 novembre 2026 avec le code en service (`api/preprocessing.py`, fonctions `anonymize` puis `preprocess`). Phrases de test inventées, pour ne reproduire aucune donnée réelle.
+
+
+| **Texte d'origine** | **Après anonymisation** | **Lecture** |
+| --- | --- | --- |
+| Hi John Smith, please stop reverting my edits or I will report you to Microsoft. | Hi personne_tag, please stop reverting my edits or I will report you to organisation_tag. | NER : personne et organisation |
+| Contact me at jane.doe@example.com or call +33 6 12 34 56 78. | Contact me at email_tag or call telephone_tag. | Regex : e-mail et téléphone |
+| User:WikiFan42 your edit from 192.168.45.67 was vandalism, see https://en.wikipedia.org/wiki/Talk:Paris | User:pseudo_tag your edit from ip_tag was vandalism, see url_tag | Regex : pseudo, IP, URL (l'URL entière, y compris « Paris ») |
+| @darkknight you are a moron, I live at 221 Baker Street, London. | @pseudo_tag you are a moron, I live at adresse_tag, London. | « moron » conservé ; adresse masquée, ville conservée |
+| I hate people from France, they are all idiots. | (inchangé) | Choix voulu : le pays visé est le signal de identity_hate |
+| 13 rue pierre 75000 Paris | (inchangé) | **Échec connu** : nom de rue en minuscules |
+| Y0u 4re a st0pid 1diot | personne_tag a st0pid 1diot | **Faux positif** : le leetspeak est pris pour un nom |
+
+Après nettoyage, la dernière ligne devient `personne_tag a stopid 1diot` : la balise survit au nettoyage (le `_` est conservé), mais une partie de l'insulte est perdue. C'est une limite réelle de l'ordre des traitements, découverte en rédigeant ce rapport.
+
+### 2.4 Corrections après lecture des sorties
+
+La première version masquait trop. Nous avons lu les sorties et compté :
+
+- insultes prises pour des noms (`moron` ×202), jargon Wikipédia (`Wikipedia` ≈ 19 % des ORG, `UTC`, `POV`), personnalités publiques, mots courants (`hi` ×189) ;
+- un motif IPv4 incorrect laissait passer ≈ 1 100 adresses IP ;
+- de fausses adresses détectées (années, `Way`, `Place`).
+
+Corrections : listes de filtrage, règle « un mot isolé en minuscules n'est pas un nom », motif IPv4 corrigé, faux positifs d'adresse retirés. **Résultat sur 20 000 lignes : 1,45 balise par commentaire au lieu de 1,93, et plus aucune insulte masquée par le NER.**
+
+### 2.5 Ce que l'anonymisation ne garantit pas
+
+- **Aucun jeu annoté à la main** : nous n'avons ni précision ni rappel chiffrés pour l'anonymisation.
+- Les listes de filtrage sont faites à la main, donc incomplètes.
+- Cas non couverts constatés : rue en minuscules, numéro à 9 chiffres, pseudo sans préfixe, leetspeak pris pour un nom.
+
+**Conclusion : c'est de la pseudonymisation et de la minimisation, pas une anonymisation au sens du RGPD.** Le texte d'origine reste public sur Wikipédia : un auteur peut être ré-identifié par recoupement.
+
+### 2.6 Nettoyage
+
+Minuscules → suppression des emojis → suppression de la ponctuation (`[^\w\s]`) → espaces réduits à un seul. Le `\w` conserve le `_` : les balises `xxx_tag` survivent. Le notebook vérifie que chaque balise apparaît le même nombre de fois avant et après. Limite acceptée : les majuscules et les `!!!` sont des indices de colère que l'on perd.
+
+## 3. Modèles (étape 2)
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Nettoyer les textes (ponctuation, emojis, casse) | § 2.6 |
+| Entraîner LSTM, BERT et LAYA | § 3.1 et 3.2 |
+| Comparer précision, rappel et temps de traitement | § 3.3 et 3.4 |
+
+
+### 3.1 Un protocole commun, pour une comparaison honnête
+
+
+| **Jeu** | **Contenu** | **Rôle** |
+| --- | --- | --- |
+| Entraînement | 30 000 lignes des 80 % de `train_clean.csv`, stratifiées sur la combinaison exacte des 6 labels (graine 42) | BiLSTM et DistilBERT (LAYA n'est pas entraîné) |
+| Validation | Les 20 % restants (31 915 lignes) ; 3 000 pour LAYA, trop lent | Choisir les seuils |
+| Test | 10 000 lignes du test Kaggle, graine 42, regardées **une seule fois** à la fin | Comparaison finale |
+
+- **30 000 lignes** : temps d'entraînement acceptable sur un Mac M3 16 Go (DistilBERT : 64 min).
+- **Stratification** : les classes rares (threat) restent présentes dans l'échantillon.
+- **Lignes à -1 retirées du test avant toute prédiction** : elles ne sont pas évaluées par Kaggle (89 186 sur 153 164).
+- **Test séparé de la validation** : les seuils sont réglés sur la validation, donc le résultat du test n'est pas optimiste.
+
+### 3.2 Choix de modélisation
+
+**Le besoin.** Fonctionnellement : un commentaire peut cumuler plusieurs formes de toxicité, et les plus graves (menace, haine identitaire) sont les plus rares, à moins de 1 %. Un modèle qui les ignore serait inutile pour la modération, même avec une excellente exactitude globale. Techniquement : le modèle est appelé en ligne, sur CPU. Pour garder un P95 inférieur à 2 s avec plusieurs requêtes en file, une inférence doit coûter de l'ordre de la dizaine de millisecondes, pas de la seconde.
+
+
+| **Choix** | **Justification** |
+| --- | --- |
+| 6 sorties sigmoïde (multi-label) | Un commentaire peut être à la fois toxic, obscene et insult |
+| `BCEWithLogitsLoss` avec `pos_weight` = négatifs / positifs | Sans lui, les classes rares sont ignorées. Contrepartie : les probabilités sont gonflées |
+| Seuil par label, réglé sur la validation (maximise le F1) | Au seuil 0,5, le rappel est très haut et la précision très basse ; le seuil corrige l'effet du `pos_weight`. Limite : threat a peu de positifs, son seuil est moins stable |
+| **BiLSTM** (embedding 128, 64 par sens, max-pooling, dropout 0,3, 3 époques, Adam 1e-3) | Référence légère, sans pré-entraînement. Hyperparamètres choisis, non optimisés |
+| **DistilBERT** (`distilbert-base-uncased`, 66 M de paramètres, 2 époques, lr 2e-5, batch 16) | Version distillée de BERT : bon compromis entre qualité et temps de calcul, à l'entraînement comme en service |
+| **LAYA en zéro-shot** (`convaiinnovations/laya`) | Voir ci-dessous |
+
+**LAYA, le « modèle de décision » du sujet.** LAYA (Convai Innovations, licence Apache 2.0) repose sur un encodeur **ModernBERT-large de 421 M de paramètres**, six fois plus gros que DistilBERT. Il ne génère pas de texte : on lui pose **une question oui/non par label**, et la probabilité de « oui » sert de score. Nous ne l'avons **pas entraîné**, par décision de groupe, car les deux voies possibles étaient irréalistes sur notre machine :
+
+- le fine-tuning complet demande 4 à 5 h sur 2 GPU T4, avec un script prévu pour un autre format de données ;
+- `agent.fit` a été **mesuré à 7,6 s par ligne**, soit ≈ 63 h pour 30 000 lignes.
+
+LAYA est donc un **plancher** : un modèle évalué sur le même test sans avoir vu une seule donnée d'entraînement.
+
+### 3.3 Résultats (macro-moyenne sur les 6 labels, test commun de 10 000 lignes)
+
+
+| **Modèle** | **ROC-AUC test** | **AUC-PR test** | **F1 (seuil 0,5)** | **Précision / rappel (seuil optimisé)** | **F1 (seuil optimisé)** | **Entraînement** | **Inférence** |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| BiLSTM | 0,916 | 0,362 | 0,231 | 0,301 / 0,481 | 0,358 | 157 s | 0,13 ms |
+| **DistilBERT** | **0,977** | **0,590** | 0,308 | 0,493 / 0,693 | **0,558** | 64 min | 8,1 ms |
+| LAYA (zéro-shot) | 0,969 | — | 0,328 | 0,366 / 0,740 | 0,476 | 0 | 700 ms |
+
+ROC-AUC sur la validation : 0,948 / 0,985 / 0,965. Détail par label : `models/resultats_par_label.csv`.
+
+### 3.4 Pourquoi DistilBERT est déployé
+
+- **Meilleure qualité** sur le test commun : AUC-PR 0,590 et F1 0,558.
+- **8 ms d'inférence** sur Mac M3 (≈ 100 ms par requête complète dans un pod à 1 CPU, d'après les journaux de production) : compatible avec une API en ligne. LAYA est ≈ 90 fois plus lent (700 ms sur Mac M3).
+- **L'AUC-PR est notre indicateur principal.** Avec ≈ 10 % de positifs, la ROC-AUC est gonflée par les vrais négatifs : BiLSTM a 0,916 de ROC-AUC mais seulement 0,362 d'AUC-PR.
+- **Pourquoi pas BERT base ou RoBERTa.** Ils sont environ deux fois plus lourds que DistilBERT. Sur notre CPU, cela divise par deux la capacité par pod, déjà le goulot (§ 6), pour un gain de qualité que nous n'avons pas pu mesurer dans notre budget d'entraînement (P5).
+- **Ce que la comparaison montre.** DistilBERT et LAYA reposent tous deux sur un encodeur de type BERT. Le petit modèle spécialisé par fine-tuning (66 M) bat le gros modèle généraliste (421 M), à la fois en qualité et en vitesse.
+
+### 3.5 Le score de 0 à 100
+
+- Score d'un label = probabilité × 100.
+- Un label est « détecté » si sa probabilité atteint son seuil.
+- **Score global = moyenne des scores des labels détectés** ; si aucun n'est détecté, score de toxic.
+
+**Pourquoi ne pas faire la moyenne des 6 labels.** Un commentaire très toxique (toxic à 0,95) avec cinq autres labels à 0,02 obtiendrait ≈ 19 au lieu de 95 : le bruit des labels non déclenchés effacerait le signal.
+
+**Limites.** Ce n'est pas une probabilité calibrée (le `pos_weight` la gonfle) ; 50 n'est pas la frontière du « toxique » ; un label faiblement détecté peut faire baisser la moyenne.
+
+**En service [TP2]** : le score renvoyé est **arrondi à la dizaine** et accompagné du seul verdict `toxique`. Les probabilités et les seuils restent internes, parce qu'ils aideraient un attaquant à cloner le modèle ou à régler une évasion.
+
+## 4. Déploiement et API (étape 3)
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Exporter le modèle et le déployer dans le Cloud | § 4.1 et 4.2 |
+| Créer une API qui reçoit un texte et renvoie un score | § 3.5 et 4.4 |
+| Tester plusieurs exemples de requêtes | § 4.4 (requêtes et réponses réelles) |
+
+
+### 4.1 Chaîne de livraison
+
+**Poids du modèle dans un bucket GCS privé** → **Cloud Build** construit l'image → **Artifact Registry** → **GKE Autopilot** (europe-west9, Paris).
+
+- **Les poids ne sont jamais dans Git**, qui est public. Le bucket est privé (accès public interdit) ; la chaîne de livraison n'a que le droit de lecture.
+- **Le modèle est intégré dans l'image** et Hugging Face tourne en mode hors ligne : aucun téléchargement au démarrage d'un pod, aucun appel externe en production.
+- **Leçon du 13 novembre.** Un déploiement lancé depuis un clone Git a produit une image **sans modèle**. L'API est retombée **silencieusement** sur un modèle factice (`dummy-0`) tout en répondant 200. Depuis, on contrôle la version du modèle après chaque déploiement, et le dépôt est reproductible grâce au bucket.
+
+### 4.2 Choix techniques du déploiement
+
+
+| **Besoin** | **Choix** | **Raison technique** | **Alternative écartée** | **Validé par** |
+| --- | --- | --- | --- | --- |
+| Une API qui encaisse la charge, survit à la perte d'une instance et se teste en failover (étapes 5 et 6) | **Kubernetes (GKE)** | Réplicas, sondes de santé, autoscaler et load balancer sont fournis et réglables ; on peut tuer un pod pour tester la reprise | **Vertex AI** : déploiement plus simple, mais peu de contrôle sur la redondance et impossible de provoquer une panne d'instance ; **une VM** : tout serait à construire à la main | Failover F1 à F3 (§ 6.4) |
+| Ne pas passer le projet à administrer des machines (P5) | **Autopilot** plutôt que GKE Standard | Google gère les nœuds ; facturation à la ressource demandée par les pods, pas à la machine | GKE Standard : nœuds à dimensionner et à mettre à jour nous-mêmes | Contrepartie mesurée : un pod qui exige une nouvelle machine met 5 min 29 s à servir |
+| Données dans l'UE, utilisateurs en France | Région **europe-west9 (Paris)** | Hébergement UE (RGPD, P3) et latence réseau minimale depuis la France | Régions US, moins chères | — |
+| Construire l'image sans Docker sur nos postes | **Cloud Build** | Construction dans le projet, à côté du dépôt d'images, reproductible | Docker local : dépend du poste, pousse 1 Go d'image depuis une connexion domestique | — |
+| Un pod qui démarre vite et sans dépendance externe | **Modèle intégré à l'image**, Hugging Face hors ligne | Aucun téléchargement au démarrage, aucun service externe en production | Télécharger le modèle au démarrage : plus lent, et la production dépendrait de Hugging Face | Pod prêt en 15 à 20 s quand une machine est disponible (F2) |
+| Un calcul sur CPU, sans GPU | **torch CPU** | Notre inférence (≈ 100 ms par requête dans le pod, 8 ms sur Mac M3) n'a pas besoin de GPU ; la version CPU évite ≈ 2 Go de bibliothèques CUDA inutiles | Nœuds GPU : coût sans rapport avec le besoin (P5) | Le CPU est le goulot (≈ 4 req/s par pod), mais un GPU coûterait bien plus qu'un pod supplémentaire |
+| Retirer du trafic un pod qui n'est pas prêt, redémarrer un pod bloqué | **Trois sondes** sur `/health` | startup : laisse jusqu'à 5 min pour charger spaCy et le modèle ; readiness : pas de trafic avant d'être prêt ; liveness : redémarrage d'un pod figé | Une seule sonde : un pod lent à démarrer serait tué en boucle | Remplacement immédiat en F1 |
+| Ne pas gaspiller la mémoire du pod | **Un seul worker uvicorn** (justification a posteriori) | Chaque worker charge sa propre copie de spaCy et du modèle. Avec 1,43 Go au pic, deux workers dépasseraient les 2 Go ; et sur 1 CPU, un second worker n'apporte aucun calcul supplémentaire | 2 workers ou plus | Mémoire mesurée (§ 7.1) |
+
+**Extrait commenté de** `api/k8s/deployment.yaml` (sécurité du conteneur) :
+
+
 ```
 
-Deux pièges rencontrés, qui ont chacun coûté un déploiement raté :
-- **Déployer depuis un clone Git (Cloud Shell)** : l'image part sans modèle et l'API **retombe silencieusement sur un modèle factice** (`model_version: dummy-0`, scores fixes, seuils à 0,5) tout en répondant 200. Le contrôle de `model_version` après chaque déploiement est donc indispensable.
-- **Fichier de poids en lecture réservée au propriétaire** (`-rw-------`) : le conteneur non-root ne peut pas le lire et le pod plante en boucle (`CrashLoopBackOff`, `FileNotFoundError`). Le déploiement progressif a protégé le service : les deux anciens pods ont continué à répondre pendant tout l'incident.
+securityContext:
+  runAsNonRoot: true            # Kubernetes refuse de lancer le conteneur en root
+  runAsUser: 1000               # utilisateur appuser créé dans l'image
+containers:
+  - env:
+      - name: ENV
+        value: "prod"           # ferme /docs, /redoc et /openapi.json
+      - name: API_KEY           # lue dans un Secret, jamais dans le code
+        valueFrom:
+          secretKeyRef: {name: dss-api-key, key: API_KEY}
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true   # impossible de déposer un exécutable
+      capabilities: {drop: ["ALL"]}
+```
 
-**Limite du procédé :** il dépend d'une copie locale non versionnée, donc il n'est pas reproductible depuis le seul dépôt. Amélioration proposée : stocker les poids dans un bucket Cloud Storage (ou un registre de modèles) et les récupérer pendant le build, avec une étape de contrôle qui refuse de déployer si `model_version` commence par `dummy`.
+**Extrait commenté du** `Dockerfile` :
 
-### 3.3 Utiliser l'API : exemples de requêtes et réponses
 
-Exemples **réels**, relevés le 16 novembre 2026 à 10:40 UTC sur le cluster (modèle `distilbert-2026-11-16`). `<domaine>` et `<CLE_API>` sont à remplacer : la clé n'est jamais écrite dans le dépôt, qui est public.
+```
 
-**Santé** (sans clé) : volontairement muette, elle ne révèle ni version ni détail.
+FROM python:3.12-slim
+RUN apt-get update && apt-get upgrade -y        # correctifs système (faille zlib1g trouvée par trivy)
+RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1     # aucun téléchargement en production
+RUN useradd --create-home --uid 1000 appuser
+USER 1000                                       # non-root
+CMD uvicorn main:app --workers 1 --no-access-log --no-server-header
+#   --no-access-log : aucune adresse IP de client dans les journaux de l'API
+```
 
-```bash
+### 4.3 Dimensionnement : pourquoi 1 CPU par pod, et de 2 à 5 pods
+
+Ces chiffres ont été posés **avant** les tests, sur des raisons de coût et de redondance, puis **confrontés aux mesures de l'étape 5** (P2). Les mesures les confirment pour l'usage prévu et fixent leur limite.
+
+**Ce que vaut un pod.** Un pod à 1 CPU sert **≈ 4 requêtes/s** quand son CPU est saturé (91 à 99 %). Un utilisateur de nos tests envoie ≈ 1 requête/s (10 utilisateurs → 8 requêtes/s mesurées).
+
+
+| **Configuration** | **Capacité** | **Utilisateurs servis avec P95 < 2 s** | **Source** |
+| --- | --- | --- | --- |
+| 1 pod (après une panne, F3) | ≈ 4 req/s | 5 utilisateurs tenus de justesse (P95 1,09 s, maximum 4,7 s) | F3 |
+| **2 pods (minimum)** | ≈ 8 req/s | **10 utilisateurs** (P95 1,2 s) ; rupture à 20 | Montée, stress |
+| **5 pods (maximum)** | 17 à 20 req/s mesurées | **≈ 20 utilisateurs**, par calcul (5 × 4 req/s) ; P95 non mesuré à ce palier | Montée, exécution 2 |
+| 5 pods face à 100 utilisateurs | 17,6 req/s servies pour ≈ 100 demandées | ✗ P95 11,8 s | Montée |
+
+
+| **Réglage** | **Raison posée au départ** | **Ce que les mesures en disent** |
+| --- | --- | --- |
+| **1 CPU et 2 Go par pod** | Autopilot facture les ressources demandées : 2 CPU et 4 Go étaient dimensionnés pour LAYA (421 M de paramètres), inutiles pour DistilBERT (66 M) | Mémoire au pic : 1,43 Go, soit ≈ 30 % de marge sur 2 Go. Le CPU est saturé : c'est lui l'unité de capacité, ce qui justifie de raisonner en nombre de pods |
+| **2 pods minimum** | Redondance : un pod peut tomber sans couper le service | L'usage normal reste sous 2 req/s (référence de nos alertes) : 2 pods en servent 8, **marge × 4**. La perte d'un pod sur 2 a été tenue sans erreur (F3) |
+| **5 pods maximum** | Plafond de coût (crédits étudiants, P5) | 5 pods à 1 CPU, plus Prometheus et Grafana, approchent le **quota de 12 CPU** du projet : c'est très probablement ce quota qui a bloqué un pod pendant F3 (§ 6.4). Monter plus haut demanderait d'abord une hausse de quota |
+| **Cible de 70 % de CPU** | Garder de la marge pour les pics | Un pod neuf met 5 min 29 s à servir. Pendant ce temps, les 30 % restants des pods en place absorbent la hausse (≈ 1,2 req/s par pod) |
+
+**Conclusion.** 2 à 5 pods couvrent l'usage visé : l'usage normal avec une marge de 4, et un pic d'environ 20 utilisateurs actifs. **Ils ne couvrent pas 100 utilisateurs simultanés** : il faudrait au moins 25 pods à 1 CPU (100 req/s ÷ 4), donc une hausse de quota, ou bien plus de CPU par pod et un traitement par lots (§ 6.5). C'est un choix assumé de coût, pas une capacité illimitée.
+
+### 4.4 Utiliser l'API
+
+Exemples **réels**, relevés le 16 novembre 2026 à 10:40 UTC (modèle `distilbert-2026-11-16`). `<domaine>` et `<CLE_API>` remplacent les vraies valeurs : le dépôt est public.
+
+
+```
+
 curl https://<domaine>.sslip.io/health
-```
-
-```json
-{"status":"ok"}
-```
-
-**Commentaire neutre**
-
-```bash
+{"status":"ok"}                                 # muette : ni version ni détail
+ 
 curl -X POST https://<domaine>.sslip.io/score \
   -H "Content-Type: application/json" -H "X-API-Key: <CLE_API>" \
   -d '{"text":"Thanks for fixing the references, great work."}'
-```
-
-```json
 {"score":0,"toxique":false}
-```
-
-**Commentaire toxique**
-
-```bash
-curl -X POST https://<domaine>.sslip.io/score \
-  -H "Content-Type: application/json" -H "X-API-Key: <CLE_API>" \
-  -d '{"text":"You are a stupid idiot"}'
-```
-
-```json
+ 
+curl -X POST https://<domaine>.sslip.io/score ... -d '{"text":"You are a stupid idiot"}'
 {"score":100,"toxique":true}
-```
-
-**Commentaire déguisé** (leetspeak) : la normalisation avant le modèle le ramène à `you are a idiot`.
-
-```json
-{"score":100,"toxique":true}
-```
-
-**Version du modèle** (route **réservée à la clé** : le contrôle après déploiement s'en sert pour refuser le modèle factice)
-
-```bash
+ 
 curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"
-```
-
-```json
 {"model_version":"distilbert-2026-11-16","preprocessing_version":"1.0"}
 ```
 
-| Champ | Signification |
-| --- | --- |
-| `score` | Entier de 0 à 100, **arrondi à la dizaine** (0, 10, 20… 100). En interne : moyenne des probabilités des labels détectés, sinon probabilité de `toxic`, multipliée par 100. |
-| `toxique` | `true` si au moins un des 6 labels dépasse son seuil de décision (§ 2.2). |
 
-**Pourquoi une réponse aussi pauvre.** Jusqu'au 16 novembre, la réponse contenait aussi les 6 probabilités à 4 décimales, les seuils de décision, la version du modèle et les textes prétraités. Ce détail aide un attaquant : il peut chercher le texte qui passe juste sous un seuil (évasion) ou entraîner un clone du modèle sur nos réponses (vol de modèle par distillation). Nous gardons donc un score (la sortie centrale du TP) mais **arrondi**, et le verdict ; probabilités et seuils restent internes (journaux et métriques). Le compromis a un coût : un client perd le détail par label.
-
-**Documentation interactive fermée en production.** `/docs`, `/redoc` et `/openapi.json` répondent **404** depuis le 16 novembre à 10:31 UTC, après qu'un client a téléchargé le schéma complet de l'API puis envoyé 94 000 requêtes sur `/docs` (§ 6.6).
-
-**Erreurs**
-
-| Cas | Code | Corps de la réponse |
+| **Cas** | **Code** | **Origine** |
 | --- | --- | --- |
-| Clé absente ou fausse | **401** | `{"detail":"Clé API absente ou invalide"}` |
-| Texte vide | **422** | `{"detail":[{"type":"string_too_short","loc":["body","text"],"msg":"String should have at least 1 character","input":""}]}` |
-| Champ `text` absent | **422** | `{"detail":[{"type":"missing","loc":["body","text"],"msg":"Field required","input":{}}]}` |
-| Texte de plus de 5 000 caractères, ou corps qui n'est pas du JSON | **422** | même format `detail` |
+| Clé absente ou fausse | 401 | Vérification de la clé |
+| Texte vide, champ absent, plus de 5 000 caractères, corps non JSON | 422 | Validation Pydantic |
+| Corps de plus de 40 Ko | 413 | Couche de protection |
+| Trop de requêtes, ou trop de clés fausses depuis une adresse | 429 | Couche de protection |
+| Plus de 3 calculs simultanés sur un pod pendant plus de 0,25 s | 503 (`Retry-After: 1`) | Plafond de calcul |
 
-**Autres points.** Le texte reçu est anonymisé avant le modèle et n'est jamais stocké ni journalisé. L'API locale de ce dépôt est différente : route `/predire`, champ `texte`, choix du modèle, et la réponse contient en plus `etapes` (texte original, anonymisé, nettoyé) et les durées.
+**API locale.** Une seconde API (`api/main_local.py`, route `/predire`, sans clé) sert au développement : elle permet de **choisir le modèle** (BiLSTM, DistilBERT ou LAYA) et renvoie le détail des étapes. Le front `front/index.html` s'appuie dessus (§ 9).
 
----
-
-## Étape 4 : Sécurisation et conformité RGPD
-
-**Ce que demande l'énoncé, et où c'est fait :**
-
-| Exercice | Où |
-|---|---|
-| Configurer JWT ou clé API | § 3.2 et 3.3 (clé `X-API-Key`, Secret Manager, comparaison à temps constant) |
-| Mettre en place HTTPS et IAM | § 3.2 (certificat géré, redirection HTTPS), § 4.2 (IAM) |
-| Registre RGPD, validation, logs pseudonymes | § 4.1 (registre, validation d'entrée, journaux sans texte) |
+### 4.5 Structure du code et tests
 
 
-### 4.1 Registre de traitement (RGPD, article 30)
+| **Dossier** | **Contenu** |
+| --- | --- |
+| `api/` | `main.py` (routes), `preprocessing.py` (anonymisation et nettoyage, même code qu'à l'entraînement), `scorer.py` (chargement du modèle et seuils), `protection.py` (limites en entrée) |
+| `api/k8s/` | `deployment.yaml`, `service.yaml`, `ingress.yaml`, `hpa.yaml`, `backendconfig.yaml`, `podmonitor.yaml` |
+| `api/deploy/` | `gke_setup.sh` (mise en place, une fois), `deploy_gke.sh`, `gke_pause.sh` (pause pour économiser le crédit), `verifier_deploiement.py` |
+| `api/tests/` | 39 tests pytest : clé, validation d'entrée, format de réponse, anonymisation, protection, 4 sur le vrai modèle (dont le noyage) |
+| `loadtest/`, `supervision/` | Scripts Locust, résultats, tableau de bord Grafana, règles d'alerte, analyse des journaux |
 
-#### 4.1.1 Responsable du traitement
+Code commenté en français. Les tests sont relancés automatiquement à chaque push par la pipeline de sécurité **[TP2]**.
 
-| Champ         | Valeur                                           |
-| ------------- | ------------------------------------------------ |
-| Dénomination | Équipe Digital Social Score                     |
-| Projet        | Digital Social Score API — analyse de toxicité |
-| Contact       | Les membres de l'équipe, joignables par l'ESIGELEC (adresses non publiées : dépôt public). Projet pédagogique : aucune adresse dédiée n'existe |
-| Localisation  | France                                           |
-
-#### 4.1.2 Traitement A : anonymisation du jeu de données (notebooks)
-
-| Rubrique                              | Contenu                                                                                                                                                                                                        |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Finalité**                   | Réduire la présence de données personnelles dans les commentaires avant l'entraînement (cadre pédagogique).                                                                                               |
-| **Base légale**                | Art. 6.1.f RGPD (intérêt légitime) : on analyse des commentaires publics pour un exercice pédagogique de détection de toxicité. Les données sont anonymisées avant tout usage. |
-| **Données**                    | Texte libre pouvant contenir noms, pseudos, IP, emails, téléphones, URL, adresses. Les labels de toxicité peuvent révéler des attaques visant des groupes : **données potentiellement sensibles**. |
-| **Source et volume**            | *Toxic Comment Classification Dataset* : 159 571 commentaires (train), 153 164 (test) ; textes CC-BY-SA 3.0, labels CC0 (§ 1.1).                                                                            |
-| **Minimisation**                | Identifiants directs remplacés par des balises avant l'entraînement ; fichiers d'origine inchangés.                                                                                                         |
-| **Conservation**                | `data/anonymise/` et `data/clean/` : gardés en local jusqu'à la remise du projet, puis supprimés. Ils ne servent qu'au TP. |
-| **Destinataires et transferts** | Traitement local : rien n'est envoyé à un tiers. Le dépôt GitHub (États-Unis) contient le code, la documentation, les résultats **et les fichiers CSV d'origine du jeu Kaggle** (`data/train.csv`, `test.csv`, `test_labels.csv`, `sample_submission.csv`). Ce sont des données **déjà publiques** (licences CC-BY-SA 3.0 pour les textes, CC0 pour les labels) : leur présence ne crée pas de nouvelle diffusion. Les versions anonymisées et nettoyées (`data/anonymise/`, `data/clean/`) et les modèles ne sont pas publiés. |
-| **Risques résiduels**          | Anonymisation incomplète (§ 1.5) ; ré-identification possible par recoupement avec Wikipédia.                                                                                                              |
-
-#### 4.1.3 Traitement B : API de score en service
-
-| Champ                                        | Valeur                                                                                                                                                                                                                                                                                                                        |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Nom du traitement**                  | Digital Social Score API — Analyse automatisée de toxicité                                                                                                                                                                                                                                                                 |
-| **Finalité principale**               | Fournir une plateforme d'analyse automatisée de la toxicité de commentaires en ligne, restituant un score de 0 à 100 et une ventilation par catégorie de risque (toxic, severe_toxic, obscene, threat, insult, identity_hate)                                                                                             |
-| **Finalités secondaires**             | Journalisation pseudonymisée des appels API à des fins de traçabilité et de conformité RGPD ; détection d'abus et d'utilisation anormale du service                                                                                                                                                                     |
-| **Base légale**                       | **Art. 6.1.f RGPD — Intérêt légitime** à fournir une plateforme de détection et modération de commentaires toxiques. L'intérêt légitime a été mis en balance avec les droits des personnes concernées : l'anonymisation préalable des commentaires réduit l'impact sur la vie privée.                  |
-| **Traitement automatisé / Profilage** | **Oui** — le score est calculé par un modèle ML (DistilBERT) sans intervention humaine. Aucune décision individuelle à effet juridique dans la version actuelle. Une AIPD (Art. 35) serait obligatoire si le score était intégré dans un processus décisionnel (modération automatique, accès, recrutement). |
-
-#### 4.1.4 Catégorie de personnes concernées (Art. 30.1.c)
-
-- **Utilisateurs de l'API** — développeurs et intégrateurs identifiés par leur clé API (clé non journalisée)
-- **Auteurs des commentaires analysés** — toute personne dont le commentaire est soumis à analyse
-
-#### 4.1.5 Données traitées (Art. 30.1.c)
-
-| Donnée                  | Nature                                                                                                 | Traitement appliqué                                                                                     | Stockage                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Commentaire brut soumis  | Données à caractère personnel potentielles (contenu personnel, opinions, données sensibles Art. 9) | Anonymisé via spaCy NER + regex avant inférence                                                        | Non — traitement en mémoire uniquement  |
-| Commentaire prétraité  | Pseudonymisé                                                                                          | Retourné en réponse à l'appelant (API locale `/predire` uniquement — l'API GKE `/score` ne le retourne pas) | Non conservé côté serveur              |
-| Score de toxicité       | Non DCP (résultat agrégé)                                                                           | Calcul : moyenne des scores des labels dont la probabilité atteint leur seuil, sinon score de `toxic` | Oui — journal applicatif (Cloud Logging) |
-| Longueur du commentaire  | Non DCP (métadonnée)                                                                                 | Nombre de caractères                                                                                    | Oui — journal applicatif (Cloud Logging) |
-| Horodatage UTC           | Non DCP                                                                                                | ISO 8601                                                                                                 | Oui — journal applicatif (Cloud Logging) |
-| Durée d'inférence (ms) | Non DCP (performance)                                                                                  | Mesure temps réel                                                                                       | Oui — journal applicatif (Cloud Logging) |
-
-**Données sensibles (Art. 9 & 10 RGPD)**
-
-Les commentaires soumis peuvent contenir des données sensibles (opinions politiques, santé, orientation sexuelle, origine ethnique). L'anonymisation préalable réduit ce risque.
-
-**Dataset d'entraînement** : Toxic Comment Classification Challenge (Jigsaw / Google, 2017).
-
-| Caractéristique    | Détail                                                                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Source des données | Commentaires des pages de discussion Wikipedia (talk pages), en anglais                                                           |
-| Taille              | 159 571 commentaires d'entraînement + 63 978 de test                                                                             |
-| Annotation          | Annotation binaire par vote majoritaire d'évaluateurs humains                                                                    |
-| Labels              | `toxic`, `severe_toxic`, `obscene`, `threat`, `insult`, `identity_hate` (multi-label)                                 |
-| Licence labels      | CC0 (domaine public)                                                                                                              |
-| Licence texte       | CC-BY-SA 3.0 (texte Wikipedia)                                                                                                    |
-| Biais identifiés   | Corpus exclusivement anglophone, issu de Wikipedia — peut refléter des biais culturels dans la classification `identity_hate` |
-
-#### 4.1.6 Journal de traçabilité
-
-**Où** : sortie standard de l'API, collectée par Cloud Logging (GKE). Ni fichier CSV, ni hash de clé.
-**Principe** : aucun texte brut ni donnée directement identifiante n'est enregistré.
-
-| Champ        | Type            | Description                                                                |
-| ------------ | --------------- | -------------------------------------------------------------------------- |
-| horodatage   | datetime UTC    | ajouté par Cloud Logging                                                  |
-| `score`    | entier [0–100] | score de toxicité — résultat agrégé, non ré-identifiable             |
-| `longueur` | entier          | nombre de caractères du texte soumis — aucune information sur le contenu |
-| `duree_ms` | décimal        | durée d'inférence en millisecondes                                       |
-
-Ligne type : `score=87 longueur=142 duree_ms=14.2`
-
-#### 4.1.7 Destinataires et sous-traitants (Art. 28 RGPD)
-
-#### Destinataires internes
-
-- Équipe technique Digital Social Score (accès aux logs de traçabilité pour monitoring et support)
-
-#### Sous-traitants (Art. 28 RGPD)
-
-| Sous-traitant               | Rôle                                      | Localisation des données  | Garanties RGPD                                                            |
-| --------------------------- | ------------------------------------------ | -------------------------- | ------------------------------------------------------------------------- |
-| Google Cloud Platform (GKE) | Hébergement Kubernetes, Artifact Registry | UE — europe-west9 (Paris) | Clauses contractuelles types (CCT) — DPA disponible sur cloud.google.com |
-| Google Secret Manager       | Stockage sécurisé des clés API          | UE — europe-west9 (Paris) | Certifié ISO 27001, SOC 2 Type II                                        |
-
-#### Transferts hors UE (Art. 30.1.e)
-
-**Aucun transfert hors UE.** Le déploiement est restreint à la région `europe-west9` (Paris, France). Aucun traitement n'est réalisé dans des pays tiers sans décision d'adéquation de la Commission européenne.
-
-#### 4.1.8 Durées de conservation
-
-| Données                           | Durée                                            | Justification                  |
-| ---------------------------------- | ------------------------------------------------- | ------------------------------ |
-| Texte brut                         | **Aucune** — mémoire uniquement           | Minimisation (Art. 5.1.c)      |
-| Texte prétraité                  | **Aucune** côté serveur                   | Minimisation                   |
-| Journal applicatif (Cloud Logging) | **30 jours** — rétention par défaut GKE (non configurée manuellement) | Traçabilité vs. minimisation |
-| Poids du modèle DistilBERT        | Durée du service                                 | Nécessité opérationnelle    |
-
-> **Note** : la rétention par défaut GKE est de 30 jours ; aucune rétention personnalisée n'est configurée dans les manifestes.
-
-#### 4.1.9 Mesures de sécurité
-
-| Mesure                              | Description technique                                                                                                                                                                                       | Statut                  |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| Authentification API                | Clé API via header `X-API-Key`, comparaison à temps constant `secrets.compare_digest` — protection timing attack (`api/main.py`) ; **défaut constaté (test S2b) : une clé avec un caractère non ASCII provoque une erreur 500 au lieu de 401**                                                                   | Implémentée           |
-| Chiffrement en transit              | HTTPS forcé via `FrontendConfig` GKE (`redirectToHttps: enabled`) + `ManagedCertificate` Google (`api/k8s/ingress.yaml`)                                                                           | Implémentée           |
-| Anonymisation des commentaires      | spaCy NER + regex — 8 balises de remplacement : `personne_tag`, `organisation_tag`, `email_tag`, `url_tag`, `ip_tag`, `telephone_tag`, `pseudo_tag`, `adresse_tag` (`api/preprocess.py`) | Implémentée           |
-| Minimisation des logs               | `log.info` sans texte brut : longueur, score, durée uniquement — aucun stockage du contenu (`api/main.py`)                                                                                            | Implémentée           |
-| Gestion des secrets                 | `secretKeyRef: {name: dss-api-key, key: API_KEY}` dans `api/k8s/deployment.yaml` — clé absente du code source et de l'image Docker                                                                    | Implémentée           |
-| Conteneur non-root                  | `useradd --uid 1000 appuser` + `USER 1000` dans `api/Dockerfile` ; `runAsNonRoot: true` + `runAsUser: 1000` dans `api/k8s/deployment.yaml`                                                      | Implémentée           |
-| Réduction des privilèges système | `allowPrivilegeEscalation: false` + `capabilities: {drop: ["ALL"]}` dans `api/k8s/deployment.yaml`                                                                                                    | Implémentée           |
-| Validation des entrées             | Pydantic `Field(min_length=1, max_length=5000)` — HTTP 422 si dépassement (`api/main.py`)                                                                                                             | Implémentée           |
-| Haute disponibilité                | `replicas: 2` minimum + `startupProbe` / `readinessProbe` / `livenessProbe` sur `/health` (`api/k8s/deployment.yaml`)                                                                           | Implémentée           |
-| Journalisation des accès           | Logs Cloud Logging GKE (rétention 30 jours par défaut)                                                                                                                                                    | Par défaut GCP          |
-| Désactivation des logs d'accès uvicorn | `--no-access-log` dans le CMD du `api/Dockerfile` — les logs uvicorn n'enregistrent aucune IP cliente                                                                                               | Implémentée            |
-| AIPD (Art. 35 RGPD)                 | Analyse d'impact requise si le score est utilisé dans un processus décisionnel à effet juridique                                                                                                         | À évaluer selon usage |
-
-**Limitation de débit :** en service depuis le 16 novembre (par adresse IP, voir livrable du TP2, étape 3). **Front de démonstration :** l'historique reste dans le `sessionStorage` de l'onglet et ne contient que le texte **anonymisé** ; la clé d'API saisie en mode « API distante » n'est jamais stockée ; la police DM Sans est chargée depuis Google Fonts (connexion du navigateur vers Google).
-
-#### 4.1.10 Droits des personnes concernées
-
-| Droit                    | Article RGPD | Applicable  | Modalités d'exercice                                                                                     |
-| ------------------------ | ------------ | ----------- | --------------------------------------------------------------------------------------------------------- |
-| Droit d'accès           | Art. 15      | Oui         | Demande par email — logs pseudonymisés correspondant à la clé communicables                           |
-| Droit de rectification   | Art. 16      | Limité     | Données pseudonymisées — ré-identification impossible sans la clé d'origine                          |
-| Droit à l'effacement    | Art. 17      | Oui         | Les journaux se suppriment d'eux-mêmes après 30 jours (rétention par défaut de Google Cloud). Aucune donnée personnelle n'est stockée ailleurs. |
-| Droit à la limitation   | Art. 18      | Sans objet | Le journal ne contient aucun identifiant ni le texte : il n'y a rien à suspendre pour une personne précise. Arrêter d'utiliser la clé suffit. |
-| Droit à la portabilité | Art. 20      | Sans objet | Aucune donnée personnelle n'est conservée côté serveur : il n'y a rien à exporter. |
-| Droit d'opposition       | Art. 21      | Oui         | Le journal ne conserve ni le texte ni l'identité de l'utilisateur : rien à rattacher à une personne. Une opposition se traduit par l'arrêt de l'envoi de textes et la révocation de la clé d'API de l'intéressé. |
-| Décision automatisée   | Art. 22      | À garantir | Le score DSS ne doit pas être la seule base d'une décision à effet juridique sans intervention humaine |
-
-**Droit de réclamation** (Art. 77 RGPD) : CNIL — 3 place de Fontenoy, TSA 80715 — 75334 Paris Cedex 07 — www.cnil.fr
-
-**Contact pour exercer ses droits** : les membres de l'équipe, par l'ESIGELEC. En service réel, une adresse dédiée (et un délégué à la protection des données si l'organisme y est tenu) serait obligatoire ; elle n'existe pas pour ce projet pédagogique.
-
-> **Note** : le journal ne contient pas de hash de clé : les droits d'accès, de portabilité et d'opposition « par clé » ne sont applicables que si ce hash est ajouté au journal.
-
-#### 4.1.11 Risques résiduels
-
-Anonymisation incomplète (§ 1.5) et ré-identification possible par recoupement avec Wikipédia ; données sensibles possibles dans les commentaires ; le score n'est pas calibré (§ 2.5) et ne doit pas fonder seul une décision à effet juridique.
-
-### 4.2 Droits d'accès (IAM)
-
-Relevé du 12 novembre 2026 (`gcloud projects get-iam-policy`). Les adresses ne sont pas reproduites (dépôt public) : les comptes sont désignés par le prénom de leur titulaire.
-
-| Qui | Rôles | Ce que ça permet | Jugement |
-|---|---|---|---|
-| **Enzo** | **Owner**, plus des rôles précis : `artifactregistry.writer`, `cloudbuild.builds.editor`, `container.developer`, `secretmanager.admin`, `compute.networkViewer`, `logging.viewer`, `monitoring.viewer`, `serviceUsageConsumer` | Tout, en particulier déployer l'API et gérer le secret de la clé | Les rôles précis sont inutiles : `Owner` les contient tous |
-| **Situ** | **Owner**, plus `container.developer`, `logging.viewer`, `monitoring.viewer`, un rôle d'éditeur de ressources | Tout, en particulier piloter le cluster (`kubectl`) et lire les journaux | Les trois rôles utiles aux tests suffiraient sans `Owner` |
-| **Eliana** | **Owner** uniquement | Tout | Trop large pour un rôle de documentation |
-| **Compte de service de calcul et de Cloud Build** | `cloudbuild.builds.builder` ; lecture du dépôt d'images accordée sur le dépôt seul, par le script `gke_setup.sh` | Construire et publier l'image ; les machines du cluster ne peuvent que **lire** les images | **Moindre privilège respecté** pour la chaîne de livraison |
-| **Comptes de service gérés par Google** (agents de service de GKE, Cloud Build, Artifact Registry, etc.) | rôles `...serviceAgent` | Fonctionnement interne de Google Cloud | Normal, non modifiable |
-
-**Ce qui est bien fait**
-- Les **pods de l'API n'ont aucun droit Google Cloud** : aucun rôle ne leur est accordé. L'API n'en a pas besoin, donc une faille dans le conteneur ne donne pas accès au projet.
-- Les machines du cluster n'ont qu'un droit de **lecture** sur le dépôt d'images, accordé sur ce dépôt et non sur tout le projet.
-- La clé d'API est dans **Secret Manager** (`dss-api-key`), pas dans le code ; seul Enzo a le rôle d'administrateur du secret.
-
-**Ce qui n'est pas bien fait (et pourquoi on l'a gardé)**
-- **Les trois membres sont `Owner`** : chacun peut supprimer le cluster, lire la clé d'API et modifier les droits des autres. Choix de commodité pour un projet étudiant à trois ; en production, un seul `Owner`, les autres avec `container.developer` et les rôles de lecture. Conséquence concrète : le rôle d'administrateur du secret réservé à Enzo ne protège rien, puisque `Owner` lit aussi le secret.
-- **Comptes personnels sans organisation** : pas de groupes, pas de politique d'organisation (par exemple imposer la double authentification). Cette vérification n'a pas été faite.
-- **Un seul compte de service** pour les machines : un compte dédié à l'API, sans autre droit, serait plus propre.
-
----
-
-## Étape 5 : Simulation de montée en charge
+## 5. Sécurité et conformité RGPD (étape 4)
 
 **Ce que demande l'énoncé, et où c'est fait :**
 
 | Exercice | Où |
 |---|---|
-| Simuler croissance progressive, stress test et failover | Annexe B.3 (montée), B.4 (stress), B.6 (failover) |
-| Mesurer latence moyenne, P95/P99, taux d'erreur | Annexe B (tableaux par palier, courbes) |
-| Proposer des améliorations (cache, load balancer, redondance) | Annexe B.7 (fait ou proposé, avec la raison) |
+| Configurer JWT ou clé API | § 5.2 (clé d'API, et pourquoi pas JWT) |
+| Mettre en place HTTPS et IAM | § 5.2 (HTTPS), § 5.3 (IAM) |
+| Validation, logs pseudonymes, registre RGPD | § 5.2, § 5.4, § 5.5 et Annexe C |
 
 
-Méthode complète, captures et commandes : Annexe B. Cible : l'API déployée sur GKE (2 à 5 pods, autoscaler à 70 % de CPU), modèle DistilBERT.
+### 5.1 Analyse des risques (STRIDE)
 
-| Choix | Justification |
-|---|---|
-| Locust | Python comme le reste du projet, courbes en direct, export CSV. |
-| Cible : l'API sur GKE, pas l'API locale | C'est le service réel : on teste aussi le load balancer, l'autoscaler et les pods. |
-| 1 000 textes variés de `test_clean.csv`, un différent à chaque requête | Textes réalistes ; évite qu'un cache fausse les mesures. |
-| Percentiles calculés requête par requête | Ceux du CSV de Locust sont cumulés depuis le début du test : inutilisables par palier. |
-| Stress : +10 utilisateurs toutes les 20 s, arrêt automatique dès que le P95 dépasse 2 s pendant 10 s | Critère mesurable ; l'arrêt automatique limite le coût en crédit. |
-| Seuil de 2 s pour le P95 | Choix de l'équipe, non imposé par le TP : au-delà, un appel d'API interactif est jugé trop lent. |
-| Paliers 1 → 10 → 50 → 100 utilisateurs sur 5 min | Facteur 5 à 10 entre paliers pour voir où la latence décolle, sans durer assez longtemps pour coûter cher. |
-| Failover avec 5 utilisateurs (≈ 5 requêtes/s) | Sous la capacité de 2 pods (≈ 8 requêtes/s) : le service est sain avant l'incident, donc l'effet de la perte d'un pod se voit. |
-| 70 % d'utilisation cible, 5 pods au plus | Marge de 30 % pour les pics ; même valeur que l'autoscaler du cluster. |
+Actifs à protéger : **les textes soumis** (données personnelles potentielles), **la clé d'API**, **le modèle** (propriété intellectuelle), **la disponibilité du service**.
 
-**Montée progressive** (1 → 10 → 50 → 100 utilisateurs, 5 min) :
 
-![Montée progressive](loadtest/images/montee_courbes.png)
+| **Menace (STRIDE)** | **Scénario concret** | **Mesure en place** | **Statut** |
+| --- | --- | --- | --- |
+| **S**poofing | Appeler l'API sans y avoir droit ; deviner la clé | Clé de 64 caractères hexadécimaux (`openssl rand -hex 32`), comparaison à temps constant, 429 après 10 clés fausses par minute | ✅ (clé unique partagée : ⚠️) |
+| **T**ampering | Déposer un exécutable dans le conteneur compromis ; image modifiée | `readOnlyRootFilesystem`, non-root, `drop ALL` ; image construite par Cloud Build, nœuds en lecture seule sur le dépôt d'images | ✅ |
+| **R**epudiation | Impossible de reconstituer une attaque | Journaux complets du load balancer, refus journalisés avec une empreinte HMAC de l'adresse | ✅ (une seule clé : on ne sait pas quel client l'utilise) |
+| **I**nformation disclosure | Fuite des textes ; interception ; schéma de l'API exposé | Texte jamais journalisé (prouvé, S5) ; HTTPS forcé ; `/docs` fermé ; réponse réduite **[TP2]** ; poids hors de Git | ✅ (HTTP non chiffré entre le load balancer et les pods : ⚠️) |
+| **D**enial of service | Inonder `/score`, qui coûte 100 à 250 ms de CPU | Limites par adresse (429), au plus 3 calculs par pod (503), corps ≤ 40 Ko, délai de 15 s, autoscaler | ⚠️ limites par pod, pas globales ; Cloud Armor refusé par quota |
+| **E**levation of privilege | Sortir du conteneur ; utiliser les droits du pod sur le projet | `allowPrivilegeEscalation: false`, aucun rôle Google Cloud pour les pods | ✅ (comptes humains `Owner` : ❌, § 5.3) |
 
-| Palier | Requêtes/s | Médiane | P95 | P99 | Erreurs |
-|---|---|---|---|---|---|
-| 1 utilisateur | 0,9 | 176 ms | 992 ms | 1,3 s | 0 |
-| 10 | 8,0 | 384 ms | 1,2 s | 1,6 s | 0 |
-| 50 | 14,2 | 1,6 s | 8,2 s | 11,2 s | 1 |
-| 100 | 17,6 | 4,1 s | 11,8 s | 14,7 s | 2 |
+**Rattachement aux référentiels.**
 
-**Ce que les mesures montrent**
-- **L'API ne tombe pas, elle ralentit** : 4 erreurs 502 sur 3 616 requêtes (≈ 0,1 %), mais la latence passe de 176 ms à plus de 4 s.
-- **Le goulot est le CPU** : pods à 91-99 % de CPU, environ 4 requêtes/s par pod (débit plafonné vers 8 requêtes/s avec 2 pods lors de la première exécution).
-- **L'autoscaler est trop lent pour une montée de 5 minutes** : un pod neuf a mis 5 min 29 s à être prêt (5 min 10 s en `Pending`, le temps qu'Autopilot prépare une machine). À la 2e exécution il a atteint ses 5 pods, et le débit est monté à 17-20 requêtes/s.
+- **OWASP API Security Top 10 (2023)** : API2 Broken Authentication → clé à temps constant et anti brute-force ; API4 Unrestricted Resource Consumption → limites, plafond de calcul, 413 ; API8 Security Misconfiguration → `/docs` fermé, en-tête `Server` retiré, conteneur durci ; API9 Improper Inventory Management → une seule route métier exposée (`/score`).
+- **CIS Kubernetes / GKE Benchmark** : conteneur non-root, pas d'élévation de privilèges, capacités retirées, système de fichiers en lecture seule, secrets hors de l'image.
+- **ANSSI**, recommandations pour un déploiement sécurisé : moindre privilège, cloisonnement (métriques sur un port non exposé), journalisation.
 
-**Stress** : rupture (P95 > 2 s) à **20 utilisateurs**, 33 s après le début, pour ≈ 8 requêtes/s de débit maximal (≈ 4 par pod : 2 pods au départ, vérifié sur capture). **0 erreur** : c'est une dégradation, pas une panne ; le test est trop court pour que l'autoscaler réagisse.
+### 5.2 Authentification, chiffrement, validation
 
-![Stress](loadtest/images/stress_courbes.png)
 
-**Failover** : un pod est supprimé (`kubectl delete`) pendant une charge constante de 5 utilisateurs.
+| **Besoin** | **Choix** | **Raison technique** | **Alternative écartée** | **Preuve** |
+| --- | --- | --- | --- | --- |
+| Réserver l'API à des clients connus. Ce sont des programmes (outils de modération), pas des personnes qui se connectent | **Clé d'API** dans l'en-tête `X-API-Key`, comparée à temps constant | Un appel = une vérification, sans état ni serveur d'identité. Le temps constant empêche de deviner la clé caractère par caractère en mesurant le temps de réponse | **JWT** : utile pour des sessions d'utilisateurs avec expiration et droits variables ; ici, il ajouterait un émetteur de jetons et une rotation sans rien protéger de plus | S1, S2 : 401 |
+| Chiffrer le trafic sans gérer de certificat | **Certificat géré par Google** sur l'Ingress, HTTP redirigé ; domaine `<ip>.sslip.io` | Émission et renouvellement automatiques ; sslip.io donne un nom de domaine gratuit pointant vers notre IP, condition pour obtenir le certificat | Certificat manuel (Let's Encrypt) : renouvellement à surveiller ; acheter un domaine (P5) | S3 : 301 vers HTTPS |
+| Clé hors du code, du dépôt public et de l'image | **Secret Manager → Secret Kubernetes** → variable d'environnement | Accès contrôlé par IAM et journalisé ; la clé change sans reconstruire l'image | Variable écrite dans le manifeste ou le code : elle finirait dans Git (c'est arrivé une fois dans une branche, clé révoquée depuis) | `gke_setup.sh`, étape 3/6 |
+| Rejeter les entrées invalides avant tout calcul (P4) | **Pydantic** : 1 à 5 000 caractères, sinon 422 | Validation déclarative, intégrée à FastAPI, avant le NER et le modèle | Contrôles écrits à la main dans la route | S4 : 422 |
+| Laisser le front de démonstration appeler l'API depuis un navigateur | **CORS ouvert à toutes les origines, sans cookies**, GET et POST, deux en-têtes autorisés | La clé est dans un en-tête, jamais dans un cookie : une page tierce ne peut pas l'utiliser à l'insu de l'utilisateur, donc ouvrir les origines n'affaiblit pas l'authentification | Liste blanche d'origines : impossible, le front est ouvert depuis un fichier (origine `null`) | Front en mode « API distante » fonctionnel |
 
-![Failover](loadtest/images/failover_courbes.png)
+**Réglages de la protection en entrée : d'où viennent les chiffres (P2, P4).** Ces seuils ne sont pas arbitraires : ils dérivent de la capacité mesurée : ≈ 4 calculs/s par pod saturé, soit ≈ 250 ms de CPU par calcul sous charge.
 
-**0 erreur sur 1 192 requêtes**, latence inchangée (P95 628 ms avant, 465 ms après). Kubernetes a recréé un pod immédiatement. Limites : l'incident a eu lieu avec 5 pods prêts (pas le minimum de 2), l'arrêt est propre (pas une panne brutale), et le test s'arrête 59 s après.
 
-**Conséquences pour les choix**
-- DistilBERT limite la capacité à ≈ 4 requêtes/s par pod ; le BiLSTM (0,13 ms par commentaire) serait bien plus rapide mais son F1 est de 0,36 contre 0,56 (§ 2.3) : compromis assumé en faveur de la qualité.
-- **Améliorations (cache, load balancer, redondance), ce qui est fait et ce qui ne l'est pas** : le **load balancer** (Ingress Google) et la **redondance** (2 pods minimum, autoscaler jusqu'à 5) sont **en place** et testés (failover : 0 erreur). Le reste est **proposé, non mis en œuvre** : minimum de 3 pods, pods prêts plus vite (un pod neuf met 5 min 29 s), CPU et threads de torch (goulot CPU), traitement par lots, limite de débit par clé, file d'attente, **cache** (non mesuré : nos tests envoient un texte différent à chaque requête). Détail et justification de chaque ligne : Annexe B, § B.7.
+| **Réglage** | **Valeur** | **Raison** |
+| --- | --- | --- |
+| Calculs simultanés par pod | 3, attente maximale 0,25 s (1 s jusqu'au 17 nov.), puis 503 | 3 calculs × ≈ 250 ms + 0,25 s d'attente au plus : une requête acceptée reste sous le critère de 2 s. Au-delà, mieux vaut un refus immédiat qu'une réponse en 30 s |
+| `/score` par adresse et par pod | Seau à jetons : rafale de 10, puis 1 par seconde ; un texte long coûte plus (1 jeton par tranche de 500 octets) **[TP2]** (60 par minute jusqu'au 17 nov.) | Un usage normal est ≈ 1 requête/s. La limite est volontairement large, parce que tout le wifi de l'école sort par une seule adresse. Le coût selon la taille vient d'une mesure : un texte de 5 000 caractères coûte 20 fois plus de calcul qu'un texte court |
+| Adresse qui insiste après ses refus | Bloquée 30 s, puis 60, 120… jusqu'à 15 min **[TP2]** | Un flot continu coûte de moins en moins cher au serveur |
+| Toutes routes, par adresse et par pod | 300 par minute | Freine une inondation de pages légères, comme celle du 16 novembre (191 req/s sur `/docs`) |
+| Clés fausses par adresse | 10 par minute, puis 429 | Un client légitime ne se trompe pas de clé 10 fois en une minute ; un brute-force, si |
+| Taille du corps | 40 Ko, puis 413 | 5 000 caractères accentués font ≈ 10 Ko ; le reste est une marge pour le JSON. Au-delà, ce n'est plus un commentaire |
+| Délai du load balancer | 15 s (30 s par défaut) | Un score prend ≈ 0,1 s : une requête qui traîne 15 s est anormale et occupe une connexion pour rien |
 
-**Limites** : Locust tourne sur un Mac et l'API sur Google Cloud (les latences incluent le réseau) ; une seule exécution du failover ; percentiles exacts seulement pour la 2e montée et le failover.
+Tous ces réglages sont des variables d'environnement : on les ajuste sans reconstruire l'image.
 
----
+**Défaut trouvé par nos tests, corrigé le 17 novembre.** Une clé contenant un caractère non ASCII provoquait une **erreur 500 au lieu de 401** (S2b) : `compare_digest` refuse de comparer des chaînes non ASCII (`TypeError`). Comme l'exception survenait avant le comptage des clés fausses, ces essais échappaient aussi au blocage anti brute-force. Correction : comparer des octets, `compare_digest(cle.encode(), API_KEY.encode())`, avec un test qui échoue sur l'ancien code.
 
-## Étape 6 : Supervision et sécurité
+### 5.3 Moindre privilège et droits d'accès (IAM)
+
+Relevé du 12 novembre 2026 (`gcloud projects get-iam-policy`). Les adresses e-mail ne sont pas reproduites.
+
+**Ce qui applique le moindre privilège, avec sa preuve :**
+
+
+| **Compte ou composant** | **Droits** | **Pourquoi c'est le minimum** | **Preuve** |
+| --- | --- | --- | --- |
+| **Pods de l'API** | **Aucun rôle Google Cloud** | L'API n'appelle aucun service Google : une faille dans le conteneur ne donne aucun accès au projet | Aucun compte de service dédié ni liaison IAM pour les pods |
+| **Nœuds du cluster** | `artifactregistry.reader` **sur le seul dépôt d'images** `dss`, pas sur le projet | Ils n'ont besoin que de télécharger l'image | `gke_setup.sh`, étape 5/6 (extrait ci-dessous) |
+| **Processus dans le conteneur** | uid 1000, aucune capacité Linux, pas d'élévation, système de fichiers en lecture seule | Le moindre privilège s'applique aussi à l'intérieur du pod | `deployment.yaml` (§ 4.2) |
+| **Secret de la clé** | Un seul administrateur du secret (Enzo) | Limite qui peut changer la clé | Relevé IAM |
+| **Poids du modèle** | Bucket privé, lecture seule pour la chaîne de livraison | Seul ce qui construit l'image peut les lire | Configuration du bucket |
+| **Métriques** | Port 9090, ni dans le Service ni dans l'Ingress | Lisibles par Prometheus dans le cluster, pas depuis Internet | `deployment.yaml`, `service.yaml` |
+| **Pipeline [TP2]** | Aucune clé stockée : Workload Identity Federation limitée à ce dépôt et à 2 branches ; compte de service dédié sans rôle d'administrateur | Rien à voler dans GitHub | Rendu TP2 |
+
+
+```
+
+# api/deploy/gke_setup.sh, étape 5/6 : lecture des images, sur ce dépôt seulement
+gcloud artifacts repositories add-iam-policy-binding "$REPO" --location="$REGION" \
+  --member="serviceAccount:$NUM-compute@developer.gserviceaccount.com" \
+  --role="roles/artifactregistry.reader"
+```
+
+**Ce qui ne l'applique pas, et pourquoi nous l'avons gardé :**
+
+
+| **Qui** | **Rôles** | **Jugement** |
+| --- | --- | --- |
+| Enzo | `Owner` + 8 rôles précis (artifactregistry.writer, cloudbuild.builds.editor, container.developer, secretmanager.admin…) | Les rôles précis ne servent à rien : `Owner` les contient tous |
+| Situ | `Owner` + container.developer, logging.viewer, monitoring.viewer | Les trois rôles utiles aux tests suffiraient |
+| Eliana | `Owner` | Trop large pour un rôle de documentation |
+
+- **Conséquence concrète** : chacun peut supprimer le cluster, modifier les droits des autres et **lire la clé d'API**. Le rôle d'administrateur du secret réservé à Enzo ne protège donc rien.
+- **Pourquoi** : commodité d'un projet étudiant à trois, sans organisation Google Cloud.
+- **Cible en production** : un seul `Owner` ; les autres avec `container.developer`, `logging.viewer` et `monitoring.viewer` ; des groupes plutôt que des comptes nominatifs ; la double authentification imposée par une politique d'organisation ; un compte de service dédié aux nœuds.
+
+**Bilan : le moindre privilège est respecté pour tous les comptes machines et à l'intérieur du conteneur, pas pour les comptes humains.**
+
+### 5.4 Journaux et RGPD
+
+- **Journaux de l'API** : une ligne par analyse, `score=60 longueur=67 duree_ms=80.2`. Jamais le texte, jamais l'adresse (`--no-access-log`).
+- **Refus** (401, 429, 503) : motif, route et **empreinte HMAC de 10 caractères** de l'adresse (clé secrète du serveur), au plus une ligne par minute et par client. On peut reconnaître un client sans le nommer.
+- **Journaux du load balancer** : adresse IP, chemin, code, outil. Activés volontairement (`sampleRate: 1.0`), car ce sont les seuls à permettre de reconstituer une attaque (§ 7.4). **Ils contiennent des adresses IP, donc des données personnelles** : déclarés dans le registre, conservés 30 jours.
+- **Preuve (test S5)** : envoi de « Bonjour je suis Jean Dupont, ip 192.168.45.67, mot-test ZEBRAXYZ123 », puis recherche de ces trois éléments dans Cloud Logging sur 30 minutes : **aucun résultat**.
+
+### 5.5 Registre de traitement (article 30) : synthèse
+
+Le registre complet et corrigé est en Annexe C. Il distingue deux traitements.
+
+
+| **Rubrique** | **A. Préparation du jeu d'entraînement** | **B. API de score en service** |
+| --- | --- | --- |
+| Finalité | Réduire les données personnelles avant l'entraînement (cadre pédagogique) | Fournir un score de toxicité de 0 à 100 |
+| Base légale | Intérêt légitime (art. 6.1.f) ; commentaires publics, sous licence | Intérêt légitime (art. 6.1.f), mis en balance par la minimisation |
+| Données | Texte libre (noms, pseudos, IP, e-mails…) ; labels pouvant révéler des attaques contre des groupes | Texte soumis (en mémoire seulement) ; score, longueur, durée ; IP dans les journaux du load balancer |
+| Conservation | Fichiers anonymisés supprimés après la notation | Texte : aucune ; journaux : 30 jours |
+| Hors UE | Le dépôt GitHub (États-Unis) contient le **jeu brut public** | Calcul et journaux en UE ; la police du front de démonstration vient de Google Fonts |
+
+**Incohérences relevées dans notre propre registre, corrigées dans la version livrée :**
+
+
+| **Version précédente** | **Constat** | **Correction** |
+| --- | --- | --- |
+| « Le dépôt ne contient aucune donnée brute » | `data/train.csv` et `data/test.csv` (130 Mo) sont dans le dépôt public, sur toutes les branches | Déclaré : texte déjà public (CC-BY-SA), risque résiduel ; à retirer de Git |
+| Journaux conservés 90 jours (et 30 jours ailleurs) | Rien n'est configuré : c'est la rétention par défaut de Cloud Logging, 30 jours | 30 jours partout |
+| « Aucune IP dans les journaux » | Faux pour les journaux du load balancer | Catégorie ajoutée : IP, 30 jours, finalité sécurité |
+| Secret Manager localisé à Paris | Le secret est créé avec `--replication-policy=automatic` (multi-régions, choisies par Google) | Corrigé ; réplication à restreindre à europe-west9 |
+| « Aucun transfert hors UE » | Le front de démonstration charge une police depuis Google Fonts | Déclaré ; à héberger localement |
+| Texte prétraité « retourné à l'appelant » | Plus vrai depuis le 16 novembre (réponse réduite) | Corrigé |
+| Droits d'accès, limitation, portabilité « par clé » | Impossible : les journaux ne contiennent aucun identifiant de clé | Droits reformulés selon ce qui est réellement possible |
+
+**Décision automatisée (art. 22).** Le score ne doit jamais être la seule base d'une décision à effet juridique. S'il servait à modérer ou à refuser un accès, une analyse d'impact (AIPD, art. 35) serait obligatoire.
+
+## 6. Montée en charge (étape 5)
 
 **Ce que demande l'énoncé, et où c'est fait :**
 
 | Exercice | Où |
 |---|---|
-| Tester la supervision Prometheus/Grafana | § 6.2 (installation, métriques, tableau de bord) |
-| Analyser les logs et les comportements anormaux | § 6.4 (Cloud Logging), § 6.6 (attaque réelle analysée dans les journaux) |
-| Simuler panne ou attaque, évaluer la continuité | § 6.3 (panne brutale), § 6.5 (attaque simulée), § 6.6 (attaque réelle) |
+| Simuler croissance progressive, stress test et failover | § 6.2, 6.3, 6.4 ; détail en Annexe B |
+| Mesurer latence moyenne, P95/P99, taux d'erreur | § 6.2 à 6.4, Annexe B |
+| Proposer des améliorations (cache, load balancer, redondance) | § 6.5 |
 
 
-### 6.1 Tests de sécurité
+### 6.1 Méthode
 
-Grille complète : Annexe A.
 
-| Test | Résultat |
+| **Choix** | **Justification** |
+| --- | --- |
+| Locust | Les scénarios sont du code Python, comme le reste du projet : c'est ce qui a permis l'arrêt automatique du stress test et l'attaque mêlée à du trafic légitime. **Apache Bench** ne sait envoyer qu'une même requête en boucle ; **k6** s'écrit en JavaScript, une langue de plus dans le projet |
+| Cible : l'API sur GKE, pas l'API locale | On teste aussi le load balancer, l'autoscaler et les pods |
+| 1 000 textes réels de `test_clean.csv`, un différent à chaque requête | Textes réalistes ; aucun cache ne fausse la mesure |
+| Percentiles recalculés requête par requête (`*_requetes.csv`) | Ceux de Locust sont cumulés depuis le début du test : inutilisables par palier |
+| Seuil de rupture : P95 > 2 s | Choix de l'équipe : au-delà, un appel interactif est jugé trop lent |
+| Stress : +10 utilisateurs toutes les 20 s, **arrêt automatique** dès que le P95 dépasse 2 s pendant 10 s | Critère mesurable, et le test s'arrête seul pour économiser le crédit |
+
+**Conditions.** Mesures du 12 novembre, à 1 CPU et 2 Go par pod (ReplicaSet `69798c4847`, vérifié actif pendant tous les tests). Elles sont **antérieures à la couche de protection du 16 novembre** : avec la limite actuelle (1 requête/s par adresse en moyenne), Locust lancé depuis une seule machine recevrait des 429. Locust tournait sur un Mac : les latences incluent le réseau.
+
+### 6.2 Montée progressive (1 → 10 → 50 → 100 utilisateurs en 5 min)
+
+
+| **Palier** | **Requêtes/s** | **Moyenne** | **Médiane** | **P95** | **P99** | **Erreurs** |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0,9 | 317 ms | 176 ms | 992 ms | 1,3 s | 0 |
+| 10 | 8,0 | 482 ms | 384 ms | 1,2 s | 1,6 s | 0 |
+| 50 | 14,2 | 2,8 s | 1,6 s | 8,2 s | 11,2 s | 1 |
+| 100 | 17,6 | 4,9 s | 4,1 s | 11,8 s | 14,7 s | 2 |
+
+![Montée progressive : débit, latences et erreurs par palier](loadtest/images/montee_courbes.png)
+
+*Montée progressive : débit, latences et erreurs par palier*
+
+- **L'API ne tombe pas, elle ralentit** : 4 erreurs 502 sur 3 616 requêtes (≈ 0,1 %), mais une latence médiane qui passe de 176 ms à plus de 4 s. Les requêtes font la queue.
+- **Le goulot est le CPU** : pods à 91-99 % de leur CPU, ≈ 4 requêtes/s par pod.
+- **L'autoscaler est trop lent pour un pic de 5 minutes** : un pod neuf a mis 5 min 29 s à être prêt, dont 5 min 10 s en attente d'une machine. Une première exécution est restée à 8 requêtes/s ; la seconde a atteint 5 pods et 17 à 20 requêtes/s.
+
+### 6.3 Stress test
+
+Rupture (P95 > 2 s) **à 20 utilisateurs, 33 s après le début**, pour un débit maximal de ≈ 8 requêtes/s avec 2 pods, soit ≈ 4 par pod. **0 erreur** : c'est une dégradation, pas une panne. Le test est trop court pour que l'autoscaler réagisse : c'est la capacité de la configuration de départ.
+
+![Stress test : arrêt automatique à 20 utilisateurs](loadtest/images/stress_courbes.png)
+
+*Stress test : arrêt automatique à 20 utilisateurs*
+
+### 6.4 Failover
+
+
+| **Test** | **Scénario** | **Résultat** |
+| --- | --- | --- |
+| F1 | Suppression propre d'un pod (`kubectl delete`), 5 utilisateurs, 5 pods prêts | 0 erreur sur 1 192 requêtes ; P95 628 ms avant, 465 ms après |
+| F2 | Arrêt brutal (`--grace-period=0 --force`), mêmes conditions | 1 erreur sur 771 (un 502 du load balancer, 2 s après) ; débit en baisse pendant ≈ 10 s |
+| F3 | **Pire cas** : arrêt brutal avec seulement **2 pods** | 0 erreur sur 892 ; **un seul pod pendant 7 min 27 s** ; P95 779 → 1 092 ms |
+
+![F3 : perte d'un pod sur 2](loadtest/images/f3_courbes.png)
+
+*F3 : perte d'un pod sur 2*
+
+**Ce que F3 a révélé.** Le pod de remplacement est resté en attente : Google a refusé d'ajouter une machine (`GCE quota exceeded`). Le plus serré des quotas relevés ensuite est la limite globale du projet, **12 CPU toutes régions confondues** (4/12 hors charge). Hypothèse la plus plausible, non vérifiable après coup : elle a été atteinte quand l'API, Prometheus et Grafana occupaient le plus de machines. **Le risque n'est donc pas Kubernetes, mais la capacité que Google accepte de fournir.** Par ailleurs, le pod survivant a lui-même été arrêté pendant l'incident : aucun `PodDisruptionBudget` ne l'empêchait.
+
+### 6.5 Améliorations proposées, reliées aux mesures
+
+
+| **Priorité** | **Amélioration** | **État** | **Mesure qui la justifie** |
+| --- | --- | --- | --- |
+| 1 | 3 pods minimum et un `PodDisruptionBudget` (`minAvailable: 1`) | Proposée | F3 : 7 min 27 s sur un seul pod, et le survivant évincé |
+| 2 | Refuser tôt plutôt que faire attendre | **Faite le 16/11** : 429 par adresse, au plus 3 calculs par pod (503) ; renforcée le 17/11 (débit lissé, sanction progressive) **[TP2]** | 80 requêtes simultanées : 26 × 200, 54 × 503, `/health` toujours 200, aucun redémarrage. Le 17/11, sous 201 req/s sur `/score` avec la clé, un utilisateur légitime venant d'une autre adresse a gardé 29 requêtes sur 29, P95 177 → 401 ms (livrable du TP2, § 4.3) |
+| 3 | Plus de CPU par pod, ou réglage des threads de torch | Proposée | Pods saturés à 91-99 % pour ≈ 4 requêtes/s |
+| 4 | Traitement par lots | Proposée | Le modèle est plus efficace par lots ; un appel par commentaire pèse à 100 requêtes/s |
+| 5 | Monter le minimum de pods avant un pic annoncé | Proposée | 5 min 29 s pour qu'un pod neuf serve |
+| 6 | Limite globale (Cloud Armor ou Redis) | **Essayée, refusée** : quota `SECURITY_POLICIES` à 0 sur le projet étudiant | Les limites actuelles sont par pod : avec 5 pods, la limite réelle est 5 fois plus haute |
+| 7 | File d'attente pour les pics | Proposée | Absorbe un pic sans bloquer l'appelant |
+| 8 | Cache des textes déjà vus | Proposée, **non mesurée** | Nos tests envoient un texte différent à chaque requête |
+| — | Load balancer et redondance (2 pods minimum) | **En place et testés** | F1 : 0 erreur |
+| — | Modèle plus léger (BiLSTM, 0,13 ms) | Écartée | F1 de 0,36 contre 0,56 : nous préférons la qualité |
+
+## 7. Supervision, alertes et incidents (étape 6)
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
 |---|---|
-| S1 — requête sans clé | 401 |
-| S2 — requête avec une clé fausse | 401 |
-| S2b — clé contenant un caractère non ASCII | **500 au lieu de 401** : bogue de la comparaison de clé (`TypeError` dans le journal) ; un client peut produire des erreurs 500 sans connaître la clé |
-| S3 — appel en HTTP | 301 vers HTTPS |
-| S4 — texte vide, trop long (> 5 000 caractères) ou corps non JSON | 422 |
-| S5 — le texte reçu n'apparaît pas dans les journaux | **Vérifié** : un texte avec un nom, une adresse IP et un mot unique a été envoyé ; la recherche de ces trois éléments dans Cloud Logging ne renvoie rien (voir 6.4) |
-| S6 — `/docs` accessible sans clé | 200 : publique le 12 nov. ; **404 depuis le 16 nov.** (voir § 6.6) |
-| S7 — rafale de requêtes invalides | Service légitime maintenu (voir 6.5) |
-| S8 — limitation de débit | Aucune : aucun refus 429 (constat, voir 6.5) |
+| Tester la supervision Prometheus/Grafana | § 7.1 et 7.2 |
+| Analyser les logs et les comportements anormaux | § 5.4 et 7.4 (attaque réelle reconstituée dans les journaux) |
+| Simuler panne ou attaque, évaluer la continuité du service | § 6.4 (pannes), § 7.3 (attaque simulée S7), § 7.4 (attaque réelle) |
 
-### 6.2 Supervision Prometheus et Grafana
 
-**Choix et justification.** Prometheus et Grafana sont imposés par le TP ; on les installe **dans le cluster** (Helm, `kube-prometheus-stack`) plutôt qu'en service géré, pour rester sur les outils demandés sans dépendre d'une offre payante en plus. L'API expose ses métriques sur un **port séparé (9090)**, non relié au Service ni à l'Ingress : elles ne sont donc **pas accessibles depuis Internet**, contrairement à ce qui se serait passé avec un `/metrics` sur le port public. Grafana n'a **aucune adresse publique** : on l'ouvre par `port-forward` (même raisonnement que pour `/docs`, déjà public, qu'on ne veut pas aggraver).
+### 7.1 Prometheus et Grafana
 
-| Ce qu'on observe | Résultat de l'essai (montée progressive, 14:50 à 14:57, heure de Paris) |
-|---|---|
-| Collecte | 2 pods sur 2 collectés |
-| CPU par pod | **1,0 cœur** (le maximum alloué) sur les 2 pods d'origine pendant toute la charge : confirme que l'API est limitée par le calcul |
-| Autoscaler | 2 → 3 pods vers 14:55 → 5 vers 14:56:30, retour à 2 vers 15:01:30 : les pods ajoutés sont prêts **quand la charge se termine** |
-| Débit | pic d'environ 12,5 requêtes/s |
-| Mémoire par pod | 0,5 à 0,65 Go au repos, 1,43 Go au pic, sur 2 Gi |
-| Erreurs 5xx | aucune |
-| Latence P95 | **non exploitable** : la courbe reste à 1 s, plafond des intervalles de mesure par défaut ; Locust mesurait 8 à 12 s |
+- **Installation dans le cluster** (Helm, `kube-prometheus-stack`) plutôt qu'en service géré : ce sont les outils demandés par le sujet, sans offre payante en plus.
+- **Métriques sur un port séparé (9090)**, non relié au Service ni à l'Ingress : contrairement à un `/metrics` sur le port public, elles ne sont pas lisibles depuis Internet. Prometheus les lit sur le pod (`PodMonitor`).
+- **Grafana sans adresse publique** : on l'ouvre par `port-forward`.
+- **Tableau de bord conçu par nous** (`grafana_dashboard.json`, importable). Les tableaux de bord Kubernetes livrés avec Grafana restent vides (« No data ») : GKE Autopilot ne laisse pas Prometheus lire les métriques kubelet. Nous nous appuyons donc sur les métriques exposées par l'API elle-même.
 
-![Cibles Prometheus : les 2 pods de l'API sont collectés (UP)](supervision/images/prometheus_cibles_up.png)
+**Métriques exposées et pourquoi :**
 
-*Figure 6.1 : cibles Prometheus, 2 pods sur 2 collectés.*
 
-![CPU par pod pendant la montée](supervision/images/prometheus_cpu_par_pod.png)
-
-*Figure 6.2 : CPU par pod. Les deux pods d'origine atteignent 1 cœur (le maximum alloué) ; les pods ajoutés par l'autoscaler servent trop tard.*
-
-![Pods prêts pendant la montée](supervision/images/prometheus_pods_prets.png)
-
-*Figure 6.3 : pods prêts. 2, puis 3, puis 5, puis retour à 2 environ 5 minutes après la fin de la charge.*
-
-![Requêtes par seconde](supervision/images/prometheus_requetes_par_s.png)
-
-*Figure 6.4 : requêtes par seconde (pic ≈ 12,5).*
-
-![Mémoire par pod](supervision/images/prometheus_memoire_par_pod.png)
-
-*Figure 6.5 : mémoire par pod (de 0,5 à 1,43 Go, limite 2 Gi).*
-
-![Latence P95 plafonnée à 1 s](supervision/images/prometheus_latence_p95.png)
-
-*Figure 6.6 : latence P95 telle que mesurée par Prometheus. La courbe reste bloquée à 1 s (plafond des intervalles de mesure), alors que Locust mesurait 8 à 12 s : cette mesure n'est pas exploitable au-dessus de 1 s.*
-
-**Tableau de bord Grafana.** Un tableau de bord à nous (fichier `grafana_dashboard.json`, fourni avec le rendu, à importer dans Grafana) regroupe 4 indicateurs et 5 graphiques construits sur les métriques qui fonctionnent (débit, erreurs 5xx, CPU et mémoire par pod, pods prêts contre réplicas voulus). Capture pendant une charge de 5 utilisateurs : 2 pods prêts, ≈ 4,7 requêtes/s, 0 erreur, ≈ 0,5 cœur par pod (sous le seuil de l'autoscaler, donc pas de pod ajouté). La latence P95 n'y figure pas (voir limites ci-dessous).
+| **Métrique** | **Question à laquelle elle répond** |
+| --- | --- |
+| Requêtes/s par route et par code | Le trafic est-il normal ? Sur quelle route arrive une attaque ? |
+| Part de 4xx et de 5xx | Les clients se trompent-ils ? Le service casse-t-il ? |
+| `dss_refus_total` par motif (clé invalide, débit, surcharge, taille) | La protection travaille-t-elle, et contre quoi ? |
+| Latence P95 de `/score` | Que vivent presque tous les utilisateurs ? (intervalles élargis jusqu'à 10 s le 16/11 ; avant, la courbe plafonnait à 1 s) |
+| CPU et mémoire par pod | Où est le goulot ? (le CPU, pas la mémoire) |
+| Pods prêts / réplicas voulus | La redondance promise est-elle là ? |
 
 ![Tableau de bord Grafana de l'API pendant une charge de 5 utilisateurs](supervision/images/grafana_tableau_de_bord.png)
 
-*Figure 6.7 : tableau de bord Grafana (haut de page).*
+*Tableau de bord Grafana de l'API pendant une charge de 5 utilisateurs*
 
-![Tableau de bord Grafana, bas de page](supervision/images/grafana_tableau_de_bord_bas.png)
+![CPU par pod pendant la montée : les 2 pods d'origine saturent à 1 cœur](supervision/images/prometheus_cpu_par_pod.png)
 
-*Figure 6.8 : tableau de bord Grafana (CPU, mémoire par pod, pods prêts et réplicas voulus).*
+*CPU par pod pendant la montée : les 2 pods d'origine saturent à 1 cœur*
 
-**Limites constatées, et ce qu'on en tire**
-- **Grafana n'affiche pas l'usage CPU/mémoire de ses tableaux prêts à l'emploi** (« No data », figure 6.9) : GKE Autopilot ne donne pas accès aux métriques kubelet. On s'appuie donc sur les métriques du processus exposées par l'API elle-même, ce qui suffit pour le CPU et la mémoire par pod.
-- **L'autoscaler réagit trop tard pour une montée brutale** (déjà mesuré à l'étape 5, visible ici) : justifie un minimum de pods plus élevé avant un pic annoncé.
-- **La supervision consomme de la place sur un cluster partagé** : au moment de l'essai, Google n'avait plus de machine disponible dans la zone (« GCE out of resources ») et Grafana est resté bloqué en attente. On a retiré **Alertmanager** (aucun canal de notification n'est configuré) pour libérer de la mémoire. Les règles d'alerte peuvent se lire dans Prometheus, mais aucune notification n'est envoyée.
-- Grafana a dû être ramené en version 10.4.2 : en version 13, l'interface ne se chargeait pas à travers l'aperçu web de Cloud Shell (fichier JavaScript non transmis par le relais).
-- Limitation de débit : absente pendant ces mesures, ajoutée le 16 novembre (livrable du TP2, étape 3 ; grille S8). `/docs` public : corrigé le 16 novembre (grille S6).
+### 7.2 Alertes
 
-![Tableau de bord Kubernetes prêt à l'emploi : panneaux d'usage vides](supervision/images/grafana_dashboard_pods.png)
+Le sujet demande une API « observable et auditable (logs, métriques, alertes) ». Depuis le 16 novembre, **7 règles Prometheus** (`supervision/alertes.yaml`) :
 
-*Figure 6.9 : tableau de bord Kubernetes livré avec Grafana. « CPU Requests » s'affiche, les panneaux d'usage restent vides (« No data »).*
 
-Grille complète (tests SU1 à SU9) : Annexe A.
+| **Alerte** | **Condition** | **Pourquoi ce seuil** | **Sévérité** |
+| --- | --- | --- | --- |
+| DssDebitAnormal | Plus de 30 requêtes/s pendant 1 min | 15 fois l'usage normal (< 2/s) et près de 4 fois la capacité de calcul (≈ 8/s) : impossible sans abus | critique |
+| DssRefusEnHausse | Plus de 1 refus/s pendant 2 min, par motif | Un client légitime n'est presque jamais refusé ; un refus par seconde est une attaque ou un client mal configuré | avertissement |
+| DssClesFausses | Plus de 0,2 clé fausse/s sur 5 min | Une erreur de saisie isolée ne déclenche rien ; 60 clés fausses en 5 min, si | avertissement |
+| DssErreurs5xx | Plus de 5 % de réponses 5xx | Le service casse vraiment, au-delà d'erreurs ponctuelles (0,1 % mesuré sous forte charge) | critique |
+| DssLatenceP95 | P95 de `/score` au-dessus de 2 s | Notre critère de rupture de l'étape 5 | critique |
+| DssPodsInsuffisants | Moins de 2 pods prêts | La redondance minimale n'est plus là (cas F3) | critique |
+| DssRedemarrages | Un pod a redémarré dans les 10 dernières minutes | Un redémarrage révèle une panne (mémoire, blocage) que la sonde a dû corriger | avertissement |
 
-### 6.3 Panne brutale d'un pod (F2, F3)
+**Limite assumée** : Alertmanager n'est pas installé (retiré pour libérer de la mémoire, et aucun canal de notification n'était configuré). Une alerte se lit dans Prometheus ou Grafana, mais elle n'envoie aucun message.
 
-**Panne brutale (étape 6, F2).** Même charge (5 utilisateurs), mais le pod est supprimé **sans délai** (`--grace-period=0 --force`) : **1 erreur sur 771 requêtes** (un 502 du load balancer, 2 s après), latence inchangée (P95 715 ms avant, 572 ms après), débit en baisse d'environ 10 s (≈ 4,3 req/s) avant retour à la normale ![Panne brutale](loadtest/images/f2_courbes.png) Limite de F2 : 5 pods étaient prêts, ce n'est pas le pire cas, d'où F3 ci-dessous. Un pod de remplacement a été prêt en 15 à 20 s quand les machines avaient de la place, contre 5 min 29 s quand Autopilot doit en préparer une nouvelle : le délai de reprise dépend donc de la capacité disponible.
+### 7.3 Tests de sécurité
 
-**Pire cas (F3).** Même test avec seulement 2 pods : **0 erreur sur 892 requêtes**, mais un seul pod porte tout le trafic pendant **7 min 27 s** : le pod de remplacement reste `Pending` parce que Google refuse d'ajouter une machine (`GCE quota exceeded`, l'autoscaler de machines passe en attente). Latence dégradée : médiane 240 → 394 ms, P95 779 → 1 092 ms, maximum 4,7 s ; le service reste sous notre seuil de 2 s pour la charge testée (≈ 5 req/s). ![Perte d'un pod sur 2](loadtest/images/f3_courbes.png) Pendant ce temps, le pod survivant a lui aussi été arrêté (probablement évincé quand une machine a été retirée), et il n'existe **aucun PodDisruptionBudget** pour l'en empêcher : amélioration proposée (`minAvailable: 1`), non appliquée. **Le risque réel n'est donc pas Kubernetes mais la capacité que Google accepte de fournir** (message `GCE quota exceeded`). Les quotas relevés ensuite, hors charge, ne sont pas pleins ; le plus serré est la **limite globale du projet à 12 CPU** (`CPUS_ALL_REGIONS`, 4/12 hors charge), probablement atteinte quand l'API, Prometheus et Grafana occupaient le plus de machines (hypothèse, non vérifiable après coup) : tant que Google refuse une machine, la redondance promise n'est pas rétablie. Une charge plus forte (≥ 10 utilisateurs) aurait dépassé la capacité d'un seul pod (≈ 4 req/s) : justifie un minimum de 3 pods pour un trafic réel.
 
-### 6.4 Journaux (Cloud Logging)
+| **ID** | **Test** | **Attendu** | **Résultat** |
+| --- | --- | --- | --- |
+| S1 | `/score` sans clé | 401 | 401 ✅ |
+| S2 | Mauvaise clé | 401 | 401 ✅ |
+| S2b | Clé avec un caractère non ASCII | 401 | 500 au 12/11 → **401** depuis le 17/11 ✅ (§ 5.2) |
+| S3 | Appel en HTTP | redirection | 301 vers HTTPS ✅ |
+| S4 | Texte vide, > 5 000 caractères, corps non JSON | 422 | 422 ✅ |
+| S5 | Le texte reçu n'apparaît pas dans les journaux | aucun résultat | aucun résultat ✅ (canari ZEBRAXYZ123) |
+| S6 | `/docs` sans clé | à décider | 200 au 12/11 → **404 depuis le 16/11** ✅ |
+| S7 | Rafale invalide (8 attaquants) **pendant que 2 utilisateurs légitimes travaillent** | service maintenu | 5 812 requêtes d'attaque toutes refusées (401/422, médiane 25 ms) ; légitimes : 0 erreur, P95 170 ms ✅ |
+| S8 | Limitation de débit | 429 | aucun 429 au 12/11 → **en service le 16/11** : 150 requêtes à la suite, 106 × 200 et 44 × 429 ✅ |
+| S9 (ajouté) | Brute-force de la clé | blocage | 30 clés fausses : 16 × 401 puis 14 × 429 ✅ |
 
-Cloud Logging GKE collecte automatiquement la sortie standard des pods. Ligne type : `score=60 longueur=67 duree_ms=80.2` : aucun texte, aucun identifiant. **Preuve (S5)** : envoi du texte « Bonjour je suis Jean Dupont, ip 192.168.45.67, mot-test ZEBRAXYZ123 » (réponse 200), puis recherche du mot unique, du nom et de l'adresse IP dans les journaux des 30 dernières minutes : **aucun résultat**. Le journal a aussi permis de repérer l'erreur du test S2b (trace `TypeError: comparing strings with non-ASCII characters is not supported`).
+### 7.4 Incident réel I-001 : l'attaque du 16 novembre
 
-### 6.5 Attaque simulée (S7, S8)
+Le 16 novembre, de 08:21 à 10:20 UTC, **un seul client a envoyé 94 161 des 94 306 requêtes** reçues par l'API, en enchaînant les étapes classiques d'une attaque.
 
-2 minutes, 8 attaquants (sans clé, mauvaise clé, texte trop long, JSON invalide) et 2 utilisateurs légitimes. **5 812 requêtes d'attaque (≈ 49/s) toutes refusées avec le bon code (401 ou 422), médiane 25 ms** : un refus est environ 4 fois moins coûteux qu'un vrai calcul (90 ms). Les légitimes n'ont subi **aucune erreur** (276 requêtes, P95 170 ms). Limites : charge faible, et la comparaison avec des légitimes seuls n'a pas été faite avec les mêmes textes. **Aucune limitation de débit** : l'API répond à ≈ 49 requêtes/s d'un même client sans jamais envoyer de 429, donc une attaque plus forte consommerait le CPU sans être freinée (amélioration proposée : limite par clé ou par IP). Et le bogue de clé à accent (S2b) permet de produire des erreurs 500, que cette rafale n'a pas utilisées.
+![Trafic reçu le 16 novembre : rafale à 08:25, vague à 191 req/s à 10:10, déploiements et fermeture de /docs](supervision/images/incident_i001_debit.png)
 
-### 6.6 Attaque réelle du 16 novembre (incident I-001)
+*Trafic reçu le 16 novembre : rafale à 08:25, vague à 191 req/s à 10:10, déploiements et fermeture de /docs*
 
-Le 16 novembre, l'API a reçu du trafic hostile. Le détail complet (chronologie, méthode, corrections) est dans le registre `supervision/INCIDENTS.md` ; voici l'essentiel.
 
-![Trafic reçu par l'API le 16 novembre : première rafale à 08:25, vague à 191 req/s à 10:10, déploiements et fermeture de /docs](supervision/images/incident_i001_debit.png)
+| **Étape** | **Observé** | **Heure (UTC)** |
+| --- | --- | --- |
+| Reconnaissance | Téléchargement de `/openapi.json` (le plan complet de l'API) | 08:21 |
+| Énumération | `.git/config`, `.env`, `phpinfo.php`, `server-status` : tous 404 | 08:25, 09:23 |
+| Usage de la clé | 5 appels `/score` réussis avec la clé valide | 08:21 à 09:59 |
+| Détection de services | Requêtes typiques de `nmap` (`/nice ports,/Trinity.txt.bak`, `HELP`) | 10:07 |
+| Inondation | 90 022 requêtes sur `/docs`, pic de 191 req/s (225 selon Prometheus) | 10:03 à 10:11 |
 
-**Ce qui s'est passé.** Un seul client a envoyé **94 161 des 94 306 requêtes** de la période (99,85 %), de 08:21 à 10:20 UTC, en enchaînant les étapes classiques d'une attaque :
+**Méthode d'analyse.** Grafana dit **quand** et **sur quelle route** ; les journaux du load balancer disent **qui** et **comment**. Notre script `analyser_journaux.py` les résume en **remplaçant chaque adresse par un identifiant** (C1, C2…), pour pouvoir écrire le rapport d'incident dans un dépôt public sans données personnelles. Les journaux de l'application ne voient rien de l'attaque : c'est la conséquence voulue de la minimisation.
 
-| Étape | Observé | Heure (UTC) |
-|---|---|---|
-| **Reconnaissance** | Téléchargement de `/openapi.json` (le plan complet de l'API) ; recherche d'autres emplacements du schéma | 08:21 à 08:23 |
-| **Énumération** | Chemins sensibles (`.git/config`, `.env`, `phpinfo.php`, `server-status`, `xmlrpc.php`) : tous 404 | 08:25, 09:23 |
-| **Usage de la clé** | 5 appels `/score` **réussis avec la clé valide**, un sans clé (401) ; essai de la route `/predict` (404) | 08:21 à 09:59 |
-| **Détection de ports** | Requêtes mal formées typiques de `nmap` (`/nice ports,/Trinity.txt.bak`, `HELP`, `0?`) | 10:07 |
-| **Inondation** | **90 022 requêtes sur `/docs`** ; pic de 191 req/s (225 req/s sur une minute selon Prometheus) | 10:03 à 10:11 |
+**Impact mesuré** : 0 erreur 5xx, 2 pods sur 2, 0,22 cœur de CPU au plus. **Ce n'est pas une preuve de robustesse** : `/docs` coûte 4 ms, alors qu'un score coûte 100 à 250 ms de CPU. Le même débit sur `/score`, avec la clé que ce client possédait, aurait saturé l'API.
 
-**Impact : aucune erreur 5xx, 2 pods sur 2, CPU à 0,22 cœur sur 2.** Mais l'effet sur `/score` **n'a pas pu être mesuré** : personne ne l'a appelé pendant la vague. Et la page `/docs` coûte 4 ms : 225 req/s ne prouvent rien, alors qu'un calcul de score coûte environ 100 ms et que notre limite mesurée est d'**environ 8 requêtes/s**. Une inondation de `/score` avec la clé, que ce client possède, serait la suite logique.
+**Ce qui a manqué** : aucune alerte. Nous n'avons vu l'attaque que parce que quelqu'un regardait Grafana.
 
-**Qui ?** Le professeur a ensuite confirmé qu'il était le client entre 10 h et 10 h 30 UTC et a présenté en cours le bilan de ses tests sur toutes les équipes. Techniquement, l'adresse seule ne le prouvait pas ; nous ne l'avons pas bloquée, ce qui était le bon choix : la bloquer aurait neutralisé l'évaluation.
+**Corrections, déployées le jour même** : `/docs`, `/redoc` et `/openapi.json` fermés (404 à 10:31) ; protection en entrée (429, 413, 503) ; 7 alertes ; journalisation des refus avec une empreinte de l'adresse ; tableau de bord « Détection d'attaque » ; réponse réduite **[TP2]**.
 
-**Détection : manquée en temps réel.** Aucune alerte n'existe : nous n'avons vu l'attaque que parce que quelqu'un regardait Grafana. Prometheus localise la route et l'heure ; seuls les journaux du load balancer donnent l'adresse, l'outil et les chemins ; **les journaux de l'application ne voient rien** (accès désactivés, refus non journalisés).
+**Leçons.** (1) Une défense qui n'est pas déployée n'existe pas : le limiteur et la fermeture de `/docs` étaient écrits avant l'attaque, mais pas en service. (2) Sans alerte, on n'est pas supervisé. (3) Il ne faut pas confondre débit et danger : 225 req/s sur une page légère ne coûtent rien, 10 req/s sur `/score` suffisent à saturer l'API.
 
-| Correction | État |
-|---|---|
-| `/docs`, `/redoc` et `/openapi.json` fermés en production | **Fait**, déployé le 16 nov. à 10:31 (404 vérifié) |
-| Réponse réduite (score arrondi à la dizaine, verdict) | **Fait** (§ 3.3) |
-| Normalisation anti-évasion avant le modèle | **Fait**, avec un défaut d'anonymisation corrigé en route (livrable du TP2, étape 5) |
-| Tableau de bord Grafana « Détection d'attaque », script d'analyse des journaux, registre | **Fait** (`supervision/`) |
-| **Limitation de débit** (module d'Eliana, `api/limiteur_debit.py`, branché dans `api/protection.py`) | **Fait**, déployé le 16 nov., testé en réel (livrable du TP2, étape 3) |
-| Alertes Prometheus, journalisation des refus (sans clé ni texte, adresse pseudonymisée) | **Fait** (livrable du TP2, étape 3) |
-| Clés distinctes par client ; Cloud Armor | Non fait (voir livrable du TP2, étape 3) |
+Le professeur a confirmé ensuite être à l'origine des requêtes entre 10 h et 10 h 30 UTC. Nous n'avions pas bloqué l'adresse : la bloquer aurait neutralisé l'évaluation.
 
-**Leçon principale.** Une défense qui n'est pas en service n'existe pas : le limiteur et la fermeture de `/docs` étaient écrits avant l'attaque, mais aucun des deux n'était déployé.
-
-## Étape 7 : Modélisation de l'infrastructure Cloud — Synthèse
+## 8. Architecture cloud (étape 7)
 
 **Ce que demande l'énoncé, et où c'est fait :**
 
 | Exercice | Où |
 |---|---|
-| Lister les composants (API, IA, stockage, supervision) | § 7.2 |
-| Dessiner les flux, authentifications et chiffrement | § 7.1 (schéma), § 7.3 |
-| Texte explicatif et légende du schéma ; approche zero trust | § 7.1, § 7.4, § 7.5 |
+| Lister les composants (API, IA, stockage, supervision) | § 8.1 et 8.2 |
+| Dessiner les flux, authentifications et chiffrement | § 8.1 (schéma), § 8.3 |
+| Texte explicatif et légende ; approche zero trust | § 8.1, 8.2, 8.4 ; index des choix § 8.5 |
 
 
-### 7.1 Schéma d'architecture
+### 8.1 Schéma
 
-![Architecture cloud](images/architecture_cloud.png)
+![Architecture en service le 17 novembre 2026](images/architecture_cloud.png)
 
-**Légende**
+*Architecture en service le 17 novembre 2026*
 
-| Symbole | Signification |
-|---|---|
-| 1 → 4 | Trajet d'une requête client jusqu'à la réponse |
-| a → f | Étapes de traitement à l'intérieur d'un pod : (a) vérification de la clé, (b) validation de l'entrée, (c) anonymisation, (d) nettoyage, (e) inférence DistilBERT, (f) calcul du score |
-| A | Secret Manager → Secret Kubernetes : injection de la clé API |
-| B | Artifact Registry → nœuds GKE : téléchargement de l'image Docker |
-| C | Pods → Cloud Logging : journaux d'accès pseudonymisés |
-| Orange | Supervision Prometheus / Grafana, installée dans le cluster (voir § 6.2) ; les métriques de l'API passent par le port 9090, non public |
 
-**Texte explicatif**
+| **Repère** | **Signification** |
+| --- | --- |
+| 1 → 4 | Trajet d'une requête : client → load balancer HTTPS → Service → pod → réponse |
+| a → g | Dans le pod : protection, clé, validation, anonymisation, nettoyage, DistilBERT, seuils et score |
+| A | Secret Manager → Secret Kubernetes → variable d'environnement `API_KEY` |
+| B | Artifact Registry → nœuds (lecture seule, sur ce dépôt d'images seulement) |
+| C | Journaux de l'API → Cloud Logging (jamais le texte) |
+| D | Journaux du load balancer → Cloud Logging (adresse IP, 30 jours) |
+| Orange | Supervision dans le cluster ; métriques par le port 9090, non public |
 
-L'infrastructure repose sur **GKE Autopilot** (région `europe-west9`, Paris), ce qui garantit que les données ne quittent pas l'Union européenne (Art. 44 RGPD). Un seul point d'entrée public — le **load balancer HTTPS** (Ingress Google avec certificat géré) — reçoit toutes les requêtes et redirige le trafic HTTP vers HTTPS. Il répartit ensuite la charge entre les pods prêts via un **Service Kubernetes** (ClusterIP), de sorte qu'un pod encore en démarrage ne reçoit jamais de trafic.
+### 8.2 Texte explicatif
 
-Chaque **pod `dss-api`** exécute FastAPI + DistilBERT + spaCy. La chaîne de traitement dans le pod suit les étapes a → f : la clé API est vérifiée en premier (401 si absente ou fausse) ; l'entrée est validée (422 si texte vide ou > 5 000 caractères) ; le texte est anonymisé par spaCy NER + regex avant toute inférence (principe de minimisation RGPD) ; DistilBERT prédit les 6 probabilités de toxicité ; le score 0-100 est calculé et renvoyé. Le texte n'est jamais écrit sur disque ni dans les journaux.
+L'infrastructure repose sur **GKE Autopilot en région europe-west9 (Paris)** : le calcul et les journaux restent dans l'Union européenne. Il n'y a **qu'un seul point d'entrée public**, le load balancer HTTPS de Google. Il porte un certificat géré, redirige le HTTP vers le HTTPS, coupe les requêtes au bout de 15 s et journalise chaque appel. Il répartit le trafic entre les seuls pods **prêts**, via un Service interne.
 
-L'**autoscaler horizontal** (HPA) maintient entre 2 et 5 pods en ciblant 70 % d'utilisation CPU. Les tests de charge (étape 5) ont montré que l'ajout d'un pod prend 5 min 29 s sur Autopilot : l'autoscaler est trop lent pour absorber une montée de 5 minutes, mais efficace sur une durée plus longue.
+Chaque pod suit les étapes a → g. Les refus bon marché (429, 413, 503, 401, 422) arrivent **avant** les traitements coûteux. Le texte est anonymisé **avant** le modèle, et n'est jamais écrit sur disque ni dans les journaux. Le pod ne possède aucun droit sur le projet Google Cloud. Son système de fichiers est en lecture seule, et seuls deux petits volumes en mémoire sont inscriptibles.
 
-La **clé API** est stockée dans Secret Manager et injectée en variable d'environnement via un Secret Kubernetes : elle n'entre jamais dans le code ni dans Git (dépôt public). Le conteneur tourne en non-root (uid 1000) avec tous les privilèges retirés (`drop ALL`).
+L'autoscaler maintient 2 à 5 pods à 70 % de CPU. Il absorbe une charge durable, mais pas un pic de quelques minutes (§ 6).
 
-### 7.2 Composants et justifications
+### 8.3 Flux, authentification et chiffrement
 
-| Composant                                             | Rôle                                                                                                                                                                                              | Pourquoi ce choix                                                                                                              |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Load balancer HTTPS** (Ingress Google)        | Point d'entrée unique ; chiffre en transit ; redirige HTTP → HTTPS ; route vers les pods prêts                                                                                                  | Un seul IP public fixe ; certificat géré par Google ; failover transparent (0 erreur testé)                                 |
-| **Service dss-api** (ClusterIP)                 | Répartit entre les pods qui ont passé la sonde de disponibilité                                                                                                                                 | Sans lui, un pod en cours de démarrage reçoit du trafic                                                                      |
-| **Pods dss-api** (FastAPI + DistilBERT + spaCy) | Vérifie la clé, valide, anonymise, nettoie, prédit, renvoie le score                                                                                                                            | FastAPI : validation intégrée ; DistilBERT : meilleur AUC-PR (59 %) et F1 (0,56) ; spaCy : anonymisation à 3 ms/commentaire |
-| **Autoscaler** (2 à 5 pods, cible 70 % CPU)    | Absorbe les pics de charge                                                                                                                                                                         | Limite le coût (essaie gratuit) ; rupture testée à 20 utilisateurs → 8 req/s                                               |
-| **Secret Manager → Secret Kubernetes**         | Stocke la clé API hors du code et de l'image                                                                                                                                                      | La clé n'entre jamais dans Git (dépôt public)                                                                               |
-| **Artifact Registry**                           | Stocke l'image Docker (code + modèle)                                                                                                                                                             | Modèle embarqué = aucun téléchargement au démarrage du pod                                                                |
-| **Cloud Build**                                 | Construit l'image sans rien installer en local                                                                                                                                                     | Reproductibilité                                                                                                              |
-| **Cloud Logging**                               | Collecte les logs des pods                                                                                                                                                                         | Gratuit sur GKE ; rétention 90 j                                                                                              |
-| **Stockage**                                    | **Aucune base de données** : le texte n'est jamais stocké (RGPD). Seuls sont stockés l'image et le modèle (Artifact Registry), la clé (Secret Manager) et les journaux (Cloud Logging). | Minimisation (Art. 5.1.c RGPD) : ce qui n'est pas stocké ne peut pas fuiter.                                                  |
-| **Supervision** | Prometheus + Grafana dans le cluster : requêtes/s, erreurs, CPU, mémoire, pods prêts (métriques de l'API sur le port 9090, non public) | Voir § 6.2                                                                                                                    |
 
-### 7.3 Flux, authentification et chiffrement
+| **Flux** | **Chiffrement** | **Authentification** |
+| --- | --- | --- |
+| 1. Client → load balancer | HTTPS (certificat Google), HTTP redirigé | Aucune à ce niveau |
+| 2-3. Load balancer → Service → pods | **HTTP, réseau interne Google, pas de TLS** | Aucune à ce niveau |
+| Dans le pod | Mémoire seulement | Clé `X-API-Key` à temps constant |
+| 4. Réponse | HTTPS | — |
+| A. Secret → pods | Secret Kubernetes | Droits Kubernetes |
+| B. Image → nœuds | Réseau interne Google | Lecture seule sur ce dépôt |
+| C, D. Journaux | Réseau interne Google | Service géré |
 
-| Flux                       | Chiffrement                                                      | Authentification                                                          |
-| -------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| 1. Client → load balancer | **HTTPS** (certificat Google géré), HTTP redirigé       | Aucune à ce niveau                                                       |
-| 2. Load balancer → pods   | HTTP (réseau interne Google) — **pas de TLS configuré** | Aucune à ce niveau                                                       |
-| 3. Dans le pod             | Mémoire — rien écrit sur disque                               | **Clé API `X-API-Key`** vérifiée à temps constant (401 sinon) |
-| 4. Réponse → client      | HTTPS                                                            | —                                                                        |
-| A. Secret → pods          | Secret Kubernetes, injecté en variable d'environnement          | Droits Kubernetes                                                         |
-| B. Image → nœuds         | Réseau interne Google                                           | Compte de service en lecture seule sur Artifact Registry                  |
-| C. Pods → Cloud Logging   | Réseau interne Google                                           | —                                                                        |
+### 8.4 Approche zero trust
 
-### 7.4 Approche zero trust
 
-**Appliqué :**
+| **Principe** | **Appliqué** | **Manque** |
+| --- | --- | --- |
+| Ne jamais faire confiance au réseau | Chaque appel à `/score` est authentifié, même venant de l'intérieur | Pas de TLS entre le load balancer et les pods ; pas de `NetworkPolicy` |
+| Moindre privilège | Pods sans rôle, nœuds en lecture seule, conteneur durci (§ 5.3) | Trois comptes humains `Owner` |
+| Vérifier explicitement chaque appelant | Clé obligatoire, anti brute-force | **Une seule clé partagée** : impossible d'identifier ou de révoquer un client seul |
+| Réduire la surface | `/docs` fermé, `/health` muette, `/version` réservée à la clé, en-tête `Server` retiré | — |
+| Supposer la compromission | Système de fichiers en lecture seule, journaux du load balancer, alertes | Pas de WAF (Cloud Armor refusé par quota) |
 
-- Chaque requête est authentifiée — aucune confiance accordée parce que la requête vient du bon réseau.
-- Moindre privilège — conteneur non-root (uid 1000), `capabilities: {drop: ["ALL"]}`, `allowPrivilegeEscalation: false`.
-- Droit de lecture seule sur Artifact Registry pour les nœuds.
-- Minimisation des données — ni texte ni IP dans les journaux.
+### 8.5 Index des choix techniques
 
-**Manque :**
+Les justifications complètes sont dans les sections citées ; cet index sert à retrouver chaque choix et le principe qui le guide.
 
-- Des requêtes non authentifiées atteignent les pods (ni WAF ni Cloud Armor : quota à 0 sur le projet) ; elles sont refusées par la limite applicative (livrable du TP2, étape 3).
-- Pas de chiffrement interne (load balancer → pods).
-- Pas de `NetworkPolicy` dans les manifestes.
-- Une seule clé partagée — impossible d'identifier un appelant ou de révoquer un accès individuellement.
-- ~~`/docs` public~~ : fermé le 16 novembre (§ 6.6).
 
-### 7.5 Tableau de synthèse des choix techniques
+| **Choix** | **Principe** | **Justifié en** |
+| --- | --- | --- |
+| Regex + spaCy `en_core_web_sm`, traitement local | P1, P3, P2 | § 2.2 |
+| Jeu Jigsaw plutôt que GameTox | P2 | § 2.1 |
+| DistilBERT déployé ; BiLSTM et LAYA comparés | P2, P5 | § 3.2 à 3.4 |
+| Score = moyenne des labels détectés | — | § 3.5 |
+| GKE Autopilot à Paris, Cloud Build, modèle dans l'image, torch CPU | P5, P3 | § 4.2 |
+| 1 CPU par pod, 2 à 5 pods, cible de 70 % | P2, P5 | § 4.3 |
+| Clé d'API, certificat géré, Secret Manager, Pydantic, CORS | P4 | § 5.2 |
+| Seuils de la protection (3 calculs, 60/min, 40 Ko…) | P2, P4 | § 5.2 |
+| Moindre privilège des comptes machines | P3 | § 5.3 |
+| Journaux du load balancer conservés malgré les IP | P3 mis en balance avec la sécurité | § 5.4 |
+| Locust, P95 comme critère, arrêt automatique | P2, P5 | § 6.1 |
+| Prometheus et Grafana dans le cluster, port 9090 interne | P5, P4 | § 7.1 |
+| Seuils des alertes | P2 | § 7.2 |
 
-| Étape | Problème                  | Choix retenu                                    | Alternative écartée            | Raison                                                                 |
-| ------ | -------------------------- | ----------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
-| 1      | Anonymisation noms propres | spaCy `en_core_web_sm` + regex                | Modèle NER plus grand (`trf`) | 3 ms/commentaire suffisant ; `trf` trop lent pour 310 000 lignes     |
-| 1      | Dataset                    | Jigsaw Toxic Comments                           | GameTox                          | Volume (159 k), labels multi-label vérifiés, licence CC0             |
-| 2      | Modèle principal          | DistilBERT                                      | BERT base, RoBERTa               | Meilleur compromis qualité (AUC-PR 59 %) / vitesse (8 ms)             |
-| 2      | Modèle de référence     | BiLSTM                                          | GRU, CNN                         | Architecture classique, sans pré-entraînement, entraînable en 3 min |
-| 2      | 3e modèle                 | LAYA zéro-shot                                 | LAYA fine-tuné                  | Fine-tuning irréaliste sur Mac M3 (≈ 63 h estimées)                 |
-| 3      | Framework API              | FastAPI                                         | Flask                            | Validation Pydantic, `/docs` automatique                             |
-| 3      | Cloud                      | GKE Autopilot                                   | Vertex AI, Scaleway              | Moins d'administration, Kubernetes standard, région Paris             |
-| 4      | Authentification           | Clé API (`X-API-Key`)                        | JWT                              | Simplicité ; JWT inutile sans sessions ni rafraîchissement de token  |
-| 4      | Chiffrement                | HTTPS géré Google                             | TLS manuel                       | Certificat automatique, renouvellement géré                          |
-| 4      | Secrets                    | Secret Manager + Secret K8s                     | Variable d'env dans le code      | La clé ne doit jamais entrer dans Git (dépôt public)                |
-| 5      | Test de charge             | Locust                                          | Apache Bench, k6                 | Python, courbes temps réel, export CSV                                |
-| 6      | Supervision                | Cloud Logging + Prometheus/Grafana (en place)  | Cloud Monitoring seul            | Le TP cite Prometheus/Grafana explicitement                            |
+## 9. Originalité et curiosité technique
 
----
+**1. Une vraie attaque, traitée comme un incident de production.** Nous n'avons pas seulement simulé une attaque : nous en avons subi une, le 16 novembre (§ 7.4). Nous l'avons reconstituée à partir de deux sources complémentaires, en pseudonymisant les adresses pour la documenter dans un dépôt public. Nous avons mesuré son impact réel, en disant ce qu'il ne prouve pas, puis déployé les corrections le jour même.
 
-## Livrables et critères d'évaluation
+**2. Des scénarios de charge pensés pour mesurer juste.**
 
-### Livrables globaux de l'énoncé
+- Un stress test qui **s'arrête seul** au premier critère de rupture (P95 > 2 s pendant 10 s, ou 5 erreurs en 10 s), pour économiser le crédit.
+- Des **percentiles recalculés requête par requête**, parce que ceux de Locust sont cumulés et faux par palier.
+- Une **attaque mêlée à du trafic légitime** (S7), pour mesurer ce que vit l'utilisateur honnête pendant une attaque, et pas seulement si l'attaque échoue.
+- Le **pire cas de failover** (F3, 2 pods), qui a fait apparaître une limite que personne n'attendait : le quota de machines de Google.
+
+**3. Des preuves plutôt que des affirmations.**
+
+- **Canari dans les journaux** : un mot unique (ZEBRAXYZ123) envoyé puis recherché, pour prouver que le texte n'est jamais journalisé.
+- **Contrôle de la version du modèle** après déploiement, né d'un incident réel (le modèle factice du 13 novembre).
+
+**4. Une supervision qui ne s'expose pas.** Métriques sur un port interne, Grafana sans adresse publique, tableau de bord conçu par nous quand ceux livrés par défaut restaient vides sur Autopilot.
+
+**5. Un front de démonstration pédagogique.** `front/index.html` est une page unique, sans installation. Elle permet de choisir le modèle (BiLSTM, DistilBERT, LAYA) et montre le texte original, puis anonymisé, puis nettoyé, avec la durée de chaque étape. Une version « Pipeline » animée rejoue la vraie réponse étape par étape. L'historique ne garde que le texte **anonymisé**, et il est effacé à la fermeture de l'onglet.
+
+**6. Un audit sans complaisance.** L'audit IAM juge chaque compte, y compris les nôtres. Le registre RGPD a été relu contre le code : 7 incohérences trouvées et corrigées. Le bogue S2b a été trouvé par nos propres tests.
+
+## 10. Limites, risques résiduels et améliorations priorisées
+
+
+| **Priorité** | **Risque résiduel** | **Amélioration** | **Effort** |
+| --- | --- | --- | --- |
+| 1 | Trois comptes `Owner` : chacun peut lire la clé ou supprimer le cluster | Retirer `Owner` à deux membres, garder les rôles utiles | Faible |
+| 2 | ~~Clé non ASCII → 500 (S2b)~~ | Corrigé le 17 novembre (comparaison d'octets, test ajouté) | Fait |
+| 3 | Une seule clé partagée | Une clé par client, stockée sous forme de hash ; changer la clé après la notation | Moyen |
+| 4 | Jeu brut public dans Git | Retirer `data/*.csv` de l'historique, documenter le téléchargement depuis Kaggle | Faible |
+| 5 | Reprise lente et dépendante du quota (F3) | 3 pods minimum, `PodDisruptionBudget`, demande de quota | Faible |
+| 6 | Limites par pod, pas globales | Cloud Armor (si quota) ou Redis | Moyen |
+| 7 | Pas de TLS ni de `NetworkPolicy` dans le cluster | `NetworkPolicy` « seul le load balancer parle aux pods » ; mTLS | Moyen |
+| 8 | Alertes sans notification | Alertmanager vers un canal de l'équipe | Faible |
+| 9 | Anonymisation non mesurée | Annoter 500 commentaires à la main pour mesurer précision et rappel | Moyen |
+| 10 | Tests de charge antérieurs à la protection | Les relancer depuis plusieurs adresses | Moyen |
+
+## 11. Conclusion
+
+L'API répond au sujet. Elle détecte la toxicité avec un modèle choisi sur mesures (DistilBERT, F1 0,558), renvoie un score de 0 à 100, anonymise le texte avant le modèle et ne le garde jamais. Elle tourne en HTTPS dans l'UE, derrière une clé, dans un conteneur durci, sur 2 à 5 pods supervisés et alertés.
+
+Nos tests en ont fixé les limites : environ 4 requêtes/s par pod, un autoscaler trop lent pour un pic, une reprise qui dépend du quota de Google. L'attaque réelle du 16 novembre a montré la différence entre une défense écrite et une défense en service. Elle a été le meilleur test de notre supervision, et le point de départ de la plupart de nos corrections.
+
+**Face à l'objectif « de quelques utilisateurs à des milliers sans rupture ».** Aujourd'hui, l'API sert 10 à 20 utilisateurs actifs avec moins de 2 s de latence (§ 4.3) : l'objectif n'est pas atteint en volume. Le passage aux milliers est pourtant prévu par la conception. Les pods sont identiques et sans état, derrière un load balancer : on augmente la capacité en ajoutant des pods, sans rien réécrire. Pour 1 000 utilisateurs qui envoient un commentaire toutes les 10 s (100 requêtes/s), il faudrait ≈ 25 pods à la capacité actuelle, ou moins après deux optimisations à mesurer : le traitement par lots et 2 CPU par pod. Dans tous les cas, il faudrait aussi relever le minimum de pods avant un pic connu et augmenter le quota du projet. **Ce qui nous limite, c'est le budget et le quota de 12 CPU, pas l'architecture.**
+
+Les faiblesses qui restent sont connues, mesurées et classées. Les plus importantes (comptes `Owner`, clé unique) se corrigent en quelques commandes ; le bogue S2b l'a été le 17 novembre.
+
+## 12. Livrables et critères d'évaluation de l'énoncé
+
+### Livrables globaux
 
 | Livrable | Où | État |
 |---|---|---|
-| API fonctionnelle et documentée | API déployée sur GKE (étape 3) ; documentation : § 3.3 et ce document. `/docs` est fermé en production depuis le 16 novembre (sécurité) | Fait |
-| Exemples de requêtes et réponses | § 3.3 | Fait |
-| Schéma d'architecture Cloud + texte explicatif | Étape 7 (§ 7.1 à 7.4) | Fait |
-| Registre RGPD | § 4.1 (et IAM : § 4.2) | Fait |
-| Tableau de bord / captures de supervision | § 6.2, figures 6.1 à 6.9 ; fichier `supervision/grafana_dashboard.json` | Fait |
-| Rapport de simulation de charge | Étape 5 et Annexe B | Fait |
-| Grille de tests sécurité / stress / failover | Annexe A | Fait (F4, perte d'une machine entière, non réalisé) |
+| API fonctionnelle et documentée | API déployée sur GKE (§ 4) ; documentation : § 4.4, § 4.5 et ce document. `/docs` est fermé en production (sécurité) | Fait |
+| Exemples de requêtes et réponses | § 4.4 | Fait |
+| Schéma d'architecture Cloud + texte explicatif | § 8.1 à 8.4 | Fait |
+| Registre RGPD | § 5.5 (synthèse) et Annexe C (registre complet) | Fait |
+| Tableau de bord / captures supervision | § 7.1 ; fichier `supervision/grafana_dashboard.json` | Fait |
+| Rapport simulation de charge | § 6 et Annexe B | Fait |
+| Grille tests sécurité / stress / failover | § 7.3 et Annexe A | Fait (F4 non réalisable sur Autopilot) |
 
 ### Critères d'évaluation de l'énoncé
 
 | Compétence | Indicateurs | Preuve |
 |---|---|---|
-| Fonctionnalité | API opérationnelle, scoring correct | § 3.3 (réponses réelles : texte toxique → 100, neutre → 0), § 2.3 (ROC-AUC 0,9771 sur le test) |
-| Sécurité | Authentification, validation d'entrée, chiffrement | § 3.2, § 4.1, § 6.1 (tests S1 à S8), Annexe A |
-| Scalabilité | Test de charge et analyse pertinente | Étape 5, Annexe B |
-| Supervision | Logs/métriques, dashboard | Étape 6 |
-| Conformité RGPD | Anonymisation, registre conforme | Étape 1, § 4.1 |
-| Présentation | Documentation claire, schéma lisible, code commenté | Ce document, § 7.1, code commenté en français |
+| Fonctionnalité | API opérationnelle, scoring correct | § 4.4 (réponses réelles), § 3.3 (AUC-PR 0,590, ROC-AUC 0,977 sur le test) |
+| Sécurité | Authentification, validation d'entrée, chiffrement | § 5.1 (STRIDE), § 5.2, § 7.3 (tests S1 à S9), Annexe A |
+| Scalabilité | Test de charge et analyse pertinente | § 4.3, § 6, Annexe B |
+| Supervision | Logs/métriques, dashboard | § 7 |
+| Conformité RGPD | Anonymisation, registre conforme | § 2, § 5.4, § 5.5, Annexe C |
+| Présentation | Documentation claire, schéma lisible, code commenté | Principes P1 à P5 (§ 1), § 8, index des choix § 8.5, code commenté en français |
 
-### Grille d'évaluation détaillée (12 novembre)
+La correspondance avec la grille détaillée du 12 novembre est en tête de document (« Correspondance avec la grille d'évaluation »).
 
-| Critère | Preuve | Limite à connaître |
-|---|---|---|
-| **Code structuré** | Notebooks par étape (anonymisation, nettoyage, entraînement), API en modules séparés, tests automatiques | — |
-| **API fonctionnelle** | § 3.3 : requêtes et réponses réelles sur l'API déployée ; 11 vérifications automatiques après chaque déploiement | — |
-| **NER pour anonymisation et pseudonymisation** | § 1.2 et 1.3 : regex (e-mails, téléphones, IP) + NER spaCy, balises `xxx_tag` | Le NER laisse passer certains noms (§ 1.5) |
-| **Conformité RGPD documentée** | § 4.1 : finalités, bases légales, durées, droits des personnes ; texte jamais stocké ni journalisé | Le load balancer Google conserve les adresses IP 30 jours (dit dans le registre) |
-| **Authentification** | Clé d'API, comparaison à temps constant, 401 sans clé ou avec une fausse (§ 3.2, § 6.1) | Une seule clé pour tous les clients |
-| **Chiffrement, HTTPS, IAM** | Certificat géré, redirection HTTPS, Secret Manager, compte de service aux droits minimaux (§ 3.2, § 4.2, § 7.3) | Trafic non chiffré entre le load balancer et les pods |
-| **Simulation de charge réussie** | Montée progressive, stress, failover avec Locust (Annexe B) | Mesures faites depuis un poste, réseau inclus |
-| **Pertinence des métriques choisies** | Latence moyenne, P95, P99, débit, erreurs, CPU et mémoire par pod ; critère de rupture P95 > 2 s justifié (Annexe B.1) | Percentiles cumulés dans le CSV de Locust : recalculés par palier |
-| **Pertinence des propositions d'amélioration** | Annexe B.7, chacune marquée « fait » ou « proposé » avec sa raison | Plusieurs restent proposées |
-| **Pertinence des métriques exposées** | Métriques Prometheus sur un port séparé, non public : requêtes par route, erreurs, latence (§ 6.2) | Pas d'accès direct au CPU du kubelet sur Autopilot (contourné, § 6.2) |
-| **Qualité de la visualisation** | Tableau de bord Grafana construit à la main, captures sous charge et pendant l'attaque (§ 6.2, § 6.6) | Grafana accessible seulement par `port-forward` (choix de sécurité) |
-| **Schéma clair et complet** | § 7.1 : schéma avec flux, authentification, chiffrement, supervision | — |
-| **Documentation lisible, exécution, README** | Ce document, section « Reproduire », `README.md` | — |
-| **Justification des choix techniques** | Une justification à chaque décision ; tableau de synthèse (§ 7.5) | — |
-| **Exploration d'outils alternatifs** | LAYA évalué en zéro-shot (entraînement mesuré à 7,6 s par ligne, donc irréaliste), BiLSTM comparé ; Prometheus/Grafana plutôt que Cloud Monitoring seul (§ 7.5) | — |
-| **Amélioration personnelle** | Front de démonstration ; attaque réelle analysée dans les journaux (§ 6.6) | — |
-| **Scénarios de charge innovants** | Stress à arrêt automatique, failover propre et brutal, perte d'un pod sur 2, attaque avec utilisateurs légitimes en parallèle (§ 6.3, § 6.5, Annexe B) | — |
+## 13. Reproduire
 
----
 
-## Reproduire
+```
 
-```bash
+# Environnement
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt        # inclut spaCy en_core_web_sm
-# 1. notebooks/anonyme_2.ipynb  (~20 min)   → data/anonymise/
-# 2. notebooks/clean_text.ipynb             → data/clean/
-# 3. notebooks/train.ipynb  (BiLSTM ~3 min, DistilBERT ~64 min, LAYA test ~2 h) → models/
-.venv/bin/uvicorn api.main_local:app --port 8000   # API locale (3 modèles + front) → http://127.0.0.1:8000/
-# API déployée (/score, clé, protections) : voir api/README.md ; tests : cd api && pytest
+pip install -r requirements.txt                # inclut spaCy en_core_web_sm
+ 
+# Données et modèles (le jeu Kaggle va dans data/)
+# 1. notebooks/anonyme_2.ipynb   (~20 min)      -> data/anonymise/
+# 2. notebooks/clean_text.ipynb                  -> data/clean/
+# 3. notebooks/train.ipynb  (BiLSTM ~3 min, DistilBERT ~64 min, LAYA ~2 h) -> models/
+ 
+# API locale et front
+.venv/bin/uvicorn api.main_local:app --port 8000   # API locale + front, http://127.0.0.1:8000/
+ 
+# Mise en place GCP (une fois), puis déploiement
+PROJECT_ID=<projet> bash api/deploy/gke_setup.sh
+python api/export_model.py --type distilbert
+PROJECT_ID=<projet> bash api/deploy/deploy_gke.sh
+curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"   # jamais dummy-…
+ 
+# Tests
+cd api && pytest -v
+export API_KEY=<clé>   # jamais dans un fichier
+LOG_REQUETES=loadtest/results/montee_requetes.csv .venv/bin/locust \
+  -f loadtest/locustfile.py,loadtest/montee.py --host https://<domaine>.sslip.io
+.venv/bin/python loadtest/report.py montee
 ```
 
 ---
 
 ## Annexe A : grille de tests (sécurité, stress, failover, supervision)
 
+Tests non réalisés :
+
+| **Test non réalisé** | **Pourquoi** |
+| --- | --- |
+| ST4 : rupture « dure » (vague d'erreurs) | Non atteinte jusqu'à 100 utilisateurs ; monter plus haut coûte du crédit |
+| F4 : perte d'un nœud entier | Non réalisé : sur Autopilot, les nœuds sont gérés par Google |
+
 Livrable du TP (« Grille tests sécurité/stress/failover »). Cible : l'API déployée sur GKE. Date des essais : 12 novembre 2026.
 
-Légende : **OK** = vérifié sur le cluster ; **code** = prévu dans le code (tests `pytest` de la branche Enzo), pas vérifié sur le cluster ; **à faire**.
+Légende : **OK** = vérifié sur le cluster ; **code** = prévu dans le code (tests `pytest` de `api/tests/`), pas vérifié sur le cluster ; **à faire**.
 
 ### Sécurité
 
@@ -869,13 +914,13 @@ Légende : **OK** = vérifié sur le cluster ; **code** = prévu dans le code (t
 |---|---|---|---|---|
 | S1 | `POST /score` sans clé | 401 | 401 | **OK** |
 | S2 | `POST /score` avec une mauvaise clé | 401 | 401 | **OK** |
-| S2b | `POST /score` avec une clé contenant un caractère non ASCII (ex. `clé`) | 401 | **500 Internal Server Error** ; le journal montre `TypeError: comparing strings with non-ASCII characters is not supported` (comparaison de clé). | **Bogue confirmé** (reproduit avec `X-API-Key: clé`, HTTP/2 500) : à corriger (comparer des octets, pas des chaînes) ; un client peut provoquer des erreurs 500 à volonté |
+| S2b | `POST /score` avec une clé contenant un caractère non ASCII (ex. `clé`) | 401 | **500 Internal Server Error** ; le journal montre `TypeError: comparing strings with non-ASCII characters is not supported` (comparaison de clé). | **Bogue confirmé** le 12 nov. (reproduit avec `X-API-Key: clé`, HTTP/2 500) ; **corrigé le 17 nov.** (comparaison d'octets, test automatique) ; un client peut provoquer des erreurs 500 à volonté |
 | S3 | Appel en HTTP (sans TLS) | redirection vers HTTPS | 301 vers `https://…:443/health` | **OK** |
 | S4a | Texte vide | 422 | 422 | **OK** |
 | S4b | Texte de 6 000 caractères (> 5 000) | 422 | 422 | **OK** |
 | S4c | Corps qui n'est pas du JSON | 422 | 422 | **OK** |
 | S5 | Les logs ne contiennent pas le texte reçu | aucun texte ni IP dans Cloud Logging | Texte envoyé : un nom, une IP et un mot unique (`ZEBRAXYZ123`). Recherche dans Cloud Logging (30 min) : **aucun résultat**. Les lignes du journal ont toutes la forme `score=60 longueur=67 duree_ms=80.2` (jamais le texte). | **OK** |
-| S6 | `/docs` (Swagger) accessible sans clé | à décider | **200 : publique** le 12 nov. ; **404 depuis le 16 nov.** | corrigé après l'attaque (§ 6.6) |
+| S6 | `/docs` (Swagger) accessible sans clé | à décider | **200 : publique** le 12 nov. ; **404 depuis le 16 nov.** | corrigé après l'attaque (§ 7.4) |
 | S7 | Rafale de requêtes invalides (sans clé, mauvaise clé, texte trop long, JSON invalide) pendant que des utilisateurs légitimes travaillent | le service légitime continue | 2 min, 2 légitimes + 8 attaquants (`loadtest/attaque.py`). **5 812 requêtes d'attaque (≈ 49/s), toutes refusées avec le bon code** (401 ou 422), médiane 25 ms. **Utilisateurs légitimes : 276 requêtes, 0 erreur, médiane 90 ms, P95 170 ms, maximum 391 ms.** | **OK** (limite : pas de mesure « légitimes seuls » avec les mêmes textes, donc la comparaison n'est qu'indicative) |
 | S8 | Limitation de débit | requêtes refusées (429) au-delà d'un seuil | Mesure du 12 nov. : aucun 429, les ≈ 49 requêtes/s d'un même client étaient toutes traitées. **Après correction (16 nov.)** : 150 requêtes séquentielles sur `/score` : 106 × 200 puis 44 × 429. | **OK** après correction (limite par IP et par pod, livrable du TP2, étape 3) |
 
@@ -1081,3 +1126,153 @@ LOG_REQUETES=loadtest/results/montee_requetes.csv .venv/bin/locust -f loadtest/l
 #   kubectl delete $(kubectl get pods -o name | head -1); date -u +%T
 .venv/bin/python loadtest/report.py failover <HH:MM:SS>
 ```
+
+---
+
+## Annexe C : registre des activités de traitement (article 30 RGPD)
+
+**Référence** : DSS-RGPD-2026-001
+**Version** : 1.1 (relue contre le code en service, branche `ci`)
+**Date** : 17 novembre 2026
+**Statut** : En vigueur
+
+---
+
+#### 1. Responsable du traitement
+
+| Champ | Valeur |
+|---|---|
+| Dénomination | Équipe Digital Social Score (CAKPOSSA Jean-Philippe, OUEDRAOGO Eliana, NOUDEGBE Situ) |
+| Projet | Digital Social Score API — analyse de toxicité (TP ESIGELEC) |
+| Contact | Les membres de l'équipe, joignables par l'ESIGELEC (adresses non publiées : dépôt public). Projet pédagogique : aucune adresse dédiée n'existe |
+| Localisation | France |
+
+---
+
+#### 2. Traitement A — Préparation du jeu d'entraînement (notebooks)
+
+| Rubrique | Contenu |
+|---|---|
+| Finalité | Réduire la présence de données personnelles dans les commentaires avant l'entraînement des modèles (cadre pédagogique) |
+| Base légale | Art. 6.1.f — intérêt légitime : commentaires publics publiés sous licence libre, utilisés pour un exercice de détection de toxicité ; données pseudonymisées avant tout usage |
+| Source | Toxic Comment Classification Dataset (Jigsaw / Google, 2017) : 159 571 commentaires d'entraînement, 153 164 de test ; texte CC-BY-SA 3.0 (Wikipédia), labels CC0 |
+| Données | Texte libre pouvant contenir noms, pseudos, adresses IP, e-mails, téléphones, URL, adresses postales. Les labels (notamment `identity_hate`) peuvent révéler des attaques visant des groupes : données potentiellement sensibles (art. 9) |
+| Personnes concernées | Auteurs et personnes citées dans les commentaires Wikipédia |
+| Minimisation | Identifiants directs remplacés par 8 balises typées (regex + spaCy NER) avant l'entraînement. **Pseudonymisation, pas anonymisation** : le texte d'origine reste public sur Wikipédia |
+| Stockage | Fichiers anonymisés et nettoyés (`data/anonymise/`, `data/clean/`) : en local seulement, exclus de Git |
+| **Jeu brut** | **`data/train.csv` et `data/test.csv` (≈ 130 Mo) sont publiés dans le dépôt GitHub public** `elSam22/depl_ai_cyber`. Texte déjà public et sous licence, mais republié sans pseudonymisation, sur un hébergement situé aux États-Unis. **Action : retirer ces fichiers de l'historique Git et documenter le téléchargement depuis Kaggle** |
+| Conservation | Fichiers anonymisés et nettoyés : supprimés après la notation du projet |
+| Destinataires | Équipe projet |
+| Transferts hors UE | GitHub (États-Unis) : code, documentation, résultats agrégés **et jeu brut public** (voir ci-dessus) |
+| Risques résiduels | Anonymisation incomplète (aucun jeu annoté pour la mesurer) ; ré-identification par recoupement avec Wikipédia |
+
+---
+
+#### 3. Traitement B — API de score en service
+
+| Rubrique | Contenu |
+|---|---|
+| Nom | Digital Social Score API — analyse automatisée de toxicité |
+| Finalité principale | Restituer, pour un texte soumis, un score de toxicité de 0 à 100 (arrondi à la dizaine) et un verdict (`toxique`) |
+| Finalité secondaire | Sécurité du service : détection et analyse d'abus (journaux du load balancer, refus pseudonymisés) |
+| Base légale | Art. 6.1.f — intérêt légitime à fournir un outil d'aide à la modération ; mis en balance par la minimisation (texte jamais conservé, anonymisé avant le modèle) |
+| Décision automatisée / profilage | Le score est calculé sans intervention humaine. Aucune décision à effet juridique dans la version actuelle. **Une AIPD (art. 35) serait obligatoire** si le score était intégré à un processus décisionnel (modération automatique, accès, recrutement) |
+
+##### 3.1 Personnes concernées
+
+- **Utilisateurs de l'API** (développeurs, intégrateurs) : identifiés par une clé d'API **unique et partagée** ; la clé n'est jamais journalisée.
+- **Auteurs des commentaires soumis**, et personnes citées dans ces commentaires.
+
+##### 3.2 Données traitées
+
+| Donnée | Nature | Traitement | Stockage |
+|---|---|---|---|
+| Commentaire soumis | Données personnelles potentielles, y compris sensibles (art. 9 : opinions, santé, origine…) | Anonymisé (regex + spaCy NER) puis nettoyé, en mémoire, avant le modèle | **Aucun** — ni disque, ni journal, ni réponse |
+| Réponse | Score arrondi à la dizaine + verdict | Renvoyée à l'appelant | Non conservée côté serveur |
+| Journal de l'API | Score, longueur du texte, durée de calcul, horodatage : non personnel | Une ligne par analyse | Cloud Logging, 30 jours |
+| Journal des refus (401, 429, 503, 413) | Motif, route, **empreinte HMAC de 10 caractères de l'adresse IP** (clé secrète du serveur) : donnée pseudonymisée | Au plus une ligne par minute et par client | Cloud Logging, 30 jours |
+| **Journaux du load balancer** | **Adresse IP du client, chemin, code de réponse, user-agent, horodatage : données personnelles** | Activés volontairement (`sampleRate: 1.0`) pour pouvoir reconstituer une attaque | Cloud Logging, 30 jours |
+| Métriques Prometheus | Compteurs par route, code, motif de refus ; CPU, mémoire : non personnel | Dans le cluster, port non exposé | Durée de rétention de Prometheus |
+
+---
+
+#### 4. Destinataires et sous-traitants (art. 28)
+
+**Destinataires internes** : les trois membres de l'équipe (journaux et supervision). Note : les trois membres ont le rôle `Owner` du projet Google Cloud (voir le rapport, § 5.3).
+
+| Sous-traitant | Rôle | Localisation | Garanties |
+|---|---|---|---|
+| Google Cloud (GKE, Artifact Registry, Cloud Build, Cloud Logging, Cloud Storage) | Hébergement, construction de l'image, journaux, stockage des poids du modèle | europe-west9 (Paris) pour le cluster et le dépôt d'images | Avenant de traitement des données Google Cloud (CCT) |
+| Google Secret Manager | Stockage de la clé d'API | **Réplication automatique (multi-régions choisies par Google)** : créé avec `--replication-policy=automatic` | ISO 27001, SOC 2 ; **action : restreindre la réplication à europe-west9** |
+| GitHub (Microsoft) | Code source, pipeline | États-Unis | Pas de donnée de production ; jeu brut public (traitement A) |
+| Google Fonts | Police du front de démonstration | Hors UE possible | Connexion directe du navigateur vers Google (adresse IP) ; **action : héberger la police localement** |
+
+##### Transferts hors UE (art. 30.1.e)
+
+Le calcul du score et les journaux de production restent dans l'UE. Il existe trois flux hors UE ou non localisés : le dépôt GitHub (jeu brut public), la réplication du secret, et la police Google Fonts chargée par le front de démonstration.
+
+---
+
+#### 5. Durées de conservation
+
+| Données | Durée | Justification |
+|---|---|---|
+| Texte soumis | Aucune — mémoire uniquement | Minimisation (art. 5.1.c) |
+| Journaux de l'API, des refus et du load balancer | **30 jours** — rétention par défaut de Cloud Logging, non modifiée | Sécurité et traçabilité, mises en balance avec la minimisation |
+| Poids du modèle | Durée du service | Nécessité opérationnelle |
+| Fichiers du traitement A | Jusqu'à la notation | Projet pédagogique |
+
+---
+
+#### 6. Mesures de sécurité (art. 32)
+
+| Mesure | Mise en œuvre | Statut |
+|---|---|---|
+| Authentification | Clé `X-API-Key`, comparaison à temps constant ; 429 après 10 clés fausses par minute et par adresse | En service ; le défaut de la clé non ASCII (500 au lieu de 401) est corrigé depuis le 17 novembre |
+| Chiffrement en transit | HTTPS forcé (certificat géré, redirection) ; pas de TLS entre le load balancer et les pods | En service |
+| Minimisation | Anonymisation avant le modèle ; texte jamais journalisé (prouvé par un canari) ; réponse réduite | En service |
+| Secrets | Secret Manager → Secret Kubernetes ; jamais dans le code, l'image ou Git ; poids du modèle dans un bucket privé | En service |
+| Durcissement | Non-root, `drop ALL`, pas d'élévation, système de fichiers en lecture seule, aucun rôle Google Cloud pour les pods | En service |
+| Protection en entrée | Limites par adresse (429), corps ≤ 40 Ko (413), au plus 3 calculs par pod (503), `/docs` fermé | En service depuis le 16 novembre |
+| Disponibilité | 2 à 5 pods, sondes de santé | En service |
+| Supervision | Prometheus, Grafana, 7 règles d'alerte (sans notification) | En service |
+| Droits d'accès | 3 comptes `Owner` | **À réduire** |
+
+---
+
+#### 7. Droits des personnes (art. 12 à 22)
+
+Les journaux ne contiennent **aucun identifiant de clé** et aucun texte. Les droits s'exercent donc ainsi :
+
+| Droit | Applicable | Modalités |
+|---|---|---|
+| Accès (art. 15) | Limité | Le texte n'est pas conservé. Pour les journaux du load balancer, une personne peut demander les lignes liées à **son adresse IP** sur les 30 derniers jours |
+| Rectification (art. 16) | Sans objet | Aucune donnée conservée qui puisse être inexacte au sujet d'une personne |
+| Effacement (art. 17) | Oui | Suppression des lignes liées à une adresse IP sur demande ; suppression automatique à 30 jours |
+| Limitation (art. 18) | Limité | Pas de donnée à geler, en dehors des journaux du load balancer |
+| Portabilité (art. 20) | Sans objet | Traitement fondé sur l'intérêt légitime, aucune donnée fournie et conservée |
+| Opposition (art. 21) | Oui | Arrêt de l'envoi de textes ; la clé étant partagée, une révocation individuelle est impossible (clé par client à prévoir) |
+| Décision automatisée (art. 22) | À garantir | Le score ne doit pas être la seule base d'une décision à effet juridique |
+
+**Contact** : les membres de l'équipe, par l'ESIGELEC (en service réel, une adresse dédiée serait obligatoire). **Réclamation** (art. 77) : CNIL, 3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07, www.cnil.fr.
+
+---
+
+#### 8. Risques résiduels
+
+- Anonymisation non mesurée et incomplète ; ré-identification possible par recoupement avec Wikipédia.
+- Données sensibles possibles dans les commentaires soumis (traitées en mémoire seulement).
+- Jeu brut publié sur GitHub.
+- Score non calibré : ne doit pas fonder seul une décision.
+- Accès trop larges au projet (trois `Owner`) : chacun peut lire la clé et les journaux.
+
+---
+
+#### 9. Historique des révisions
+
+| Version | Date | Modifications |
+|---|---|---|
+| 1.0 | 12/11/2026 | Création initiale |
+| 1.1 | 17/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) et des refus (empreinte HMAC) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; réponse réduite ; droits reformulés selon ce qui est réellement possible |
+
+*Établi en application de l'article 30 du règlement (UE) 2016/679 (RGPD).*
