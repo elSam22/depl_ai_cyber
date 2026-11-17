@@ -1,6 +1,5 @@
 """Schéma d'architecture cloud — Digital Social Score (étape 7).
-Base : version d'Eliana ; corrigé pour supprimer les chevauchements (cadre Cloud Logging, titre du cluster, étiquettes sous les pastilles)
-et passer la supervision de « à faire » à « installée ».
+Dessine le schéma avec matplotlib : composants, flux, zones de confiance et supervision (Prometheus, Grafana).
 Lancement : .venv/bin/python images/architecture_cloud.py
 """
 from pathlib import Path

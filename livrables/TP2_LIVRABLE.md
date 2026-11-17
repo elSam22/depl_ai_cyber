@@ -7,7 +7,7 @@ Renforcer une IA déployée dans le cloud : l'API Digital Social Score du TP1 (D
 ## Résumé
 
 - **Attaque (étapes 1-2)** : **évasion** par texte déguisé (leetspeak, lettres espacées, homoglyphes, caractères invisibles). Sur 1 000 commentaires du test officiel, le rappel tombe de 0,92 à 0,40-0,49 : **un toxique sur deux passe**, sans aucun signal de performance (latence inchangée).
-- **Défense (étape 3)** : normalisation du texte avant le modèle. Évasion ramenée à **0 %** (homoglyphes, invisibles) et **6 à 12 %** (leetspeak, espaces), **vérifiée par HTTP sur l'API déployée**. Défenses complémentaires contre les attaques **réellement subies** : noyage (4 → 40 insultes détectées sur 60), vol de modèle (la quantification échoue, la limite de débit réussit), déni de service : sous un flot de 201 req/s sur `/score`, un utilisateur légitime garde **100 % de ses requêtes** et un P95 multiplié par 2,3, **contre ×76** dans le rapport du professeur.
+- **Défense (étape 3)** : normalisation du texte avant le modèle. Évasion ramenée à **0 %** (homoglyphes, invisibles) et **6 à 10 %** (leetspeak, espaces), **mesuré par HTTP sur l'API déployée** (8 à 12 % en local). Défenses complémentaires contre les attaques **réellement subies** : noyage (4 → 40 insultes détectées sur 60), vol de modèle (la quantification échoue, la limite de débit réussit), déni de service : sous un flot de 201 req/s sur `/score`, un utilisateur légitime garde **100 % de ses requêtes** et un P95 multiplié par 2,3, **contre ×76** dans le rapport du professeur.
 - **IA Act (étape 4)** : **risque limité**, à condition que le score ne qualifie jamais une personne (sinon notation sociale interdite, art. 5). `model_card.json` contrôlée à chaque push ; biais déclaré **non évalué** plutôt qu'affirmé absent.
 - **DevSecOps (étape 5)** : 7 jobs à chaque push (secrets, code, conformité IA Act, configuration, image Docker, tests, déploiement), identité fédérée sans clé, **provenance des poids vérifiée**, retour arrière automatique ; blocages réels prouvés par les numéros d'exécution.
 - **Ce qui reste faible**, dit sans détour : attaque depuis plusieurs adresses, limites par pod sans WAF (Cloud Armor refusé par quota), clé unique, biais non mesuré, noyage seulement réduit.
@@ -95,7 +95,7 @@ Le TP1 (`TP1_LIVRABLE.md`) décrit l'API, son déploiement, sa charge et sa supe
 | Homoglyphes | `you are a stuріd іdіоt and a mоrоn` |
 | Invisibles | `you are a s t u p i d i d i o t and a m o r o n` (le nettoyage a changé les invisibles en espaces) |
 
-![Attaque par évasion : métriques par variante](attack/results/evasion_distilbert.png)
+![Attaque par évasion : métriques par variante](../attack/results/evasion_distilbert.png)
 
 | Variante | Précision | Rappel | Taux de faux positifs | F1 | Évasion | Latence moyenne |
 |---|---|---|---|---|---|---|
@@ -135,7 +135,7 @@ Le TP1 (`TP1_LIVRABLE.md`) décrit l'API, son déploiement, sa charge et sa supe
 
 **Défense implémentée** : une **normalisation du texte avant le modèle**, sans toucher au modèle : unification Unicode (NFKC), suppression des caractères invisibles, homoglyphes cyrilliques ramenés au latin, mots espacés lettre par lettre regroupés, dé-leet (seulement dans les mots qui contiennent déjà une vraie lettre, pour ne pas abîmer un numéro). **Réexécution de l'attaque initiale** : `attack/defense.py`, même protocole et même échantillon qu'à l'étape 2.
 
-![Effet de la défense anti-évasion (avant/après)](attack/results/defense_distilbert.png)
+![Effet de la défense anti-évasion (avant/après)](../attack/results/defense_distilbert.png)
 
 | Variante | Précision sans → avec | Rappel sans → avec | Faux positifs sans → avec | Latence sans → avec | Évasion avec défense |
 |---|---|---|---|---|---|
@@ -158,7 +158,7 @@ Le TP1 (`TP1_LIVRABLE.md`) décrit l'API, son déploiement, sa charge et sa supe
 
 Même protocole, mais **par HTTP contre l'API en service**, défenses actives, avec un nouveau script : `attack/mesure_api_deployee.py` (60 commentaires toxiques + 60 sains du test officiel, graine 42 ; requêtes espacées pour rester sous la limite de débit). C'est ce qu'obtiendrait un vrai attaquant, réseau, prétraitement et limites compris.
 
-![Évasion contre l'API déployée, défenses en service](attack/results/api_deployee.png)
+![Évasion contre l'API déployée, défenses en service](../attack/results/api_deployee.png)
 
 | Variante | Précision | Rappel | Faux positifs | Évasion | Latence médiane vue du client |
 |---|---|---|---|---|---|
@@ -182,7 +182,7 @@ Même protocole, mais **par HTTP contre l'API en service**, défenses actives, a
 
 **Mesure** (vrai modèle, **vrais seuils de décision**, 60 vraies insultes du test officiel, rembourrage tiré de vrais commentaires sains ; 300 textes sains de 400 à 5 000 caractères pour les fausses alertes) :
 
-![Défense anti-noyage : détection et fausses alertes](attack/results/noyage_seuils_reels.png)
+![Défense anti-noyage : détection et fausses alertes](../attack/results/noyage_seuils_reels.png)
 
 | Variante | Insultes détectées : sans rembourrage / 1 000 car. / 3 000 car. | Fausses alertes sur textes sains longs |
 |---|---|---|
@@ -191,7 +191,7 @@ Même protocole, mais **par HTTP contre l'API en service**, défenses actives, a
 | **Fenêtres de 64, chevauchement 16 (retenu, déployé)** | 52 / **40** / **48** | 11,7 % |
 | Fenêtres de 32 | 52 / 47 / 51 | 15,3 % |
 
-**Compromis assumé** : des fenêtres plus courtes détectent mieux, mais un mot isolé de son contexte déclenche plus de fausses alertes. Nous retenons 64 tokens. Une première mesure (d'Eliana) annonçait « 0 % d'évasion » : elle comparait la probabilité à 0,5, alors que nos vrais seuils sont de 0,88 à 0,97 ; avec eux, la défense est réelle mais partielle.
+**Compromis assumé** : des fenêtres plus courtes détectent mieux, mais un mot isolé de son contexte déclenche plus de fausses alertes. Nous retenons 64 tokens. Une première mesure annonçait « 0 % d'évasion » : elle comparait la probabilité à 0,5, alors que nos vrais seuils sont de 0,88 à 0,97 ; avec eux, la défense est réelle mais partielle.
 
 **Une défense qui crée une faille, trouvée par la mesure.** Déployée le 17 novembre (en service à 13:46), la lecture par fenêtres a été mesurée dans le pod : un texte de 5 000 caractères demandait **5,3 à 6,8 s de calcul**, contre ~0,1 s pour un texte court. Avec 3 calculs simultanés par pod, **un seul client envoyant des textes longs à 1 requête/s pouvait occuper tout le service** : nous avions transformé une défense contre l'évasion en porte ouverte au déni de service. Correctif en service le jour même à 14:07 (exécution 44097581208) :
 - un texte long **coûte plus de jetons** au client (1 jeton + 1 par tranche de 500 octets ; un texte de 5 000 caractères vide son seau de 10 jetons) ;
@@ -202,7 +202,7 @@ Même protocole, mais **par HTTP contre l'API en service**, défenses actives, a
 
 **Vol de modèle** (subi : une autre équipe a envoyé jusqu'à 2 000 requêtes sans aucun refus et obtenu un clone à 94,7 % d'accord ; notre latence a doublé). Défense testée d'abord : **arrondir le score renvoyé** (`api/defense_extraction.py`). Test (`attack/extraction.py`) : un clone TF-IDF + Ridge entraîné sur 100 à 2 000 réponses, score exact puis verdict pur.
 
-![Effet de la quantification sur la fidélité du clone](attack/results/extraction.png)
+![Effet de la quantification sur la fidélité du clone](../attack/results/extraction.png)
 
 | Requêtes | Accord clone/cible sans défense | Avec défense (verdict 0/100) |
 |---|---|---|
@@ -213,11 +213,11 @@ Même protocole, mais **par HTTP contre l'API en service**, défenses actives, a
 
 **Résultat négatif** : le vocabulaire toxique est si discriminant que le verdict seul suffit à l'attaquant. **La vraie défense est le débit** : avec une limite de 60 requêtes par minute (`attack/debit.py`, 20 s de rafale), l'attaquant obtient **60 réponses au lieu de 1 442** ; il lui faudrait ~33 minutes pour réunir 2 000 requêtes.
 
-![Effet du limiteur de débit](attack/results/debit.png)
+![Effet du limiteur de débit](../attack/results/debit.png)
 
 **Déni de service : l'attaque réelle du 16 novembre et le bilan du professeur.** Le 16 novembre, un client (le professeur, confirmé ensuite) a envoyé **94 000 requêtes en 2 heures** : reconnaissance (`/openapi.json`), énumération (`.git`, `.env`, `phpinfo.php`), appels à `/score` avec la clé, détection de ports, puis inondation de `/docs` (pic de 191 à 225 req/s). Son rapport consolidé (9 équipes, 29 failles, déni de service réussi sur toutes les cibles) mesure chez nous **43 685 requêtes acceptées en 4 minutes (~180 req/s), P95 de 4 276 ms contre 56 ms (×76), 0 % d'erreurs**, plus des en-têtes de sécurité manquants, aucune limitation de débit observable et pas de WAF. Analyse détaillée dans les journaux : livrable du TP1, § 7.4.
 
-![Attaque du 16 novembre : débit par route (Prometheus)](supervision/images/incident_i001_debit.png)
+![Attaque du 16 novembre : débit par route (Prometheus)](../supervision/images/incident_i001_debit.png)
 
 **Corrections déployées le 16 novembre**, à partir des failles relevées chez toutes les équipes :
 
@@ -389,7 +389,7 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 - `trivy image` : **2 failles de sévérité haute dans `zlib1g`** (bibliothèque système de l'image de base Debian), avec correctif publié. La pipeline a refusé la pull request ; `apt-get upgrade` ajouté au Dockerfile, contrôle repassé au vert (exécutions 43858297183 puis 43858725549).
 - Un échec de la première exécution, gardé volontairement : les tests importaient `pandas`, absent des dépendances de test. Cela montre que la pipeline détecte ce qui passe inaperçu sur une machine de développement.
 
-![Première exécution de la pipeline (échec sur les tests, secrets et code au vert), GitHub Actions, 16 novembre](supervision/images/ci_premiere_execution.png)
+![Première exécution de la pipeline (échec sur les tests, secrets et code au vert), GitHub Actions, 16 novembre](../supervision/images/ci_premiere_execution.png)
 
 **Le déploiement automatique, et pourquoi il est sûr.**
 - **Déclenchement** : push sur la branche `ci` (la branche `Enzo` en a été retirée le 16 novembre) quand `api/` a changé, ou à la demande ; **jamais sur une pull request** (le code peut venir d'un tiers). Un seul déploiement à la fois.

@@ -126,7 +126,7 @@ def _evaluer(texte_brut: str) -> Reponse:
     duree_ms = 1000 * (time.perf_counter() - t0)
 
     detectes = [label for label in LABELS if probas[label] >= scorer.seuils[label]]
-    # Score 0-100 (DOCUMENTATION.md §4) : moyenne des labels détectés, sinon probabilité de toxic.
+    # Score 0-100 (livrables/TP1_LIVRABLE.md) : moyenne des labels détectés, sinon probabilité de toxic.
     # Calculé pour le LOG interne et la décision, mais PAS renvoyé au client.
     retenus = detectes or ["toxic"]
     score_final = round(100 * sum(probas[label] for label in retenus) / len(retenus))

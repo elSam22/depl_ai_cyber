@@ -1,6 +1,6 @@
 """Contrôle de mise en page d'un PDF exporté : aucun titre (ni étiquette en gras) ne doit finir une page.
 
-Lancement (macOS, depuis la racine) : python3 outils/verifier_pdf.py TP1_LIVRABLE.md
+Lancement (macOS, depuis la racine) : python3 outils/verifier_pdf.py livrables/TP1_LIVRABLE.md
 Lit le texte de chaque page du PDF (PDFKit de macOS, via osascript) et compare la dernière ligne de chaque page
 aux titres et étiquettes du Markdown source. Code de sortie 1 s'il y a un titre orphelin.
 """

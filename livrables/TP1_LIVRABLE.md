@@ -559,7 +559,7 @@ Le registre complet et corrigé est en Annexe C. Il distingue deux traitements.
 | 50 | 14,2 | 2,8 s | 1,6 s | 8,2 s | 11,2 s | 1 |
 | 100 | 17,6 | 4,9 s | 4,1 s | 11,8 s | 14,7 s | 2 |
 
-![Montée progressive : débit, latences et erreurs par palier](loadtest/images/montee_courbes.png)
+![Montée progressive : débit, latences et erreurs par palier](../loadtest/images/montee_courbes.png)
 
 *Montée progressive : débit, latences et erreurs par palier*
 
@@ -571,7 +571,7 @@ Le registre complet et corrigé est en Annexe C. Il distingue deux traitements.
 
 Rupture (P95 > 2 s) **à 20 utilisateurs, 33 s après le début**, pour un débit maximal de ≈ 8 requêtes/s avec 2 pods, soit ≈ 4 par pod. **0 erreur** : c'est une dégradation, pas une panne. Le test est trop court pour que l'autoscaler réagisse : c'est la capacité de la configuration de départ.
 
-![Stress test : arrêt automatique à 20 utilisateurs](loadtest/images/stress_courbes.png)
+![Stress test : arrêt automatique à 20 utilisateurs](../loadtest/images/stress_courbes.png)
 
 *Stress test : arrêt automatique à 20 utilisateurs*
 
@@ -584,7 +584,7 @@ Rupture (P95 > 2 s) **à 20 utilisateurs, 33 s après le début**, pour un débi
 | F2 | Arrêt brutal (`--grace-period=0 --force`), mêmes conditions | 1 erreur sur 771 (un 502 du load balancer, 2 s après) ; débit en baisse pendant ≈ 10 s |
 | F3 | **Pire cas** : arrêt brutal avec seulement **2 pods** | 0 erreur sur 892 ; **un seul pod pendant 7 min 27 s** ; P95 779 → 1 092 ms |
 
-![F3 : perte d'un pod sur 2](loadtest/images/f3_courbes.png)
+![F3 : perte d'un pod sur 2](../loadtest/images/f3_courbes.png)
 
 *F3 : perte d'un pod sur 2*
 
@@ -636,11 +636,11 @@ Rupture (P95 > 2 s) **à 20 utilisateurs, 33 s après le début**, pour un débi
 | CPU et mémoire par pod | Où est le goulot ? (le CPU, pas la mémoire) |
 | Pods prêts / réplicas voulus | La redondance promise est-elle là ? |
 
-![Tableau de bord Grafana de l'API pendant une charge de 5 utilisateurs](supervision/images/grafana_tableau_de_bord.png)
+![Tableau de bord Grafana de l'API pendant une charge de 5 utilisateurs](../supervision/images/grafana_tableau_de_bord.png)
 
 *Tableau de bord Grafana de l'API pendant une charge de 5 utilisateurs*
 
-![CPU par pod pendant la montée : les 2 pods d'origine saturent à 1 cœur](supervision/images/prometheus_cpu_par_pod.png)
+![CPU par pod pendant la montée : les 2 pods d'origine saturent à 1 cœur](../supervision/images/prometheus_cpu_par_pod.png)
 
 *CPU par pod pendant la montée : les 2 pods d'origine saturent à 1 cœur*
 
@@ -681,7 +681,7 @@ Le sujet demande une API « observable et auditable (logs, métriques, alertes) 
 
 Le 16 novembre, de 08:21 à 10:20 UTC, **un seul client a envoyé 94 161 des 94 306 requêtes** reçues par l'API, en enchaînant les étapes classiques d'une attaque.
 
-![Trafic reçu le 16 novembre : rafale à 08:25, vague à 191 req/s à 10:10, déploiements et fermeture de /docs](supervision/images/incident_i001_debit.png)
+![Trafic reçu le 16 novembre : rafale à 08:25, vague à 191 req/s à 10:10, déploiements et fermeture de /docs](../supervision/images/incident_i001_debit.png)
 
 *Trafic reçu le 16 novembre : rafale à 08:25, vague à 191 req/s à 10:10, déploiements et fermeture de /docs*
 
@@ -719,7 +719,7 @@ Le professeur a confirmé ensuite être à l'origine des requêtes entre 10 h et
 
 ### 8.1 Schéma
 
-![Architecture en service le 17 novembre 2026](images/architecture_cloud.png)
+![Architecture en service le 17 novembre 2026](../images/architecture_cloud.png)
 
 *Architecture en service le 17 novembre 2026*
 
@@ -914,7 +914,7 @@ Légende : **OK** = vérifié sur le cluster ; **code** = prévu dans le code (t
 |---|---|---|---|---|
 | S1 | `POST /score` sans clé | 401 | 401 | **OK** |
 | S2 | `POST /score` avec une mauvaise clé | 401 | 401 | **OK** |
-| S2b | `POST /score` avec une clé contenant un caractère non ASCII (ex. `clé`) | 401 | **500 Internal Server Error** ; le journal montre `TypeError: comparing strings with non-ASCII characters is not supported` (comparaison de clé). | **Bogue confirmé** le 12 nov. (reproduit avec `X-API-Key: clé`, HTTP/2 500) ; **corrigé le 17 nov.** (comparaison d'octets, test automatique) ; un client peut provoquer des erreurs 500 à volonté |
+| S2b | `POST /score` avec une clé contenant un caractère non ASCII (ex. `clé`) | 401 | **500 Internal Server Error** ; le journal montre `TypeError: comparing strings with non-ASCII characters is not supported` (comparaison de clé). | **Bogue confirmé** le 12 nov. (reproduit avec `X-API-Key: clé`, HTTP/2 500) ; **corrigé le 17 nov.** (comparaison d'octets, test automatique) ; avant la correction, un client pouvait provoquer des erreurs 500 à volonté |
 | S3 | Appel en HTTP (sans TLS) | redirection vers HTTPS | 301 vers `https://…:443/health` | **OK** |
 | S4a | Texte vide | 422 | 422 | **OK** |
 | S4b | Texte de 6 000 caractères (> 5 000) | 422 | 422 | **OK** |
@@ -1006,7 +1006,7 @@ Deux exécutions. **Exécution 2** (percentiles exacts) :
 
 **Exécution 1** (moyennes seulement : le journal par requête n'existait pas encore) :
 
-![Montée progressive, exécution 1](loadtest/images/montee1_courbes.png)
+![Montée progressive, exécution 1](../loadtest/images/montee1_courbes.png)
 
 | Palier | Requêtes/s | Latence moyenne | Erreurs |
 |---|---|---|---|
@@ -1033,7 +1033,7 @@ Profil `stress.py` : **+10 utilisateurs toutes les 20 s**. Arrêt automatique d�
 
 **Résultat : rupture au sens du critère à 20 utilisateurs**, 33 s après le début, avec un P95 de 4,8 s. Le débit est déjà de ≈ 8 requêtes/s à 10 utilisateurs et n'augmente plus : la capacité est atteinte, les requêtes font la queue. La capture ci-dessous montre **2 pods** au départ (l'autoscaler à 2 réplicas, CPU à 49 % pendant le test) : cela fait ≈ 4 requêtes/s par pod.
 
-![Pods et autoscaler au départ du stress](loadtest/images/pods_stress.png)
+![Pods et autoscaler au départ du stress](../loadtest/images/pods_stress.png)
 
 **Limites.**
 - Le critère (P95 > 2 s) est strict : c'est une **dégradation**, pas une panne (0 erreur). La montée à 100 utilisateurs (§ B.3) a tenu avec 0,1 % d'erreurs : on n'a donc pas trouvé de rupture « dure ».
@@ -1044,19 +1044,19 @@ Profil `stress.py` : **+10 utilisateurs toutes les 20 s**. Arrêt automatique d�
 
 **Exécution 1** :
 
-![CPU et nombre de pods pendant l'exécution 1](loadtest/images/hpa_montee1.png)
+![CPU et nombre de pods pendant l'exécution 1](../loadtest/images/hpa_montee1.png)
 
 Le CPU passe de 0 % à 79 %, l'autoscaler ajoute **un seul pod** (2 → 3), puis le CPU reste à 91-99 % avec 3 pods, sans que l'autoscaler monte plus haut pendant le test. Le goulot est donc le **CPU**, pas le réseau.
 
 **Exécution 2** : liste des pods relevée avec `kubectl get pods -w` pendant et après le test.
 
-![Pods, première partie](loadtest/images/pods_failover_1.png)
+![Pods, première partie](../loadtest/images/pods_failover_1.png)
 
-![Pods, suite](loadtest/images/pods_failover_2.png)
+![Pods, suite](../loadtest/images/pods_failover_2.png)
 
 - On compte **5 pods distincts** : l'autoscaler a atteint son **maximum**. Trois d'entre eux (âgés de 3 à 5 min au début de la capture) ont été créés pendant la montée. Cela explique le débit de 17 à 20 requêtes/s : environ 4 à 5 requêtes/s par pod si 4 à 5 pods servaient, cohérent avec les ≈ 4 requêtes/s par pod de l'exécution 1.
 - **Un pod neuf met plusieurs minutes à servir.** Le pod `t59w6` reste **5 min 10 s en `Pending`** (Autopilot doit d'abord préparer une machine), démarre en ≈ 15 s, et n'est prêt (`1/1`) qu'à **5 min 29 s**. Un pod ajouté pendant une montée de 5 minutes arrive donc quand elle est déjà finie.
-- Les pods arrêtés passent par le statut `Error` : non diagnostiqué ici, à faire examiner (code de sortie du conteneur).
+- Les pods arrêtés passent par le statut `Error` : non diagnostiqué ici ; piste : lire le code de sortie du conteneur (`kubectl describe pod`).
 
 ### B.6 Scénario 3 : failover
 
@@ -1064,13 +1064,13 @@ Charge constante de 5 utilisateurs (≈ 5 requêtes/s, sous la capacité), 4 min
 
 *(Courbe : voir l'étape 5.)*
 
-![Commande kubectl de suppression du pod](loadtest/images/failover_kubectl.png)
+![Commande kubectl de suppression du pod](../loadtest/images/failover_kubectl.png)
 
 Interface de Locust pendant les deux tests (montée progressive, puis failover à 5 utilisateurs) et tableau final du failover :
 
-![Interface Locust](loadtest/images/locust_courbes_ui.png)
+![Interface Locust](../loadtest/images/locust_courbes_ui.png)
 
-![Statistiques Locust du failover](loadtest/images/locust_stats_failover.png)
+![Statistiques Locust du failover](../loadtest/images/locust_stats_failover.png)
 
 | Période | Requêtes/s | Médiane | P95 | Erreurs |
 |---|---|---|---|---|
