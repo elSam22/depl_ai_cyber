@@ -1,6 +1,6 @@
 # Pipeline de sécurité et de qualité (TP2, étape 5) : s'exécute à chaque push et pull request.
 # Les 6 premiers jobs contrôlent ; le job « deploiement » ne démarre que s'ils sont tous verts, sur la branche de
-# déploiement ci (protégée), et seulement si api/ a changé (ou à la demande). Voir livrables/TP2_LIVRABLE.md, § 6.
+# déploiement ci (protégée), et seulement si api/ a changé (ou à la demande). Voir LIVRABLES/TP2_LIVRABLE.md, § 6.
 name: Sécurité et tests
 
 on:

@@ -15,7 +15,7 @@ Ce module, placé AVANT l'authentification et le modèle, refuse vite et à peu 
 L'adresse du client vient de X-Forwarded-For : le load balancer Google ajoute l'adresse réelle du client puis la sienne,
 donc l'avant-dernière valeur est fiable ; les valeurs plus à gauche peuvent être inventées par le client.
 Les limites sont PAR POD (mémoire locale) : avec N pods derrière le load balancer, la limite réelle est environ N fois
-plus haute. Une limite globale demanderait Cloud Armor, refusé par le quota du projet (voir livrables/TP2_LIVRABLE.md, § 4.3).
+plus haute. Une limite globale demanderait Cloud Armor, refusé par le quota du projet (voir LIVRABLES/TP2_LIVRABLE.md, § 4.3).
 RGPD : une adresse IP est une donnée personnelle. Les journaux ne la contiennent jamais en clair : seulement une
 empreinte HMAC (clé secrète), stable d'un pod à l'autre, qui permet de reconnaître un client sans le nommer.
 """

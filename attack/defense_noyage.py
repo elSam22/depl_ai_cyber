@@ -94,7 +94,7 @@ def main():
         moy_sans = round(np.mean(probas_sans), 3)
         moy_avec = round(np.mean(probas_avec), 3)
         # Évasion = phrase non détectée. ATTENTION : seuil simplifié à 0,5. Les vrais seuils de l'API sont de 0,88 à 0,97 :
-        # mesure corrigée dans attack/results/noyage_seuils_reels.* et dans livrables/TP2_LIVRABLE.md, § 4.3.
+        # mesure corrigée dans attack/results/noyage_seuils_reels.* et dans LIVRABLES/TP2_LIVRABLE.md, § 4.3.
         evasion_sans = round(100 * sum(p < 0.5 for p in probas_sans) / len(probas_sans))
         evasion_avec = round(100 * sum(p < 0.5 for p in probas_avec) / len(probas_avec))
         print(f"Rembourrage {n:5d} chars | sans défense : {moy_sans:.3f} ({evasion_sans}% évasion) "

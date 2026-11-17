@@ -8,13 +8,13 @@ API qui note la toxicité d'un commentaire de **0 à 100**. Elle anonymise le te
 
 ## Livrables
 
-Ils sont tous dans [`livrables/`](livrables/). Il y a un document par TP, en PDF, avec les images intégrées. Chaque document suit les étapes de l'énoncé, puis reprend ses livrables et ses critères d'évaluation.
+Ils sont tous dans [`LIVRABLES/`](LIVRABLES/). Il y a un document par TP, en PDF, avec les images intégrées. Chaque document suit les étapes de l'énoncé, puis reprend ses livrables et ses critères d'évaluation.
 
 | Document | Contenu |
 |---|---|
-| [**TP1_LIVRABLE.pdf**](livrables/TP1_LIVRABLE.pdf) ([source Markdown](livrables/TP1_LIVRABLE.md)) | Étapes 1 à 7 : anonymisation, 3 modèles comparés, API, déploiement GKE, tests de charge, sécurité et supervision, architecture. En annexe : la grille de tests, le rapport de charge et le registre RGPD |
-| [**TP2_LIVRABLE.pdf**](livrables/TP2_LIVRABLE.pdf) ([source Markdown](livrables/TP2_LIVRABLE.md)) | Étapes 1 à 5 : attaque par évasion, défense mesurée (en local et sur l'API déployée), conformité IA Act, pipeline DevSecOps, analyse critique |
-| [REGISTRE_RGPD.md](livrables/REGISTRE_RGPD.md) | Registre des traitements, version 1.1 (également reproduit dans l'annexe C du TP1) |
+| [**TP1_LIVRABLE.pdf**](LIVRABLES/TP1_LIVRABLE.pdf) ([source Markdown](LIVRABLES/TP1_LIVRABLE.md)) | Étapes 1 à 7 : anonymisation, 3 modèles comparés, API, déploiement GKE, tests de charge, sécurité et supervision, architecture. En annexe : la grille de tests, le rapport de charge et le registre RGPD |
+| [**TP2_LIVRABLE.pdf**](LIVRABLES/TP2_LIVRABLE.pdf) ([source Markdown](LIVRABLES/TP2_LIVRABLE.md)) | Étapes 1 à 5 : attaque par évasion, défense mesurée (en local et sur l'API déployée), conformité IA Act, pipeline DevSecOps, analyse critique |
+| [REGISTRE_RGPD.md](LIVRABLES/REGISTRE_RGPD.md) | Registre des traitements, version 1.1 (également reproduit dans l'annexe C du TP1) |
 | [model_card.json](model_card.json) | Fiche du modèle (IA Act). Elle reste à la racine parce que la pipeline la contrôle à chaque modification |
 
 ## Résultats principaux
@@ -57,7 +57,7 @@ Codes renvoyés :
 ## Organisation du dépôt
 
 ```
-livrables/      Livrables TP1 et TP2 (PDF + source Markdown), registre RGPD, images/ (schéma d'architecture)
+LIVRABLES/      Livrables TP1 et TP2 (PDF + source Markdown), registre RGPD, images/ (schéma d'architecture)
 notebooks/      TP1, étapes 1-2 : anonymisation, nettoyage, entraînement des 3 modèles
 api/            API DÉPLOYÉE uniquement : main.py, protection.py, scorer.py, Dockerfile, k8s/, deploy/, tests/
 api_locale/     API de développement (3 modèles, route /predire) : ce qui n'est pas déployé
@@ -81,7 +81,7 @@ outils/         Export des livrables en PDF, contrôle de mise en page, contrôl
 - **API locale** : `uvicorn api_locale.main_local:app --port 8000`, puis http://127.0.0.1:8000.
 - **Tests** : `pytest api/tests`.
 - **Attaque rejouée sur l'API déployée** : `URL=https://<adresse> API_KEY=<clé> python -m attack.mesure_api_deployee`.
-- **Régénérer un PDF** : `python outils/exporter_documentation.py livrables/TP2_LIVRABLE.md`. Il faut Chrome ou Brave.
+- **Régénérer un PDF** : `python outils/exporter_documentation.py LIVRABLES/TP2_LIVRABLE.md`. Il faut Chrome ou Brave.
 
 Les tests de charge et d'attaque consomment du crédit Google Cloud. Ils ne visent que notre propre API.
 

@@ -1,6 +1,6 @@
 # TP2 : attaque par évasion sur le modèle Digital Social Score
 
-Rapport technique détaillé (scripts, protocoles, mesures intermédiaires). **Le document de référence, à jour, est [livrables/TP2_LIVRABLE.md](../livrables/TP2_LIVRABLE.md)** : il reprend ces résultats, les mesures sur l'API déployée et les corrections signalées ci-dessous.
+Rapport technique détaillé (scripts, protocoles, mesures intermédiaires). **Le document de référence, à jour, est [LIVRABLES/TP2_LIVRABLE.md](../LIVRABLES/TP2_LIVRABLE.md)** : il reprend ces résultats, les mesures sur l'API déployée et les corrections signalées ci-dessous.
 
 Script : [evasion.py](evasion.py). Résultats : [results/](results/).
 
