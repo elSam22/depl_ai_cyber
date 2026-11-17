@@ -157,3 +157,18 @@ def test_client_qui_insiste_est_bloque_partout_sauf_health():
     r = c.post("/score")
     assert r.status_code == 429 and int(r.headers["retry-after"]) >= 25   # bloqué : même /score est refusé
     assert c.get("/health").status_code == 200
+
+
+def test_texte_long_coute_plus_de_jetons():
+    seau = SeauJetons(10, 0.001)                      # quasiment pas de recharge pendant le test
+    c = petite_app(limite_ip=lim(99), limite_score=seau, echecs=lim(99), sanctions=Sanctions(seuil_refus=99))
+    assert c.post("/score", content=b"x" * 4600).status_code == 200    # coût 1 + 9 = 10 : tout le seau
+    assert c.post("/score", content=b"x" * 10).status_code == 429      # plus rien
+    c2 = petite_app(limite_ip=lim(99), limite_score=SeauJetons(10, 0.001), echecs=lim(99))
+    assert [c2.post("/score", content=b"x" * 10).status_code for _ in range(11)].count(200) == 10   # courts : 10
+
+
+def test_cout_plafonne_a_la_capacite():
+    seau = SeauJetons(10, 0.001)
+    assert seau.autoriser("a", 50)[0]                  # une requête maximale reste possible, seau plein
+    assert not seau.autoriser("a", 1)[0]

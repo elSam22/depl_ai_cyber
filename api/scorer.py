@@ -89,6 +89,10 @@ class BiLSTMScorer:
 # détectées sur 60, 9 % de fausses alertes ; de 64 -> 38 et 45 sur 60, 12 % ; de 32 -> 47 et 51 sur 60, 15 %
 # (avant : 4 et 2 sur 60, 4 %). 64 = compromis retenu. Réglable sans reconstruire l'image (variable d'environnement).
 FENETRE_NOYAGE = int(os.environ.get("FENETRE_NOYAGE", "64"))
+# Chevauchement entre fenêtres : 16 (et non 32) mesuré aussi efficace (40 et 48 insultes sur 60 au lieu de 38 et 45,
+# mêmes fausses alertes) pour 21 fenêtres au lieu de 32 sur un texte de 5 000 caractères : le coût d'un texte long
+# (mesuré 5,3 à 6,8 s sur le pod avec 32) baisse d'un tiers.
+CHEVAUCHEMENT_NOYAGE = int(os.environ.get("CHEVAUCHEMENT_NOYAGE", "16"))
 
 
 class DistilBertScorer:
@@ -103,6 +107,9 @@ class DistilBertScorer:
         self.max_len = meta["max_len"]
         # Dossier LOCAL embarqué dans l'image (HF_HUB_OFFLINE=1) : aucun téléchargement, donc pas de révision à épingler
         self.tokenizer = AutoTokenizer.from_pretrained(model_dir)  # nosec B615
+        # Un seul fil de calcul : le pod n'a droit qu'à 1 CPU ; PyTorch en lance par défaut autant que de cœurs de la
+        # machine, et le quota Kubernetes les freine tous (temps perdu). Réglable par TORCH_THREADS.
+        torch.set_num_threads(int(os.environ.get("TORCH_THREADS", "1")))
         self.model = AutoModelForSequenceClassification.from_pretrained(model_dir)  # nosec B615
         self.model.eval()
 
@@ -133,7 +140,7 @@ class DistilBertScorer:
         longueurs = [len(ids) for ids in self.tokenizer(texts, add_special_tokens=False)["input_ids"]]
         longs = [i for i, lg in enumerate(longueurs) if lg > FENETRE_NOYAGE]
         if longs:
-            fenetres, m = self._passe([texts[i] for i in longs], FENETRE_NOYAGE, FENETRE_NOYAGE // 2)
+            fenetres, m = self._passe([texts[i] for i in longs], FENETRE_NOYAGE, CHEVAUCHEMENT_NOYAGE)
             for i, f in zip(longs, fenetres):
                 complet[i] = [max(x, y) for x, y in zip(complet[i], f)]
             n += m

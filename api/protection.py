@@ -5,7 +5,8 @@ Leçons de l'attaque du 16 novembre 2026 (supervision/INCIDENTS.md) et du bilan 
 Ce module, placé AVANT l'authentification et le modèle, refuse vite et à peu de frais :
 
 - limite par adresse IP, toutes routes (429) ;
-- débit lissé par adresse IP sur /score, la route qui coûte du calcul : rafale de 10 puis 1 par seconde (429) ;
+- débit lissé par adresse IP sur /score, la route qui coûte du calcul : rafale de 10 puis 1 par seconde (429),
+  un texte long coûtant plus de jetons qu'un court (1 par tranche de 500 octets) ;
 - sanction progressive d'une adresse qui insiste après ses refus : bloquée 30 s, 60 s, 120 s... jusqu'à 15 min (429) ;
 - blocage temporaire d'une adresse qui présente trop de clés fausses (429) : brute-force de la clé ;
 - corps de requête plafonné (413) ;
@@ -43,6 +44,10 @@ def _entier(nom: str, defaut: int) -> int:
 LIMITE_IP_PAR_MIN = _entier("LIMITE_IP_PAR_MIN", 300)        # toutes routes, par IP et par pod
 LIMITE_SCORE_PAR_MIN = _entier("LIMITE_SCORE_PAR_MIN", 60)   # /score, par IP et par pod : débit moyen du seau
 RAFALE_SCORE = _entier("RAFALE_SCORE", 10)                    # /score : requêtes permises d'un coup
+# Coût d'une requête /score en jetons : 1 + 1 par tranche de OCTETS_PAR_JETON octets. Un texte long coûte bien plus
+# de calcul (mesuré sur le pod : ~0,1 s pour un texte court, 5 à 7 s pour 5 000 caractères avec la défense
+# anti-noyage) : sans cela, un seul client enverrait des textes longs à 1/s et occuperait tout le service.
+OCTETS_PAR_JETON = _entier("OCTETS_PAR_JETON", 500)
 LIMITE_ECHECS_PAR_MIN = _entier("LIMITE_ECHECS_PAR_MIN", 10)  # clés fausses, par IP et par pod
 MAX_OCTETS = _entier("MAX_BODY_BYTES", 40_000)                # 5 000 caractères accentués = 10 Ko ; marge pour le JSON
 
@@ -137,7 +142,10 @@ class Protection:
                 if not autorise:
                     refus = ("debit_ip", "Trop de requêtes, réessayer plus tard")
             if refus is None and route == "/score" and methode == "POST":
-                autorise, attente = self.limite_score.autoriser(ip)
+                taille = dict(scope["headers"]).get(b"content-length", b"0")
+                cout = 1 + (int(taille) // OCTETS_PAR_JETON if taille.isdigit() else 0)
+                autorise, attente = (self.limite_score.autoriser(ip, cout) if isinstance(self.limite_score, SeauJetons)
+                                     else self.limite_score.autoriser(ip))
                 if not autorise:
                     refus = ("debit_score", "Trop de requêtes sur /score, réessayer plus tard")
             if refus is not None:

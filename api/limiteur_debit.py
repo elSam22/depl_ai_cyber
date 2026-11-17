@@ -78,7 +78,9 @@ class SeauJetons:
         self._seaux: dict[str, tuple[float, float]] = {}
         self._verrou = Lock()
 
-    def autoriser(self, cle: str) -> tuple[bool, float]:
+    def autoriser(self, cle: str, cout: float = 1) -> tuple[bool, float]:
+        """Consomme `cout` jetons (plafonné à la capacité : une requête maximale reste possible, seau plein)."""
+        cout = min(cout, self.capacite)
         maintenant = time.monotonic()
         with self._verrou:
             if len(self._seaux) >= SEUIL_PURGE:      # seaux pleins depuis longtemps : inutiles
@@ -86,10 +88,10 @@ class SeauJetons:
                                if v[0] + (maintenant - v[1]) * self.debit_par_s < self.capacite}
             jetons, avant = self._seaux.get(cle, (float(self.capacite), maintenant))
             jetons = min(self.capacite, jetons + (maintenant - avant) * self.debit_par_s)
-            if jetons < 1:
+            if jetons < cout:
                 self._seaux[cle] = (jetons, maintenant)
-                return False, round((1 - jetons) / self.debit_par_s, 1)
-            self._seaux[cle] = (jetons - 1, maintenant)
+                return False, round((cout - jetons) / self.debit_par_s, 1)
+            self._seaux[cle] = (jetons - cout, maintenant)
             return True, 0.0
 
 
