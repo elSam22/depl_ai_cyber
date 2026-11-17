@@ -6,3 +6,4 @@ en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_
 torch==2.15.0
 transformers==5.22.2
 laya==0.4.30
+prometheus-fastapi-instrumentator>=7.0

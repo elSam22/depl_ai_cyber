@@ -17,6 +17,12 @@ from preprocessing import PREPROCESSING_VERSION
 
 LABELS = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", Path(__file__).parent / "model"))
+SEUIL_PAR_DEFAUT = 0.5
+
+
+def _seuils(meta: dict) -> dict[str, float]:
+    """Seuil de décision par label (meta.json), 0,5 si absent."""
+    return {l: float(meta.get("seuils", {}).get(l, SEUIL_PAR_DEFAUT)) for l in LABELS}
 
 
 class DummyScorer:
@@ -130,7 +136,9 @@ def load_scorer():
     """Charge le modèle décrit par model/meta.json (une seule fois, au démarrage de l'API)."""
     meta_path = MODEL_DIR / "meta.json"
     if not meta_path.exists():
-        return DummyScorer()
+        factice = DummyScorer()
+        factice.seuils = _seuils({})
+        return factice
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
     # Garde-fou anti "training/serving skew" : le modèle doit avoir été entraîné
@@ -142,4 +150,6 @@ def load_scorer():
         )
     if meta["model_type"] not in SCORERS:
         raise RuntimeError(f"model_type inconnu dans meta.json : {meta['model_type']}")
-    return SCORERS[meta["model_type"]](MODEL_DIR, meta)
+    scorer = SCORERS[meta["model_type"]](MODEL_DIR, meta)
+    scorer.seuils = _seuils(meta)
+    return scorer

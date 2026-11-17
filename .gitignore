@@ -34,3 +34,4 @@ loadtest/results/*_console.txt
 
 # Export HTML autonome (7 Mo, régénérable) : le livrable est DOCUMENTATION.pdf
 DOCUMENTATION.html
+piege.json

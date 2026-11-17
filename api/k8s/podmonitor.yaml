@@ -1,0 +1,13 @@
+# Dit à Prometheus (kube-prometheus-stack, release « monitoring ») de lire les métriques des pods dss-api.
+# Le label « release: monitoring » est nécessaire : c'est lui que le Prometheus du chart utilise pour choisir ses cibles.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: dss-api
+  labels: {release: monitoring}
+spec:
+  selector:
+    matchLabels: {app: dss-api}
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 15s
