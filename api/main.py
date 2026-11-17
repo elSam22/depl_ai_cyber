@@ -78,7 +78,9 @@ async def verifier_cle(request: Request, cle: str | None = Security(api_key_head
     LIMITE_ECHECS_PAR_MIN, Protection bloque l'adresse (anti brute-force) et le refus est journalisé sans la clé."""
     if API_KEY is None:
         raise HTTPException(status_code=500, detail="API_KEY non configurée sur le serveur")
-    if cle is None or not secrets.compare_digest(cle, API_KEY):   # comparaison à temps constant
+    # Comparaison à temps constant, sur des OCTETS : compare_digest refuse les chaînes non ASCII (TypeError -> erreur 500,
+    # test S2b) ; une clé avec un accent doit simplement être refusée (401) et comptée comme clé fausse.
+    if cle is None or not secrets.compare_digest(cle.encode(), API_KEY.encode()):
         ip = ip_client(request.scope)
         ECHECS.enregistrer(ip)
         journaliser_refus("cle_invalide", request.url.path, ip)
