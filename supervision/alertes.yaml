@@ -1,0 +1,56 @@
+# Règles d'alerte Prometheus de l'API (appliquer : kubectl apply -f supervision/alertes.yaml).
+# Visibles dans Prometheus (Alerts) et dans Grafana (Alerting > Alert rules). Alertmanager n'est pas installé (aucun canal
+# de notification) : une alerte « firing » se lit à l'écran, elle n'envoie rien. Cause : le 16 novembre, 94 000 requêtes
+# sont arrivées sans qu'aucune alerte n'existe ; chez les autres équipes, « personne ne regardait ».
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dss-api-alertes
+  namespace: monitoring
+  labels: {release: monitoring}     # sans ce label, Prometheus ignore la règle
+spec:
+  groups:
+    - name: dss-api
+      rules:
+        - alert: DssDebitAnormal
+          expr: sum(rate(http_requests_total{namespace="default",pod=~"dss-api.*"}[1m])) > 30
+          for: 1m
+          labels: {severity: critical}
+          annotations:
+            summary: "Débit anormal : {{ $value | printf \"%.0f\" }} requêtes/s (capacité de calcul ≈ 8/s, usage normal < 2/s)"
+            action: "Cloud Logging : analyser_journaux.py --heures 1 ; vérifier dss_refus_total (la protection refuse-t-elle ?)"
+        - alert: DssRefusEnHausse
+          expr: sum(rate(dss_refus_total{namespace="default"}[2m])) by (motif) > 1
+          for: 2m
+          labels: {severity: warning}
+          annotations:
+            summary: "La protection refuse {{ $value | printf \"%.1f\" }} requêtes/s, motif {{ $labels.motif }}"
+        - alert: DssClesFausses
+          expr: sum(rate(dss_refus_total{namespace="default",motif="cle_invalide"}[5m])) > 0.2
+          for: 2m
+          labels: {severity: warning}
+          annotations:
+            summary: "Clés API fausses répétées : tentative de brute-force possible"
+        - alert: DssErreurs5xx
+          expr: sum(rate(http_requests_total{namespace="default",pod=~"dss-api.*",status="5xx"}[2m])) / sum(rate(http_requests_total{namespace="default",pod=~"dss-api.*"}[2m])) > 0.05
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: "Plus de 5 % d'erreurs serveur (503 = surcharge, 500 = défaut)"
+        - alert: DssLatenceP95
+          expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace="default",pod=~"dss-api.*",handler="/score"}[2m])) by (le)) > 2
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: "P95 de /score au-dessus de 2 s (critère de rupture de l'étape 5)"
+        - alert: DssPodsInsuffisants
+          expr: kube_deployment_status_replicas_ready{namespace="default",deployment="dss-api"} < 2
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: "Moins de 2 pods prêts : plus de redondance"
+        - alert: DssRedemarrages
+          expr: increase(kube_pod_container_status_restarts_total{namespace="default",pod=~"dss-api.*"}[10m]) > 0
+          labels: {severity: warning}
+          annotations:
+            summary: "Un pod a redémarré (OOMKilled ? sonde en échec ?) : cas Loris de la promotion"
