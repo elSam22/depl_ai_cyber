@@ -1,7 +1,7 @@
 {
   "model_name": "Digital Social Score v1.0",
-  "description": "Détection de propos toxiques dans un texte (6 catégories : toxic, severe_toxic, obscene, threat, insult, identity_hate). Renvoie un score de 0 à 100 et un verdict booléen. Architecture : DistilBERT fine-tuné (distilbert-base-uncased). Déployé via API REST (FastAPI) sur Kubernetes / Google Cloud.",
-  "risk_level": "Risque limité (Art. 50 IA Act) — le système produit un score d'aide à la décision humaine, sans décision contraignante sur une personne physique.",
+  "description": "Détection de propos toxiques dans un commentaire en anglais (6 catégories : toxic, severe_toxic, obscene, threat, insult, identity_hate). Renvoie un score de 0 à 100 et un verdict booléen. Architecture : DistilBERT fine-tuné (distilbert-base-uncased). Déployé via API REST (FastAPI) sur Kubernetes / Google Cloud.",
+  "risk_level": "Risque limité (Art. 50 IA Act) — le système produit un score d'aide à la décision humaine, sans décision contraignante sur une personne physique. Le verdict final appartient à un modérateur humain. Le système ne relève d'aucun domaine à haut risque de l'Annex III.",
   "data_source": "Toxic Comment Classification Dataset (Jigsaw / Google, 2017) — commentaires de pages de discussion Wikipédia en anglais. Textes : CC-BY-SA 3.0. Labels : CC0. 159 571 commentaires d'entraînement, 63 978 de test.",
   "privacy_measures": [
     "anonymisation avant inférence : regex (email, URL, IP, téléphone, pseudo, adresse) + NER spaCy (noms de personnes et d'organisations)",
@@ -14,5 +14,5 @@
   "bias_detected": true,
   "bias_details": "Corpus exclusivement anglophone : performances non garanties sur d'autres langues. Biais culturels possibles sur le label identity_hate (terminologie et références culturelles anglophones). Déséquilibre des classes : threat et identity_hate < 1 % des exemples positifs.",
   "version": "1.0",
-  "last_update": "2026-11-16"
+  "last_update": "2026-11-17"
 }
