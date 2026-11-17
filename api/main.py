@@ -11,12 +11,13 @@ import os
 import secrets
 import time
 
-from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 from prometheus_client import start_http_server
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
 
+from limiteur_debit import LimiteurDebit
 from preprocessing import PREPROCESSING_VERSION, preprocess
 from scorer import LABELS, load_scorer
 
@@ -52,6 +53,13 @@ _port_metriques = int(os.environ.get("METRICS_PORT", "9090"))
 if _port_metriques:
     start_http_server(_port_metriques)
 
+# Défense contre le DoS distribué : quota global toutes IPs confondues (complément au limiteur par IP).
+# Protège la latence quand l'attaque vient de plusieurs sources.
+# DEBIT_GLOBAL_MAX=0 désactive. Fenêtre glissante de 60 s.
+_debit_fenetre_s = float(os.environ.get("DEBIT_FENETRE_S", "60"))
+_debit_global_max = int(os.environ.get("DEBIT_GLOBAL_MAX", "100"))
+limiteur_global = LimiteurDebit(_debit_global_max, _debit_fenetre_s) if _debit_global_max > 0 else None
+
 
 def verifier_cle(cle: str | None = Security(api_key_header)) -> None:
     """Refuse la requête si la clé API est absente ou fausse (401)."""
@@ -79,7 +87,13 @@ def health():
 
 
 @app.post("/score", response_model=Reponse, dependencies=[Depends(verifier_cle)])
-def score(demande: Demande):
+def score(demande: Demande, request: Request):
+    # Quota global (DoS distribué) — vérifié avant le traitement
+    if limiteur_global is not None:
+        autorise, attente_s = limiteur_global.autoriser("__global__")
+        if not autorise:
+            raise HTTPException(status_code=503, detail="Service temporairement surchargé, réessayez plus tard",
+                                headers={"Retry-After": str(attente_s)})
     if not demande.text.strip():
         raise HTTPException(status_code=422, detail="Texte vide")
 
