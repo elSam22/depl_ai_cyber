@@ -22,7 +22,7 @@ API de détection de toxicité : de l'analyse de texte à une infrastructure clo
 
 Nous avons conçu, entraîné, déployé et sécurisé une API qui reçoit un commentaire et renvoie un **score de toxicité de 0 à 100**. Le texte est **anonymisé avant le modèle** (regex + spaCy NER) et n'est **jamais stocké ni journalisé**.
 
-- **Modèle** : trois modèles comparés sur le même jeu de test (BiLSTM, DistilBERT, LAYA en zéro-shot). **DistilBERT** est déployé : meilleure AUC-PR (0,590) et meilleur F1 (0,558) ; inférence de 8 ms sur un Mac M3, ≈ 100 ms par requête complète (anonymisation comprise) dans un pod à 1 CPU.
+- **Modèle** : trois modèles comparés sur le même jeu de test (BiLSTM, DistilBERT, LAYA en zéro-shot). **DistilBERT** est déployé : meilleure AUC-PR (0,571) et meilleur F1 (0,558) ; inférence de 8 ms sur un Mac M3, ≈ 100 ms par requête complète (anonymisation comprise) dans un pod à 1 CPU.
 - **Infrastructure** : GKE Autopilot à Paris (europe-west9), HTTPS géré par Google, clé d'API dans Secret Manager, conteneur non-root, 2 à 5 pods avec autoscaler.
 - **Mesures** : environ 4 requêtes/s par pod ; rupture de latence (P95 > 2 s) à 20 utilisateurs ; perte d'un pod sur 2 sans erreur.
 - **Incident réel** : le 16 novembre, l'API a reçu 94 000 requêtes hostiles. Nous l'avons détectée, analysée et corrigée le jour même ; 7 règles d'alerte en sont issues.
@@ -224,17 +224,17 @@ LAYA est donc un **plancher** : un modèle évalué sur le même test sans avoir
 
 | **Modèle** | **ROC-AUC test** | **AUC-PR test** | **F1 (seuil 0,5)** | **Précision / rappel (seuil optimisé)** | **F1 (seuil optimisé)** | **Entraînement** | **Inférence** |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BiLSTM | 0,916 | 0,362 | 0,231 | 0,301 / 0,481 | 0,358 | 157 s | 0,13 ms |
-| **DistilBERT** | **0,977** | **0,590** | 0,308 | 0,493 / 0,693 | **0,558** | 64 min | 8,1 ms |
-| LAYA (zéro-shot) | 0,969 | — | 0,328 | 0,366 / 0,740 | 0,476 | 0 | 700 ms |
+| BiLSTM | 0,916 | 0,332 | 0,231 | 0,301 / 0,481 | 0,358 | 157 s | 0,13 ms |
+| **DistilBERT** | **0,977** | **0,571** | 0,308 | 0,493 / 0,693 | **0,558** | 64 min | 8,1 ms |
+| LAYA (zéro-shot) | 0,969 | 0,467 | 0,328 | 0,366 / 0,740 | 0,476 | 0 | 700 ms |
 
-ROC-AUC sur la validation : 0,948 / 0,985 / 0,965. Détail par label : `models/resultats_par_label.csv`.
+ROC-AUC sur la validation : 0,948 / 0,985 / 0,965. Détail par label : `models/resultats_par_label.csv`. AUC-PR = moyenne sur les 6 labels de la précision moyenne (`average_precision_score`), recalculable avec `outils/calculer_auc_pr.py` à partir des probabilités enregistrées (le script retrouve aussi les ROC-AUC du tableau, preuve que c'est le même échantillon).
 
 ### 3.4 Pourquoi DistilBERT est déployé
 
-- **Meilleure qualité** sur le test commun : AUC-PR 0,590 et F1 0,558.
+- **Meilleure qualité** sur le test commun : AUC-PR 0,571 et F1 0,558.
 - **8 ms d'inférence** sur Mac M3 (≈ 100 ms par requête complète dans un pod à 1 CPU, d'après les journaux de production) : compatible avec une API en ligne. LAYA est ≈ 90 fois plus lent (700 ms sur Mac M3).
-- **L'AUC-PR est notre indicateur principal.** Avec ≈ 10 % de positifs, la ROC-AUC est gonflée par les vrais négatifs : BiLSTM a 0,916 de ROC-AUC mais seulement 0,362 d'AUC-PR.
+- **L'AUC-PR est notre indicateur principal.** Avec ≈ 10 % de positifs, la ROC-AUC est gonflée par les vrais négatifs : BiLSTM a 0,916 de ROC-AUC mais seulement 0,332 d'AUC-PR.
 - **Pourquoi pas BERT base ou RoBERTa.** Ils sont environ deux fois plus lourds que DistilBERT. Sur notre CPU, cela divise par deux la capacité par pod, déjà le goulot (§ 6), pour un gain de qualité que nous n'avons pas pu mesurer dans notre budget d'entraînement (P5).
 - **Ce que la comparaison montre.** DistilBERT et LAYA reposent tous deux sur un encodeur de type BERT. Le petit modèle spécialisé par fine-tuning (66 M) bat le gros modèle généraliste (421 M), à la fois en qualité et en vitesse.
 
@@ -853,7 +853,7 @@ Les faiblesses qui restent sont connues, mesurées et classées. Les plus import
 
 | Compétence | Indicateurs | Preuve |
 |---|---|---|
-| Fonctionnalité | API opérationnelle, scoring correct | § 4.4 (réponses réelles), § 3.3 (AUC-PR 0,590, ROC-AUC 0,977 sur le test) |
+| Fonctionnalité | API opérationnelle, scoring correct | § 4.4 (réponses réelles), § 3.3 (AUC-PR 0,571, ROC-AUC 0,977 sur le test) |
 | Sécurité | Authentification, validation d'entrée, chiffrement | § 5.1 (STRIDE), § 5.2, § 7.3 (tests S1 à S9), Annexe A |
 | Scalabilité | Test de charge et analyse pertinente | § 4.3, § 6, Annexe B |
 | Supervision | Logs/métriques, dashboard | § 7 |
