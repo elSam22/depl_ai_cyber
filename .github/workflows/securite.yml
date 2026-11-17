@@ -16,7 +16,7 @@ jobs:
     name: Recherche de secrets (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
           fetch-depth: 0            # tout l'historique : une clé retirée d'un fichier reste lisible dans les anciens commits
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7   # v2
@@ -27,7 +27,7 @@ jobs:
     name: Analyse statique du code (bandit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5
         with:
           python-version: "3.12"
@@ -39,7 +39,7 @@ jobs:
     name: Conformité IA Act (model_card.json)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
       # Champs imposés par le TP2, catégorie de risque parmi les 4 niveaux du règlement, et aucune affirmation sans preuve
       # (par exemple « pas de biais » sans évaluation décrite).
       - run: python3 outils/verifier_model_card.py
@@ -48,7 +48,7 @@ jobs:
     name: Configuration Docker et Kubernetes (trivy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
       # Analyse le Dockerfile et les manifestes k8s de api/ (rien à analyser sur main : l'API locale n'en a pas).
       # Échoue à partir de la sévérité haute ; les risques acceptés sont listés avec leur raison dans .trivyignore.
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25   # v0.36.0
@@ -63,7 +63,7 @@ jobs:
     name: Analyse de l'image Docker (trivy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
       - name: Chercher le Dockerfile de l'API
         id: presence
         run: |
@@ -89,7 +89,7 @@ jobs:
     name: Tests de l'API et audit des dépendances (pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
       # Les tests et api/requirements-dev.txt appartiennent au code de l'API déployée (branches Enzo, cors, ci).
       # Sur main, api/ contient l'API locale de développement, sans tests : les étapes suivantes sont alors ignorées.
       - name: Chercher les tests de l'API
@@ -130,7 +130,7 @@ jobs:
       contents: read
       id-token: write               # jeton OIDC : GitHub prouve son identité à Google, aucune clé n'est stockée
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
           fetch-depth: 0
       - name: api/ a-t-il changé ?
