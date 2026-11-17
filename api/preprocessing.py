@@ -348,7 +348,11 @@ def clean_text(text: str) -> str:
 _HOMOGLYPHES_INV = {"\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0456": "i", "\u0441": "c", "\u0440": "p", "\u0443": "y", "\u0445": "x"}
 _LEET_INV = {"4": "a", "3": "e", "1": "i", "0": "o", "$": "s", "7": "t", "@": "a"}
 _INVISIBLES = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff"), None)
-_RE_LETTRES_ESPACEES = re.compile(r"\b(?:[a-zA-Z]\s){2,}[a-zA-Z]\b")
+# Lettres isolées séparées par UN MÊME séparateur (espace, point, tiret, tiret bas, étoile), au moins 3 lettres :
+# « U.S. » et « e.g. » ne sont pas touchés, « a U.S » non plus (séparateurs mélangés). Point, tiret, tiret bas et
+# étoile ajoutés après RedTeamIA (17 nov.) : « i.d.i.o.t » passait dans 6 cas sur 18 sur l'API déployée.
+_RE_LETTRES_ESPACEES = re.compile(r"\b[a-zA-Z]([ .\-_*])(?:[a-zA-Z]\1)+[a-zA-Z]\b")   # même séparateur partout
+_RE_SEPARATEURS = re.compile(r"[\s.\-_*]")
 _RE_A_UNE_LETTRE = re.compile(r"[a-zA-Z]")
 
 
@@ -375,7 +379,7 @@ def normaliser_avant_anonymisation(text: str) -> str:
     text = text.translate(_INVISIBLES)                               # caractères de largeur nulle
     text = "".join(c for c in text if not unicodedata.combining(c))  # accents artificiels
     text = "".join(_HOMOGLYPHES_INV.get(c, c) for c in text)         # homoglyphes cyrilliques
-    return _RE_LETTRES_ESPACEES.sub(lambda m: m.group(0).replace(" ", ""), text)  # "i d i o t"
+    return _RE_LETTRES_ESPACEES.sub(lambda m: _RE_SEPARATEURS.sub("", m.group(0)), text)  # "i d i o t", "i.d.i.o.t"
 
 
 def deleet(text: str) -> str:
