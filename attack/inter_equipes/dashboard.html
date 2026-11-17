@@ -413,7 +413,7 @@
       if (source) { source.close(); source = null; }
       btn.disabled = false;
       status.hidden = false;
-      $("status-txt").textContent = "Connexion au serveur perdue. Lance d'abord : uvicorn attack.serveur:app --port 8050";
+      $("status-txt").textContent = "Connexion au serveur perdue. Lance d'abord : uvicorn attack.inter_equipes.serveur:app --port 8050";
       status.querySelector(".pulse").style.background = "var(--warn)";
     };
   });

@@ -34,6 +34,7 @@ class DummyScorer:
     def predict(self, texts: list[str]) -> list[dict[str, float]]:
         sorties = []
         for t in texts:
+            # 0,3 par mot grossier, plafonné à 1 ; `toxic` et `insult` reçoivent la valeur entière, les autres un tiers
             p = min(1.0, 0.3 * sum(mot in self._MOTS for mot in t.split()))
             sorties.append({label: (p if label in ("toxic", "insult") else p / 3) for label in LABELS})
         return sorties
@@ -61,9 +62,9 @@ class BiLSTMScorer:
                 self.sortie = nn.Linear(2 * hidden, n_labels)
 
             def forward(self, x):
-                masque = (x != 0).unsqueeze(-1)
+                masque = (x != 0).unsqueeze(-1)              # 0 = remplissage (padding) : à ignorer
                 h, _ = self.lstm(self.embedding(x))
-                h = h.masked_fill(~masque, -1e9)
+                h = h.masked_fill(~masque, -1e9)             # le remplissage ne peut jamais gagner le max-pooling
                 return self.sortie(self.dropout(h.max(dim=1).values))
 
         self.model = BiLSTM(len(self.vocab), meta["emb_dim"], meta["hidden"], len(LABELS))
@@ -74,6 +75,7 @@ class BiLSTMScorer:
         """Copie exacte de encoder() dans train.ipynb."""
         X = self.torch.zeros((len(texts), self.max_len), dtype=self.torch.long)
         for i, t in enumerate(texts):
+            # Mot inconnu -> indice 1 ; texte vide -> un seul mot inconnu ; texte trop long -> tronqué à max_len mots
             ids = [self.vocab.get(m, 1) for m in t.split()[:self.max_len]] or [1]
             X[i, :len(ids)] = self.torch.tensor(ids)
         return X
@@ -118,14 +120,16 @@ class DistilBertScorer:
         recouvrent, toutes évaluées en un seul passage, et chaque label garde son MAXIMUM sur les fenêtres."""
         options = dict(truncation=True, max_length=longueur, padding=True, return_tensors="pt")
         if chevauchement is not None:
+            # stride = nombre de tokens communs entre deux fenêtres voisines ; return_overflowing_tokens rend TOUTES les
+            # fenêtres au lieu de jeter ce qui dépasse.
             options.update(stride=chevauchement, return_overflowing_tokens=True)
         enc = self.tokenizer(texts, **options)
-        origine = enc.pop("overflow_to_sample_mapping", None)
+        origine = enc.pop("overflow_to_sample_mapping", None)     # fenêtre -> numéro du texte d'où elle vient ; à retirer avant le modèle
         with self.torch.no_grad():
             probas = self.torch.sigmoid(self.model(**enc).logits).tolist()
         origine = origine.tolist() if origine is not None else range(len(texts))
         maxima = [[0.0] * len(LABELS) for _ in texts]
-        for i, p in zip(origine, probas):
+        for i, p in zip(origine, probas):      # plusieurs fenêtres pour un même texte : max par label
             maxima[i] = [max(x, y) for x, y in zip(maxima[i], p)]
         return maxima, len(probas)
 
@@ -137,6 +141,7 @@ class DistilBertScorer:
         Chaque label garde le maximum des deux lectures. Un texte court ne fait qu'une passe : rien ne change pour lui.
         Coût : proportionnel à la longueur, plafonné par MAX_CHARS (5 000 caractères)."""
         complet, n = self._passe(texts, self.max_len)
+        # Longueur réelle en tokens (sans troncature) : seuls les textes plus longs qu'une fenêtre sont relus.
         longueurs = [len(ids) for ids in self.tokenizer(texts, add_special_tokens=False)["input_ids"]]
         longs = [i for i, lg in enumerate(longueurs) if lg > FENETRE_NOYAGE]
         if longs:
@@ -178,7 +183,7 @@ SCORERS = {"bilstm": BiLSTMScorer, "distilbert": DistilBertScorer, "laya": LayaS
 def load_scorer():
     """Charge le modèle décrit par model/meta.json (une seule fois, au démarrage de l'API)."""
     meta_path = MODEL_DIR / "meta.json"
-    if not meta_path.exists():
+    if not meta_path.exists():      # pas de modèle exporté : modèle factice (développement et tests de l'API)
         factice = DummyScorer()
         factice.seuils = _seuils({})
         return factice
@@ -194,5 +199,6 @@ def load_scorer():
     if meta["model_type"] not in SCORERS:
         raise RuntimeError(f"model_type inconnu dans meta.json : {meta['model_type']}")
     scorer = SCORERS[meta["model_type"]](MODEL_DIR, meta)
+    # Seuils de décision par label, choisis sur la validation (api/model/meta.json, venu de models/seuils.json)
     scorer.seuils = _seuils(meta)
     return scorer

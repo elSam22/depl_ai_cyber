@@ -2,7 +2,7 @@
 L'API DÉPLOYÉE est api/main.py (route /score, clé, protections).
 
 Lancement (depuis la racine du projet) :
-    .venv/bin/uvicorn api.main_local:app --port 8000
+    .venv/bin/uvicorn api_locale.main_local:app --port 8000
 Documentation interactive (pour tester dans le navigateur) : http://127.0.0.1:8000/docs
 
 RGPD : le texte reçu n'est ni enregistré ni écrit dans les logs. Il est anonymisé avant d'être donné au modèle.
@@ -19,9 +19,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from api import modeles
+from api_locale import modeles
 from api.limiteur_debit import LimiteurDebit
-from api.preprocess import pretraiter_detail
+from api_locale.preprocess import pretraiter_detail
 
 # Défense contre le vol de modèle (étape 3) : quota par identifiant, fenêtre glissante.
 # DEBIT_MAX_REQUETES=0 désactive la limite (pour comparer avec/sans, voir attack/debit.py).

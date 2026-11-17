@@ -1,7 +1,7 @@
 """Recalcule models/seuils.json à partir des prédictions enregistrées par notebooks/train.ipynb.
 
 Utile pour avoir les seuils sans attendre la dernière cellule du notebook (qui les écrit aussi, avec le même calcul).
-Usage : .venv/bin/python -m api.export_seuils
+Usage : .venv/bin/python -m api_locale.export_seuils
 """
 import json
 
@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.metrics import f1_score
 from sklearn.model_selection import train_test_split
 
-from api.modeles import DOSSIER_MODELES, LABELS, RACINE
+from api_locale.modeles import DOSSIER_MODELES, LABELS, RACINE
 
 SEED = 42
 # fichier de prédictions de validation -> nom du modèle dans seuils.json

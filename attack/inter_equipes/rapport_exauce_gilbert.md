@@ -62,7 +62,7 @@ Plus 15 commentaires sains (non attaqués, servent à vérifier l'absence de fau
 
 ## 3. Résultats
 
-![Détection avant/après par attaque](resultats_equipes/exauce_resultats.png)
+![Détection avant/après par attaque](resultats/exauce_resultats.png)
 
 | Attaque                          | Rappel avant | Rappel après | Évasions        | Latence moyenne |
 | -------------------------------- | ------------ | ------------- | ---------------- | --------------- |
@@ -105,7 +105,7 @@ Plus 15 commentaires sains (non attaqués, servent à vérifier l'absence de fau
 
 ### 3.3 Noyage et mutation — données complètes
 
-Pour le noyage, le texte envoyé est le commentaire original précédé d'environ 4 000 caractères de texte neutre (trop long pour ce document) ; le score tombe à 0,01 pour les 9 mêmes commentaires que ci-dessus. Pour la mutation aléatoire, 7 des 9 commentaires ci-dessus évadent également, avec des scores après attaque entre 18,1 et 49,5. Le détail complet (textes exacts, scores, latences) est dans [resultats_equipes/exauce_evasions.csv](resultats_equipes/exauce_evasions.csv) et [resultats_equipes/exauce_noyage.sse](resultats_equipes/exauce_noyage.sse) — disponibles sur demande si vous voulez les données brutes.
+Pour le noyage, le texte envoyé est le commentaire original précédé d'environ 4 000 caractères de texte neutre (trop long pour ce document) ; le score tombe à 0,01 pour les 9 mêmes commentaires que ci-dessus. Pour la mutation aléatoire, 7 des 9 commentaires ci-dessus évadent également, avec des scores après attaque entre 18,1 et 49,5. Le détail complet (textes exacts, scores, latences) est dans [resultats_equipes/exauce_evasions.csv](resultats/exauce_evasions.csv) et [resultats_equipes/exauce_noyage.sse](resultats/exauce_noyage.sse) — disponibles sur demande si vous voulez les données brutes.
 
 ## 5. Ce qui ressort de ces résultats
 

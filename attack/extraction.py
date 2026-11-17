@@ -25,14 +25,14 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 
-from api import modeles
+from api_locale import modeles
 from api.defense_extraction import quantifier_score
-from api.preprocess import pretraiter
+from api_locale.preprocess import pretraiter
 
 RACINE = Path(__file__).resolve().parent.parent
 SORTIES = Path(__file__).resolve().parent / "results"
-SEED = 42
-VOLUMES = [100, 500, 1000, 2000]
+SEED = 42                          # graine fixe : mêmes textes à chaque exécution, résultats reproductibles
+VOLUMES = [100, 500, 1000, 2000]   # nombre de requêtes de l'attaquant ; 2000 = ordre de grandeur de l'attaque reçue
 
 
 def charger_requetes_attaquant(n: int) -> list[str]:
@@ -46,20 +46,21 @@ def charger_test_etiquete(n: int = 3000):
     textes = pd.read_csv(RACINE / "data" / "test.csv")
     labels = pd.read_csv(RACINE / "data" / "test_labels.csv")
     df = textes.merge(labels, on="id")
+    # -1 = ligne non évaluée par Kaggle : on les écarte, elles n'ont pas de vrais labels
     df = df[df[modeles.LABELS].ne(-1).all(axis=1)].sample(n, random_state=SEED)
     return df.comment_text.astype(str).tolist(), df[modeles.LABELS].to_numpy()
 
 
 def interroger_cible(modele, seuils, textes, defense: bool):
     """Simule la réponse de l'API pour chaque texte : score par label, quantifié ou non."""
-    s = np.array([seuils[l] for l in modeles.LABELS])
+    s = np.array([seuils[l] for l in modeles.LABELS])      # seuil de décision de chaque label
     scores = np.zeros((len(textes), len(modeles.LABELS)))
     for i, t in enumerate(textes):
         p = modele.probabilites(pretraiter(t)) * 100
         if defense:
             p = np.array([quantifier_score(float(x), pas=100) for x in p])   # verdict pur : 0 ou 100, aucune nuance
         scores[i] = p
-    detectes = (scores / 100 >= s).astype(int)
+    detectes = (scores / 100 >= s).astype(int)      # verdict par label : score au-dessus du seuil
     return scores, detectes
 
 
@@ -80,6 +81,7 @@ def entrainer_clone(textes_entrainement, scores_cible):
 
 
 def predire_clone(vect, modeles_clone, textes, seuils):
+    """Verdict du clone sur des textes qu'il n'a jamais vus, avec les mêmes seuils que la cible."""
     X = vect.transform(textes)
     s = np.array([seuils[l] for l in modeles.LABELS])
     out = np.zeros((len(textes), len(modeles_clone)))
@@ -89,6 +91,8 @@ def predire_clone(vect, modeles_clone, textes, seuils):
 
 
 def metriques_clone(y_vrai, pred_clone, pred_cible):
+    """Accord = part des verdicts où le clone fait comme la cible (mesure de fidélité du vol) ; exactitude et faux
+    positifs = qualité du clone face aux VRAIS labels."""
     accord = float((pred_clone == pred_cible).mean())
     vp = ((pred_clone == 1) & (y_vrai == 1)).sum(); fp = ((pred_clone == 1) & (y_vrai == 0)).sum()
     fn = ((pred_clone == 0) & (y_vrai == 1)).sum(); vn = ((pred_clone == 0) & (y_vrai == 0)).sum()
@@ -101,13 +105,13 @@ def metriques_clone(y_vrai, pred_clone, pred_cible):
 def main():
     modele = modeles.obtenir("distilbert")
     seuils = modeles.seuils(modele)
-    modele.probabilites(pretraiter("warm up"))
+    modele.probabilites(pretraiter("warm up"))      # première inférence lente (chargement) : on la fait avant de mesurer
 
     textes_test, y_test = charger_test_etiquete()
     _, pred_cible_test = interroger_cible(modele, seuils, textes_test, defense=False)   # verdict réel, jamais quantifié pour l'évaluation
 
     resultats = {"sans_defense": [], "avec_defense": []}
-    for n in VOLUMES:
+    for n in VOLUMES:      # plus l'attaquant envoie de requêtes, plus son clone devrait être fidèle
         requetes = charger_requetes_attaquant(n)
         for condition, defense in [("sans_defense", False), ("avec_defense", True)]:
             t0 = time.perf_counter()
@@ -132,7 +136,7 @@ def main():
 
 def graphique(resultats: dict, chemin: Path):
     import matplotlib
-    matplotlib.use("Agg")
+    matplotlib.use("Agg")      # pas de fenêtre : on écrit seulement un fichier image
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -140,7 +144,7 @@ def graphique(resultats: dict, chemin: Path):
         L = resultats[condition]
         ax.plot([m["n_requetes"] for m in L], [m["accord_clone_cible"] for m in L], style, color=couleur,
                 label=f"Accord clone/cible — {'sans défense' if condition == 'sans_defense' else 'avec défense'}")
-    ax.set_xscale("log")
+    ax.set_xscale("log")      # les volumes vont de 100 à 2000 : l'échelle logarithmique les espace régulièrement
     ax.set_xlabel("Nombre de requêtes envoyées à l'API (effort de l'attaquant)")
     ax.set_ylabel("Accord clone / cible")
     ax.set_ylim(0, 1.05)

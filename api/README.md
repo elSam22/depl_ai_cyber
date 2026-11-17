@@ -9,7 +9,7 @@ clé API → validation → anonymisation → nettoyage → modèle → score. L
 | `protection.py`, `limiteur_debit.py` | Protection en entrée : limites par IP, seau à jetons sur `/score`, sanction progressive, clés fausses, taille du corps, en-têtes |
 | `defense_extraction.py` | Score arrondi à la dizaine (réponse réduite) |
 | `model_empreintes.sha256` | Empreintes des poids de référence, vérifiées par la pipeline |
-| `main_local.py`, `modeles.py`, `preprocess.py`, `export_seuils.py` | **API locale** de développement (3 modèles, `/predire`, front) : `uvicorn api.main_local:app` depuis la racine |
+| (voir `../api_locale/`) | L'API locale de développement (3 modèles, `/predire`, front) est dans son propre dossier : ce dossier ne contient que le code déployé |
 | `preprocessing.py` | Anonymisation + nettoyage : **source unique**, aussi importée par les notebooks |
 | `scorer.py` | Chargement du modèle (factice, BiLSTM ou DistilBERT) d'après `model/meta.json` |
 | `export_model.py` | Copie `models/<type>` dans `api/model/` et écrit `meta.json` |

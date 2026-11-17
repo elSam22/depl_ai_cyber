@@ -1,4 +1,4 @@
-"""TP2, étape 3 : mesure l'effet de la défense anti-noyage (fenêtres glissantes dans api/modeles.py).
+"""TP2, étape 3 : mesure l'effet de la défense anti-noyage (fenêtres glissantes dans api_locale/modeles.py).
 
 Principe de l'attaque noyage : on envoie un long texte neutre AVANT le commentaire toxique,
 ce qui fait que le tokenizer (tronquant à droite) ne voit que du neutre → proba toxic chute.
@@ -17,7 +17,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 os.environ.setdefault("USE_TF", "0")
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT))      # permet de lancer le script directement, sans « -m », en important le paquet api
 
 import json
 import matplotlib
@@ -37,6 +37,7 @@ PHRASES_TOXIQUES = [
     "I will destroy you, you pathetic loser.",
 ]
 
+# Bloc de texte neutre répété pour fabriquer le rembourrage (remplace de vrais commentaires sains : version simplifiée)
 NEUTRE_UNIT = (
     "The weather today is sunny and pleasant. "
     "I enjoy reading books in the afternoon. "
@@ -47,6 +48,8 @@ NIVEAUX_REMBOURRAGE = [0, 500, 1000, 2000, 4000]  # caractères neutres ajoutés
 
 
 def construire_texte_noye(phrase_toxique: str, n_chars: int) -> str:
+    """Place `n_chars` caractères neutres AVANT la phrase toxique : c'est la position qui rend l'attaque efficace
+    (le modèle tronque la fin du texte)."""
     if n_chars == 0:
         return phrase_toxique
     prefixe = (NEUTRE_UNIT * (n_chars // len(NEUTRE_UNIT) + 1))[:n_chars]
@@ -55,7 +58,7 @@ def construire_texte_noye(phrase_toxique: str, n_chars: int) -> str:
 
 def _sans_defense(modele, texte: str) -> float:
     """Simule l'ancien comportement (tronquage droit) pour DistilBERT."""
-    from api.modeles import LONGUEUR_BERT, DEVICE
+    from api_locale.modeles import LONGUEUR_BERT, DEVICE
     enc = modele.tokenizer(
         [texte], truncation=True, padding="max_length",
         max_length=LONGUEUR_BERT, return_tensors="pt"
@@ -74,7 +77,7 @@ def _avec_defense(modele, texte: str) -> float:
 
 
 def main():
-    from api.modeles import obtenir
+    from api_locale.modeles import obtenir
 
     print("Chargement de DistilBERT…", flush=True)
     modele = obtenir("distilbert")
@@ -90,6 +93,8 @@ def main():
             probas_avec.append(_avec_defense(modele, texte))
         moy_sans = round(np.mean(probas_sans), 3)
         moy_avec = round(np.mean(probas_avec), 3)
+        # Évasion = phrase non détectée. ATTENTION : seuil simplifié à 0,5. Les vrais seuils de l'API sont de 0,88 à 0,97 :
+        # mesure corrigée dans attack/results/noyage_seuils_reels.* et dans LIVRABLES/TP2_LIVRABLE.md, § 4.3.
         evasion_sans = round(100 * sum(p < 0.5 for p in probas_sans) / len(probas_sans))
         evasion_avec = round(100 * sum(p < 0.5 for p in probas_avec) / len(probas_avec))
         print(f"Rembourrage {n:5d} chars | sans défense : {moy_sans:.3f} ({evasion_sans}% évasion) "
@@ -102,7 +107,7 @@ def main():
             "evasion_avec_defense_pct": evasion_avec,
         })
 
-    # Sauvegarde JSON
+    # Résultats bruts en JSON (réutilisables sans relancer le modèle)
     (SORTIES / "defense_noyage.json").write_text(
         json.dumps(resultats, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -138,7 +143,7 @@ def main():
     a2.legend(fontsize=8)
     a2.spines[["top", "right"]].set_visible(False)
 
-    fig.suptitle("Défense anti-noyage : fenêtres glissantes sur DistilBERT (api/modeles.py)",
+    fig.suptitle("Défense anti-noyage : fenêtres glissantes sur DistilBERT (api_locale/modeles.py)",
                  fontsize=12, fontweight="bold")
     fig.tight_layout()
     chemin = SORTIES / "defense_noyage.png"

@@ -17,7 +17,7 @@ import torch.nn as nn
 RACINE = Path(__file__).resolve().parent.parent
 DOSSIER_MODELES = RACINE / "models"
 LABELS = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
-DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")   # GPU du Mac M3 si disponible, sinon CPU
 
 # Hyperparamètres identiques à ceux de notebooks/train.ipynb
 LONGUEUR_LSTM, EMB_LSTM, HIDDEN_LSTM = 200, 128, 64
@@ -39,13 +39,14 @@ class BiLSTM(nn.Module):
         self.sortie = nn.Linear(2 * hidden, n_labels)
 
     def forward(self, x):
-        masque = (x != 0).unsqueeze(-1)
+        masque = (x != 0).unsqueeze(-1)              # 0 = remplissage (padding) : à ignorer
         h, _ = self.lstm(self.embedding(x))
-        h = h.masked_fill(~masque, -1e9)
+        h = h.masked_fill(~masque, -1e9)             # le remplissage ne peut jamais gagner le max-pooling
         return self.sortie(self.dropout(h.max(dim=1).values))
 
 
 class ModeleBiLSTM:
+    """BiLSTM chargé depuis models/bilstm/. `nom_seuils` est la clé de ce modèle dans models/seuils.json."""
     nom_seuils = "BiLSTM"
 
     def __init__(self):
@@ -59,10 +60,10 @@ class ModeleBiLSTM:
 
     @torch.no_grad()
     def probabilites(self, texte: str) -> np.ndarray:
-        mots = texte.split() or [""]
+        mots = texte.split() or [""]      # le texte est déjà nettoyé : les mots sont séparés par des espaces
         if len(mots) <= LONGUEUR_LSTM:
-            ids = [self.vocab.get(m, 1) for m in mots]
-            x = torch.zeros((1, LONGUEUR_LSTM), dtype=torch.long)
+            ids = [self.vocab.get(m, 1) for m in mots]      # mot inconnu -> indice 1
+            x = torch.zeros((1, LONGUEUR_LSTM), dtype=torch.long)      # complété par des 0 (remplissage)
             x[0, :len(ids)] = torch.tensor(ids)
             return torch.sigmoid(self.modele(x.to(DEVICE)))[0].cpu().numpy()
         # Texte long : fenêtres glissantes → prend le max (défense anti-noyage)
@@ -77,6 +78,7 @@ class ModeleBiLSTM:
 
 
 class ModeleDistilBERT:
+    """DistilBERT chargé depuis models/distilbert/ (version locale de développement ; l'API déployée utilise api/scorer.py)."""
     nom_seuils = "DistilBERT"
 
     def __init__(self):
@@ -92,7 +94,7 @@ class ModeleDistilBERT:
     def probabilites(self, texte: str) -> np.ndarray:
         # Tokenise sans troncature pour connaître la longueur réelle
         tokens = self.tokenizer(texte, add_special_tokens=False)["input_ids"]
-        pas = LONGUEUR_BERT - 2  # réserve [CLS] et [SEP]
+        pas = LONGUEUR_BERT - 2  # réserve [CLS] et [SEP] : une fenêtre contient donc 126 tokens de texte au plus
         if len(tokens) <= pas:
             enc = self.tokenizer([texte], truncation=True, padding="max_length",
                                  max_length=LONGUEUR_BERT, return_tensors="pt")
@@ -104,7 +106,7 @@ class ModeleDistilBERT:
         for debut in range(0, len(tokens), pas):
             chunk = tokens[debut:debut + pas]
             ids = [self.tokenizer.cls_token_id] + chunk + [self.tokenizer.sep_token_id]
-            masque = [1] * len(ids)
+            masque = [1] * len(ids)      # 1 = vrai token, 0 = remplissage que le modèle doit ignorer
             pad_id = self.tokenizer.pad_token_id
             while len(ids) < LONGUEUR_BERT:
                 ids.append(pad_id)
@@ -143,7 +145,7 @@ class ModeleLaya:
 
 
 CLASSES = {"bilstm": ModeleBiLSTM, "distilbert": ModeleDistilBERT, "laya": ModeleLaya}
-_CHARGES = {}   # modèles déjà chargés
+_CHARGES = {}   # modèles déjà chargés : charger DistilBERT ou LAYA prend du temps, on ne le fait qu'une fois
 
 
 def obtenir(nom: str):

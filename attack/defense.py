@@ -1,4 +1,4 @@
-"""TP2, étape 3 : défense contre l'attaque par évasion (normaliser_anti_evasion, api/preprocess.py).
+"""TP2, étape 3 : défense contre l'attaque par évasion (normaliser_anti_evasion, api_locale/preprocess.py).
 
 Réexécute l'attaque du § 2 (attack/evasion.py) sur le même échantillon, avec et sans la
 défense, pour mesurer son effet : précision, rappel, taux d'évasion, faux positifs, latence.
@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from api import modeles
-from api.preprocess import anonymiser, clean_text, pretraiter
+from api_locale import modeles
+from api_locale.preprocess import anonymiser, clean_text, pretraiter
 from attack.evasion import ATTAQUES, SORTIES, attaquer, charger_echantillon, metriques, predire
 
 
@@ -25,6 +25,7 @@ def sans_defense(texte: str) -> str:
 
 
 def main():
+    # Protocole identique à attack/evasion.py (même échantillon, mêmes déguisements) : seule la chaîne de traitement change.
     ap = argparse.ArgumentParser()
     ap.add_argument("--modele", default="distilbert", choices=["distilbert", "bilstm"])
     ap.add_argument("--n", type=int, default=500)
@@ -43,6 +44,7 @@ def main():
 
     resultats = {}
     for nom, textes in variantes.items():
+        # Les deux chaînes sur les MÊMES textes : sans la défense (nettoyage seul) puis avec (pretraiter = chaîne de l'API)
         pred_sans, lat_sans = predire(modele, seuils, textes, pretraitement=sans_defense)
         pred_avec, lat_avec = predire(modele, seuils, textes, pretraitement=pretraiter)
         m_sans = metriques(y, pred_sans, lat_sans)
@@ -53,7 +55,7 @@ def main():
 
     # Taux d'évasion : parmi les toxiques détectés SANS attaque (avec défense active), combien
     # échappent encore UNE FOIS DÉGUISÉS, toujours avec la défense active.
-    pred_ref, _ = predire(modele, seuils, variantes["sans attaque"], pretraitement=pretraiter)
+    pred_ref, _ = predire(modele, seuils, variantes["sans attaque"], pretraitement=pretraiter)      # verdicts de référence
     for nom, textes in variantes.items():
         if nom == "sans attaque":
             continue
@@ -80,7 +82,7 @@ def graphique_defense(resultats: dict, titre: str, chemin: Path):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    noms = list(resultats)
+    noms = list(resultats)      # une paire de barres (sans / avec défense) par variante d'attaque
     fig, ax = plt.subplots(figsize=(10, 4.8))
     x = np.arange(len(noms)); w = 0.35
     rappel_sans = [resultats[n]["sans_defense"]["rappel"] for n in noms]

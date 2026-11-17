@@ -19,31 +19,36 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from api import modeles
-from api.preprocess import _est_toxique, pretraiter
+from api_locale import modeles
+from api_locale.preprocess import _est_toxique, pretraiter
 
 RACINE = Path(__file__).resolve().parent.parent
 SORTIES = Path(__file__).resolve().parent / "results"
 SEED = 42
 
+# Les trois tables ci-dessous sont les déguisements que ferait un humain pour qu'un mot reste lisible mais change d'aspect.
 LEET = {"a": "@", "e": "3", "i": "1", "o": "0", "s": "$", "t": "7"}
 HOMOGLYPHES = {"a": "а", "e": "е", "o": "о", "c": "с", "p": "р", "x": "х", "i": "і", "y": "у"}   # cyrillique
 INVISIBLE = "​"   # espace sans chasse
 
 
 def leet(mot: str) -> str:
+    """idiot -> 1d10t : lettres remplacées par des chiffres ou symboles ressemblants."""
     return "".join(LEET.get(c.lower(), c) for c in mot)
 
 
 def espaces(mot: str) -> str:
+    """idiot -> i d i o t : une espace entre chaque lettre."""
     return " ".join(mot)
 
 
 def homoglyphes(mot: str) -> str:
+    """idiot -> іdіоt : lettres latines remplacées par des lettres cyrilliques identiques à l'œil."""
     return "".join(HOMOGLYPHES.get(c, c) for c in mot)
 
 
 def invisibles(mot: str) -> str:
+    """Insère un espace sans chasse (U+200B), invisible à l'écran, entre chaque lettre : le mot reste lisible pour un humain."""
     return INVISIBLE.join(mot)
 
 
@@ -54,8 +59,9 @@ def attaquer(texte: str, transformation, rng: random.Random | None = None) -> st
     """Applique la transformation aux seuls mots toxiques : le reste du texte est intact, comme le ferait un humain."""
     def remplacer(m):
         mot = m.group()
-        if not _est_toxique(mot.lower()):
+        if not _est_toxique(mot.lower()):      # mot ordinaire : laissé tel quel
             return mot
+        # Avec `rng` (variante « mélange »), chaque mot toxique reçoit un déguisement tiré au hasard
         f = transformation if rng is None else rng.choice(list(ATTAQUES.values()))
         return f(mot)
     return re.sub(r"[A-Za-z]+", remplacer, texte)
@@ -67,10 +73,10 @@ def charger_echantillon(n: int) -> pd.DataFrame:
     labels = pd.read_csv(RACINE / "data" / "test_labels.csv")
     df = textes.merge(labels, on="id")
     df = df[df[modeles.LABELS].ne(-1).all(axis=1)].copy()
-    df["toxique"] = df[modeles.LABELS].max(axis=1).astype(int)
+    df["toxique"] = df[modeles.LABELS].max(axis=1).astype(int)      # toxique = au moins un des 6 labels vaut 1
     # on ne garde que les toxiques qui contiennent au moins un mot de la liste : sinon l'attaque n'a rien à déguiser
     contient = df["comment_text"].str.lower().str.findall(r"[a-z]+").apply(lambda ms: any(_est_toxique(m) for m in ms))
-    tox = df[(df.toxique == 1) & contient].sample(n, random_state=SEED)
+    tox = df[(df.toxique == 1) & contient].sample(n, random_state=SEED)      # graine fixe : échantillon reproductible
     sain = df[df.toxique == 0].sample(n, random_state=SEED)
     return pd.concat([tox, sain]).reset_index(drop=True)
 
@@ -83,11 +89,12 @@ def predire(modele, seuils: dict, textes, pretraitement=pretraiter):
         t0 = time.perf_counter()
         p = modele.probabilites(pretraitement(t))
         latences.append(1000 * (time.perf_counter() - t0))
-        preds.append(int((p >= s).any()))
+        preds.append(int((p >= s).any()))      # toxique prédit si AU MOINS UN label dépasse son seuil
     return np.array(preds), np.array(latences)
 
 
 def metriques(y, pred, latences, pred_reference=None) -> dict:
+    # vp/fp/fn/vn : vrais positifs, faux positifs, faux négatifs, vrais négatifs
     vp = int(((pred == 1) & (y == 1)).sum()); fp = int(((pred == 1) & (y == 0)).sum())
     fn = int(((pred == 0) & (y == 1)).sum()); vn = int(((pred == 0) & (y == 0)).sum())
     precision = vp / (vp + fp) if vp + fp else 0.0
@@ -146,7 +153,7 @@ def main():
     rng = random.Random(SEED)
     variantes["mélange"] = [attaquer(t, None, rng) for t in df.comment_text]
 
-    resultats, reference = {}, None
+    resultats, reference = {}, None      # reference = verdicts SANS attaque, pour calculer le taux d'évasion
     for nom, textes in variantes.items():
         pred, lat = predire(modele, seuils, textes)
         if reference is None:

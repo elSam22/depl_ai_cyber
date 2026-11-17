@@ -8,13 +8,13 @@ API qui note la toxicité d'un commentaire de **0 à 100**. Elle anonymise le te
 
 ## Livrables
 
-Ils sont tous dans [`livrables/`](livrables/). Il y a un document par TP, en PDF, avec les images intégrées. Chaque document suit les étapes de l'énoncé, puis reprend ses livrables et ses critères d'évaluation.
+Ils sont tous dans [`LIVRABLES/`](LIVRABLES/). Il y a un document par TP, en PDF, avec les images intégrées. Chaque document suit les étapes de l'énoncé, puis reprend ses livrables et ses critères d'évaluation.
 
 | Document | Contenu |
 |---|---|
-| [**TP1_LIVRABLE.pdf**](livrables/TP1_LIVRABLE.pdf) ([source Markdown](livrables/TP1_LIVRABLE.md)) | Étapes 1 à 7 : anonymisation, 3 modèles comparés, API, déploiement GKE, tests de charge, sécurité et supervision, architecture. En annexe : la grille de tests, le rapport de charge et le registre RGPD |
-| [**TP2_LIVRABLE.pdf**](livrables/TP2_LIVRABLE.pdf) ([source Markdown](livrables/TP2_LIVRABLE.md)) | Étapes 1 à 5 : attaque par évasion, défense mesurée (en local et sur l'API déployée), conformité IA Act, pipeline DevSecOps, analyse critique |
-| [REGISTRE_RGPD.md](livrables/REGISTRE_RGPD.md) | Registre des traitements, version 1.1 (également reproduit dans l'annexe C du TP1) |
+| [**TP1_LIVRABLE.pdf**](LIVRABLES/TP1_LIVRABLE.pdf) ([source Markdown](LIVRABLES/TP1_LIVRABLE.md)) | Étapes 1 à 7 : anonymisation, 3 modèles comparés, API, déploiement GKE, tests de charge, sécurité et supervision, architecture. En annexe : la grille de tests, le rapport de charge et le registre RGPD |
+| [**TP2_LIVRABLE.pdf**](LIVRABLES/TP2_LIVRABLE.pdf) ([source Markdown](LIVRABLES/TP2_LIVRABLE.md)) | Étapes 1 à 5 : attaque par évasion, défense mesurée (en local et sur l'API déployée), conformité IA Act, pipeline DevSecOps, analyse critique |
+| [REGISTRE_RGPD.md](LIVRABLES/REGISTRE_RGPD.md) | Registre des traitements, version 1.1 (également reproduit dans l'annexe C du TP1) |
 | [model_card.json](model_card.json) | Fiche du modèle (IA Act). Elle reste à la racine parce que la pipeline la contrôle à chaque modification |
 
 ## Résultats principaux
@@ -57,19 +57,19 @@ Codes renvoyés :
 ## Organisation du dépôt
 
 ```
-livrables/      Livrables TP1 et TP2 (PDF + source Markdown), registre RGPD
+LIVRABLES/      Livrables TP1 et TP2 (PDF + source Markdown), registre RGPD, images/ (schéma d'architecture)
 notebooks/      TP1, étapes 1-2 : anonymisation, nettoyage, entraînement des 3 modèles
-api/            API déployée (main.py, protection.py, scorer.py, Dockerfile, k8s/, deploy/, tests/)
-                et API locale de développement (main_local.py, 3 modèles) ; détail dans api/README.md
+api/            API DÉPLOYÉE uniquement : main.py, protection.py, scorer.py, Dockerfile, k8s/, deploy/, tests/
+api_locale/     API de développement (3 modèles, route /predire) : ce qui n'est pas déployé
 front/          Interface de démonstration (un seul fichier HTML)
 loadtest/       TP1, étape 5 : tests de charge Locust, rapport, courbes, résultats bruts
 supervision/    TP1, étape 6 : Prometheus/Grafana, alertes, tableau de bord, registre des incidents
 attack/         TP2 : scripts d'attaque et de défense, mesures sur l'API déployée, rapport technique
-images/         Schéma d'architecture cloud (et le script qui le génère)
-outils/         Export des livrables en PDF, contrôle de mise en page, contrôle de la fiche modèle
+  inter_equipes/  outil d'attaque des API d'autres équipes (avec leur accord), leurs rapports et résultats
 .github/        Pipeline DevSecOps (securite.yml) et mises à jour automatiques (Dependabot)
 data/           Jeu de données public (Toxic Comment Classification, Kaggle)
 cours/          Énoncés des TP et critères d'évaluation
+outils/         Export des livrables en PDF, contrôle de mise en page, contrôle de la fiche modèle
 ```
 
 **Branches** : `main` contient le code et les livrables. `ci` est la branche protégée que la pipeline déploie : on n'y entre que par une pull request dont les contrôles sont verts.
@@ -78,10 +78,10 @@ cours/          Énoncés des TP et critères d'évaluation
 
 - **Environnement** : Python 3.12, `pip install -r requirements.txt`.
 - **Entraînement** : exécuter les notebooks dans l'ordre (`anonyme_2`, `clean_text`, `train`). Il faut environ 1 h pour DistilBERT sur un Mac M3. Les modèles ne sont pas dans le dépôt, à cause de leur taille.
-- **API locale** : `uvicorn api.main_local:app --port 8000`, puis http://127.0.0.1:8000.
+- **API locale** : `uvicorn api_locale.main_local:app --port 8000`, puis http://127.0.0.1:8000.
 - **Tests** : `pytest api/tests`.
 - **Attaque rejouée sur l'API déployée** : `URL=https://<adresse> API_KEY=<clé> python -m attack.mesure_api_deployee`.
-- **Régénérer un PDF** : `python outils/exporter_documentation.py livrables/TP2_LIVRABLE.md`. Il faut Chrome ou Brave.
+- **Régénérer un PDF** : `python outils/exporter_documentation.py LIVRABLES/TP2_LIVRABLE.md`. Il faut Chrome ou Brave.
 
 Les tests de charge et d'attaque consomment du crédit Google Cloud. Ils ne visent que notre propre API.
 

@@ -1,8 +1,8 @@
-"""Exporte un livrable Markdown (livrables/TP1_LIVRABLE.md par défaut) en un seul fichier HTML (images intégrées) puis en PDF (via Brave ou Chrome).
+"""Exporte un livrable Markdown (LIVRABLES/TP1_LIVRABLE.md par défaut) en un seul fichier HTML (images intégrées) puis en PDF (via Brave ou Chrome).
 
 Le lecteur reçoit un seul document : les images sont incluses dans le fichier, pas des liens vers des fichiers.
 Prérequis : pip install markdown ; un navigateur Chrome/Brave pour le PDF.
-Lancement (depuis la racine) : .venv/bin/python outils/exporter_documentation.py [fichier.md]  (par défaut livrables/TP1_LIVRABLE.md ; TP2 : livrables/TP2_LIVRABLE.md)
+Lancement (depuis la racine) : .venv/bin/python outils/exporter_documentation.py [fichier.md]  (par défaut LIVRABLES/TP1_LIVRABLE.md ; TP2 : LIVRABLES/TP2_LIVRABLE.md)
 Sorties : <fichier>.html et <fichier>.pdf
 """
 import base64
@@ -14,7 +14,7 @@ from pathlib import Path
 import markdown
 
 RACINE = Path(__file__).resolve().parent.parent
-SOURCE = RACINE / (sys.argv[1] if len(sys.argv) > 1 else "livrables/TP1_LIVRABLE.md")   # ex. : livrables/TP2_LIVRABLE.md
+SOURCE = RACINE / (sys.argv[1] if len(sys.argv) > 1 else "LIVRABLES/TP1_LIVRABLE.md")   # ex. : LIVRABLES/TP2_LIVRABLE.md
 HTML = SOURCE.with_suffix(".html")
 PDF = SOURCE.with_suffix(".pdf")
 NAVIGATEURS = ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",

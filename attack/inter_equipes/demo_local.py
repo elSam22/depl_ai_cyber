@@ -1,7 +1,7 @@
-"""Score les 20 phrases (attack/phrases.csv) avec le modèle LOCAL, en version originale
+"""Score les 20 phrases (attack/inter_equipes/phrases.csv) avec le modèle LOCAL, en version originale
 et déguisée (combo), pour alimenter le dashboard. Pas d'appel réseau, pas de clé.
 
-Usage : .venv/bin/python -m attack.demo_local
+Usage : .venv/bin/python -m attack.inter_equipes.demo_local
 Sortie : attack/results/demo_20.json
 """
 import json
@@ -11,11 +11,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from api import modeles
-from api.preprocess import pretraiter
+from api_locale import modeles
+from api_locale.preprocess import pretraiter
 
-RACINE = Path(__file__).resolve().parent.parent
-SORTIE = Path(__file__).resolve().parent / "results" / "demo_20.json"
+RACINE = Path(__file__).resolve().parent.parent.parent
+SORTIE = Path(__file__).resolve().parent / "resultats" / "demo_20.json"
 
 HOMOGLYPHES = {"a": "а", "e": "е", "o": "о", "i": "і", "c": "с", "p": "р", "y": "у", "x": "х"}
 LEET = {"a": "4", "e": "3", "i": "1", "o": "0", "s": "$", "t": "7"}
@@ -46,7 +46,7 @@ def main():
     modele = modeles.obtenir("distilbert")
     seuils = modeles.seuils(modele)
     modele.probabilites(pretraiter("warm up"))            # 1re inférence lente, hors mesure
-    df = pd.read_csv(RACINE / "attack" / "phrases.csv")
+    df = pd.read_csv(Path(__file__).resolve().parent / "phrases.csv")
 
     lignes = []
     for _, r in df.iterrows():

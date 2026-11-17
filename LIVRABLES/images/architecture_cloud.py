@@ -1,6 +1,6 @@
 """Schéma d'architecture cloud — Digital Social Score (étape 7).
 Dessine le schéma avec matplotlib : composants, flux, zones de confiance et supervision (Prometheus, Grafana).
-Lancement : .venv/bin/python images/architecture_cloud.py
+Lancement : .venv/bin/python LIVRABLES/images/architecture_cloud.py LIVRABLES/images/architecture_cloud.png
 """
 from pathlib import Path
 import matplotlib
