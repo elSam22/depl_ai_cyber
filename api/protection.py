@@ -5,7 +5,8 @@ Leçons de l'attaque du 16 novembre 2026 (supervision/INCIDENTS.md) et du bilan 
 Ce module, placé AVANT l'authentification et le modèle, refuse vite et à peu de frais :
 
 - limite par adresse IP, toutes routes (429) ;
-- limite par adresse IP sur /score, la route qui coûte du calcul (429) ;
+- débit lissé par adresse IP sur /score, la route qui coûte du calcul : rafale de 10 puis 1 par seconde (429) ;
+- sanction progressive d'une adresse qui insiste après ses refus : bloquée 30 s, 60 s, 120 s... jusqu'à 15 min (429) ;
 - blocage temporaire d'une adresse qui présente trop de clés fausses (429) : brute-force de la clé ;
 - corps de requête plafonné (413) ;
 - en-têtes de sécurité sur toutes les réponses.
@@ -26,7 +27,7 @@ import time
 
 from prometheus_client import Counter
 
-from limiteur_debit import LimiteurDebit
+from limiteur_debit import LimiteurDebit, Sanctions, SeauJetons
 
 log = logging.getLogger("dss.protection")
 
@@ -40,7 +41,8 @@ def _entier(nom: str, defaut: int) -> int:
 # Valeurs par défaut choisies d'après les mesures de l'étape 5 (≈ 4 requêtes/s de calcul par pod) et le bilan de
 # l'attaque (191 à 225 requêtes/s sur /docs). Réglables par variable d'environnement sans reconstruire l'image.
 LIMITE_IP_PAR_MIN = _entier("LIMITE_IP_PAR_MIN", 300)        # toutes routes, par IP et par pod
-LIMITE_SCORE_PAR_MIN = _entier("LIMITE_SCORE_PAR_MIN", 60)   # /score, par IP et par pod
+LIMITE_SCORE_PAR_MIN = _entier("LIMITE_SCORE_PAR_MIN", 60)   # /score, par IP et par pod : débit moyen du seau
+RAFALE_SCORE = _entier("RAFALE_SCORE", 10)                    # /score : requêtes permises d'un coup
 LIMITE_ECHECS_PAR_MIN = _entier("LIMITE_ECHECS_PAR_MIN", 10)  # clés fausses, par IP et par pod
 MAX_OCTETS = _entier("MAX_BODY_BYTES", 40_000)                # 5 000 caractères accentués = 10 Ko ; marge pour le JSON
 
@@ -97,10 +99,11 @@ class _TropGros(Exception):
 class Protection:
     """Middleware ASGI (sans BaseHTTPMiddleware : moins de copies, donc moins de CPU sous charge)."""
 
-    def __init__(self, app, limite_ip=None, limite_score=None, echecs=None, max_octets=None):
+    def __init__(self, app, limite_ip=None, limite_score=None, echecs=None, max_octets=None, sanctions=None):
         self.app = app
         self.limite_ip = limite_ip or LimiteurDebit(LIMITE_IP_PAR_MIN, 60)
-        self.limite_score = limite_score or LimiteurDebit(LIMITE_SCORE_PAR_MIN, 60)
+        self.limite_score = limite_score or SeauJetons(RAFALE_SCORE, LIMITE_SCORE_PAR_MIN / 60)
+        self.sanctions = sanctions or Sanctions()
         self.echecs = echecs or ECHECS
         self.max_octets = max_octets or MAX_OCTETS
 
@@ -121,19 +124,28 @@ class Protection:
         ip = ip_client(scope)
 
         if route != "/health":      # sondes Kubernetes et load balancer : jamais limitées
+            bloque, attente = self.sanctions.bloque(ip)
+            if bloque:
+                journaliser_refus("sanction", route, ip)
+                return await self._repondre(send, 429, "Trop de requêtes refusées, adresse bloquée temporairement", attente)
+            refus = None
             bloque, attente = self.echecs.bloque(ip)
             if bloque:
-                journaliser_refus("echecs_cle", route, ip)
-                return await self._repondre(send, 429, "Trop de clés refusées, réessayer plus tard", attente)
-            autorise, attente = self.limite_ip.autoriser(ip)
-            if not autorise:
-                journaliser_refus("debit_ip", route, ip)
-                return await self._repondre(send, 429, "Trop de requêtes, réessayer plus tard", attente)
-            if route == "/score" and methode == "POST":
+                refus = ("echecs_cle", "Trop de clés refusées, réessayer plus tard")
+            if refus is None:
+                autorise, attente = self.limite_ip.autoriser(ip)
+                if not autorise:
+                    refus = ("debit_ip", "Trop de requêtes, réessayer plus tard")
+            if refus is None and route == "/score" and methode == "POST":
                 autorise, attente = self.limite_score.autoriser(ip)
                 if not autorise:
-                    journaliser_refus("debit_score", route, ip)
-                    return await self._repondre(send, 429, "Trop de requêtes sur /score, réessayer plus tard", attente)
+                    refus = ("debit_score", "Trop de requêtes sur /score, réessayer plus tard")
+            if refus is not None:
+                journaliser_refus(refus[0], route, ip)
+                duree = self.sanctions.enregistrer_refus(ip)
+                if duree:
+                    journaliser_refus("sanction_debut", route, ip)
+                return await self._repondre(send, 429, refus[1], max(attente, duree))
 
         longueur = dict(scope["headers"]).get(b"content-length")
         if longueur and longueur.isdigit() and int(longueur) > self.max_octets:
