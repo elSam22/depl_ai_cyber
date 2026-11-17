@@ -14,14 +14,14 @@ def rafale(url: str, duree_s: float):
     """Envoie des requêtes aussi vite que possible pendant `duree_s` secondes. Renvoie
     (nb_200, nb_429, nb_autres, requetes_par_s_effectif)."""
     t0 = time.monotonic()
-    n200 = n429 = nautres = 0
-    with requests.Session() as s:
+    n200 = n429 = nautres = 0      # réponses exploitables / refusées par le limiteur / autres (erreurs réseau comprises)
+    with requests.Session() as s:      # une session réutilise la connexion : on mesure le limiteur, pas l'ouverture de connexions
         while time.monotonic() - t0 < duree_s:
             try:
                 r = s.post(f"{url}/predire", json={"texte": "You are a stupid idiot"}, timeout=5)
-                if r.status_code == 200:
+                if r.status_code == 200:      # le modèle a répondu : l'attaquant obtient une réponse utilisable
                     n200 += 1
-                elif r.status_code == 429:
+                elif r.status_code == 429:      # refusé par le limiteur avant d'atteindre le modèle
                     n429 += 1
                 else:
                     nautres += 1
@@ -32,6 +32,7 @@ def rafale(url: str, duree_s: float):
 
 
 def main():
+    # Cible par défaut : l'API LOCALE (route /predire). On n'attaque jamais l'API déployée avec ce script.
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8000")
     ap.add_argument("--duree", type=float, default=30)

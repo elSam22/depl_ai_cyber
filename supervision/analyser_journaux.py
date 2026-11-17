@@ -18,6 +18,8 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
+# Chemins que visitent les scanners automatiques (WordPress, PHP, fichiers de configuration, traversée de dossiers...) :
+# un vrai utilisateur de notre API n'y va jamais.
 SONDES = re.compile(r"(xmlrpc|phpinfo|wp-|\.php|\.env|\.git|server-status|/stats|admin|passwd|/etc/|cgi-bin|actuator|\.\./)", re.I)
 
 parser = argparse.ArgumentParser()
@@ -28,11 +30,13 @@ parser.add_argument("--ips", action="store_true", help="afficher les adresses IP
 args = parser.parse_args()
 
 debut = (datetime.now(timezone.utc) - timedelta(hours=args.heures)).strftime("%Y-%m-%dT%H:%M:%SZ")
+# On lit les journaux du LOAD BALANCER (une ligne par requête, y compris celles refusées avant d'atteindre l'API)
 filtre = f'resource.type="http_load_balancer" AND timestamp>="{debut}"'
 sortie = subprocess.run(["gcloud", "logging", "read", filtre, "--project", args.projet, "--limit", str(args.max),
                          "--format", "json"], capture_output=True, text=True)
 if sortie.returncode:
     sys.exit("gcloud a échoué : " + sortie.stderr.strip()[:300])
+# On garde le bloc httpRequest de chaque entrée (adresse, route, code, latence) et on y ajoute l'horodatage
 entrees = [e["httpRequest"] | {"ts": e["timestamp"]} for e in json.loads(sortie.stdout or "[]") if "httpRequest" in e]
 if not entrees:
     sys.exit("Aucune entrée sur la période.")
@@ -41,11 +45,13 @@ if len(entrees) >= args.max:
 
 
 def chemin(url):
+    """https://domaine/score?x=1 -> /score : on garde le chemin, sans domaine ni paramètres."""
     m = re.match(r"https?://[^/]+(/[^?]*)", url or "")
     return m.group(1) if m else (url or "?")
 
 
 def latence(e):
+    """Latence en secondes : Cloud Logging l'écrit sous la forme « 0.095s »."""
     try:
         return float(e.get("latency", "0s").rstrip("s"))
     except ValueError:
@@ -53,6 +59,7 @@ def latence(e):
 
 
 clients = collections.Counter(e.get("remoteIp", "?") for e in entrees)
+# Pseudonymes C1, C2... par volume décroissant (RGPD) ; les vraies adresses seulement avec --ips
 nom = {ip: (ip if args.ips else f"C{i + 1}") for i, (ip, _) in enumerate(clients.most_common())}
 heures = sorted(e["ts"] for e in entrees)
 print(f"Période lue : {heures[0][:19]} à {heures[-1][:19]} UTC — {len(entrees)} requêtes, {len(clients)} clients distincts\n")
@@ -72,9 +79,9 @@ for ip, n in clients.most_common(8):
 
 print("\n== Minutes les plus chargées par client (rafales)")
 for ip, _ in clients.most_common(4):
-    par_min = collections.Counter(e["ts"][11:16] for e in entrees if e.get("remoteIp") == ip)
+    par_min = collections.Counter(e["ts"][11:16] for e in entrees if e.get("remoteIp") == ip)      # « HH:MM » de l'horodatage
     pic = par_min.most_common(1)[0]
-    if pic[1] >= 60:
+    if pic[1] >= 60:      # au moins 1 requête par seconde en moyenne sur la minute : une rafale
         print(f"  {nom[ip]:>16s}  {pic[0]} UTC : {pic[1]} requêtes ({pic[1] / 60:.0f}/s)")
 
 sonde = [e for e in entrees if SONDES.search(chemin(e.get("requestUrl")))]
@@ -82,11 +89,12 @@ print(f"\n== Chemins typiques de scanner ({len(sonde)} requêtes)")
 for ch, n in collections.Counter(chemin(e.get("requestUrl"))[:50] for e in sonde).most_common(8):
     print(f"  {n:5d}  {ch}")
 
-refus = [e for e in entrees if e.get("status") in (401, 403, 422)]
+refus = [e for e in entrees if e.get("status") in (401, 403, 422)]      # clé absente ou fausse, accès interdit, entrée invalide
 print(f"\n== Refus d'authentification et de validation ({len(refus)})")
 for (st, ip), n in collections.Counter((e.get("status"), e.get("remoteIp")) for e in refus).most_common(6):
     print(f"  {n:5d}  code {st}  client {nom[ip]}")
 
+# Percentiles calculés à la main sur la liste triée : médiane = élément du milieu, P95 = élément à 95 % du rang
 lat = sorted(latence(e) for e in entrees if "/score" in (e.get("requestUrl") or "") and e.get("status") == 200)
 if lat:
     print(f"\n== /score (réussites) : {len(lat)} requêtes, médiane {1000 * lat[len(lat) // 2]:.0f} ms, "

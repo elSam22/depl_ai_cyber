@@ -1,4 +1,4 @@
-"""Protection de l'API en entrée (couche « application » ; la couche « réseau » est Cloud Armor, voir deploy/armor.sh).
+"""Protection de l'API en entrée (couche « application »).
 
 Leçons de l'attaque du 16 novembre 2026 (supervision/INCIDENTS.md) et du bilan de la promotion : la plupart des API ont
 été mises à genoux par un simple flot de requêtes, ou ont laissé extraire leur modèle à 2 000 requêtes par minute.
@@ -15,7 +15,7 @@ Ce module, placé AVANT l'authentification et le modèle, refuse vite et à peu 
 L'adresse du client vient de X-Forwarded-For : le load balancer Google ajoute l'adresse réelle du client puis la sienne,
 donc l'avant-dernière valeur est fiable ; les valeurs plus à gauche peuvent être inventées par le client.
 Les limites sont PAR POD (mémoire locale) : avec N pods derrière le load balancer, la limite réelle est environ N fois
-plus haute. La limite globale est assurée par Cloud Armor.
+plus haute. Une limite globale demanderait Cloud Armor, refusé par le quota du projet (voir livrables/TP2_LIVRABLE.md, § 4.3).
 RGPD : une adresse IP est une donnée personnelle. Les journaux ne la contiennent jamais en clair : seulement une
 empreinte HMAC (clé secrète), stable d'un pod à l'autre, qui permet de reconnaître un client sans le nommer.
 """
@@ -77,6 +77,7 @@ def empreinte(ip: str) -> str:
     return hmac.new(cle, ip.encode(), hashlib.sha256).hexdigest()[:10]
 
 
+# (motif, client) -> (instant de la dernière ligne écrite, nombre de refus passés sous silence depuis)
 _dernier_journal: dict[tuple[str, str], tuple[float, int]] = {}
 
 
@@ -86,7 +87,7 @@ def journaliser_refus(motif: str, route: str, ip: str) -> None:
     REFUS.labels(motif).inc()
     cle = (motif, empreinte(ip))
     maintenant = time.monotonic()
-    if len(_dernier_journal) > 5000:
+    if len(_dernier_journal) > 5000:      # garde-fou mémoire : beaucoup d'adresses différentes ne doivent pas la remplir
         _dernier_journal.clear()
     dernier, ignores = _dernier_journal.get(cle, (0.0, 0))
     if maintenant - dernier < 60:
@@ -98,7 +99,7 @@ def journaliser_refus(motif: str, route: str, ip: str) -> None:
 
 
 class _TropGros(Exception):
-    pass
+    """Levée quand un corps envoyé en morceaux dépasse la taille permise (sans en-tête Content-Length pour le prévoir)."""
 
 
 class Protection:
@@ -113,18 +114,22 @@ class Protection:
         self.max_octets = max_octets or MAX_OCTETS
 
     async def _repondre(self, send, code: int, detail: str, attente: float = 0.0):
+        """Écrit directement une réponse d'erreur JSON (sans passer par l'application : c'est le but, refuser à peu de frais)."""
         corps = json.dumps({"detail": detail}).encode()
         entetes = [(b"content-type", b"application/json"), (b"content-length", str(len(corps)).encode())]
         if attente:
+            # Retry-After est un nombre entier de secondes : on arrondit vers le haut, au moins 1.
             entetes.append((b"retry-after", str(max(1, int(attente + 0.999))).encode()))
         entetes += EN_TETES_SECURITE
         await send({"type": "http.response.start", "status": code, "headers": entetes})
         await send({"type": "http.response.body", "body": corps})
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
+        if scope["type"] != "http":      # autres types ASGI (démarrage, arrêt) : on laisse passer
             return await self.app(scope, receive, send)
 
+        # Ordre des contrôles, du moins coûteux au plus coûteux : sanction en cours -> trop de clés fausses -> limite par
+        # adresse -> débit de /score -> taille du corps. Un client déjà sanctionné est refusé avant tout autre calcul.
         route, methode = scope["path"], scope["method"]
         ip = ip_client(scope)
 
@@ -133,7 +138,7 @@ class Protection:
             if bloque:
                 journaliser_refus("sanction", route, ip)
                 return await self._repondre(send, 429, "Trop de requêtes refusées, adresse bloquée temporairement", attente)
-            refus = None
+            refus = None      # (motif, message) du premier contrôle qui échoue
             bloque, attente = self.echecs.bloque(ip)
             if bloque:
                 refus = ("echecs_cle", "Trop de clés refusées, réessayer plus tard")
@@ -142,6 +147,7 @@ class Protection:
                 if not autorise:
                     refus = ("debit_ip", "Trop de requêtes, réessayer plus tard")
             if refus is None and route == "/score" and methode == "POST":
+                # Coût en jetons proportionnel à la taille déclarée du corps (un texte long coûte plus de calcul).
                 taille = dict(scope["headers"]).get(b"content-length", b"0")
                 cout = 1 + (int(taille) // OCTETS_PAR_JETON if taille.isdigit() else 0)
                 autorise, attente = (self.limite_score.autoriser(ip, cout) if isinstance(self.limite_score, SeauJetons)
@@ -150,18 +156,19 @@ class Protection:
                     refus = ("debit_score", "Trop de requêtes sur /score, réessayer plus tard")
             if refus is not None:
                 journaliser_refus(refus[0], route, ip)
-                duree = self.sanctions.enregistrer_refus(ip)
+                duree = self.sanctions.enregistrer_refus(ip)      # chaque refus rapproche le client d'une sanction
                 if duree:
                     journaliser_refus("sanction_debut", route, ip)
                 return await self._repondre(send, 429, refus[1], max(attente, duree))
 
+        # Corps trop gros : refus immédiat si la taille est annoncée ; sinon, contrôle pendant la réception (recevoir).
         longueur = dict(scope["headers"]).get(b"content-length")
         if longueur and longueur.isdigit() and int(longueur) > self.max_octets:
             journaliser_refus("trop_gros", route, ip)
             return await self._repondre(send, 413, "Requête trop volumineuse")
 
-        recu = 0
-        commence = False
+        recu = 0              # octets reçus jusqu'ici
+        commence = False      # la réponse a-t-elle déjà commencé ? Si oui, on ne peut plus la remplacer par un 413
 
         async def recevoir():
             nonlocal recu
@@ -174,7 +181,7 @@ class Protection:
 
         async def envoyer(message):
             nonlocal commence
-            if message["type"] == "http.response.start":
+            if message["type"] == "http.response.start":      # en-têtes de sécurité ajoutés à TOUTES les réponses
                 commence = True
                 message = {**message, "headers": list(message.get("headers", [])) + EN_TETES_SECURITE}
             await send(message)

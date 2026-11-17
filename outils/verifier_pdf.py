@@ -19,20 +19,23 @@ pages = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", script
 
 
 def norme(t: str) -> str:
+    """Texte réduit à l'essentiel (sans marques Markdown, en minuscules, espaces simplifiés) pour comparer un titre du
+    Markdown à une ligne extraite du PDF."""
     t = re.sub(r"[*`_#>]|\[|\]\([^)]*\)", "", t)
     return re.sub(r"\s+", " ", t).strip().lower()
 
 
-titres = set()
+titres = set()      # titres (#) et étiquettes en gras du Markdown : ce qu'il ne faut pas trouver en bas de page
 dans_code = False
 for ligne in source.read_text(encoding="utf-8").splitlines():
-    if ligne.startswith("```"):
+    if ligne.startswith("```"):      # dans un bloc de code, un « # » est un commentaire, pas un titre
         dans_code = not dans_code
     if dans_code:
         continue
     if re.match(r"^#{1,4} ", ligne) or re.fullmatch(r"\*\*[^*]{1,160}\*\*[^|]{0,80}:?", ligne.strip()):
         titres.add(norme(ligne))
 
+# Pour chaque page sauf la dernière : sa dernière ligne de texte (hors numéro de page) est-elle un titre ?
 orphelins = []
 for n, texte in enumerate(pages[:-1], start=1):
     lignes = [norme(x) for x in texte.splitlines() if x.strip() and not re.fullmatch(r"\d+", x.strip())]

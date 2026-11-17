@@ -15,6 +15,7 @@ RACINE = Path(__file__).resolve().parent.parent
 LABELS = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
 MODELES = {"BiLSTM": "bilstm", "DistilBERT": "distilbert", "LAYA (zéro-shot)": "laya__zéro_shot"}
 
+# Reconstitution du test commun du notebook : même filtre (lignes à -1 retirées), même tirage (graine 42, 10 000 lignes)
 etiquettes = pd.read_csv(RACINE / "data" / "test_labels.csv")
 non_evalue = (etiquettes[LABELS] == -1).all(axis=1).to_numpy()
 y = etiquettes[LABELS].to_numpy(dtype=np.float32)[~non_evalue]
@@ -23,6 +24,7 @@ y = y[np.sort(np.random.RandomState(42).choice(len(y), 10_000, replace=False))]
 print(f"{'modèle':<18} {'ROC-AUC':>8} {'AUC-PR':>8}")
 for nom, fichier in MODELES.items():
     p = np.load(RACINE / "models" / "predictions" / f"{fichier}_test.npy")
+    # Moyenne « macro » : un score par label, puis moyenne simple (les labels rares comptent autant que les fréquents)
     roc = np.mean([roc_auc_score(y[:, i], p[:, i]) for i in range(len(LABELS))])
     ap = np.mean([average_precision_score(y[:, i], p[:, i]) for i in range(len(LABELS))])
     print(f"{nom:<18} {roc:>8.4f} {ap:>8.3f}")
