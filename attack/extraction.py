@@ -25,9 +25,9 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 
-from api import modeles
+from api_locale import modeles
 from api.defense_extraction import quantifier_score
-from api.preprocess import pretraiter
+from api_locale.preprocess import pretraiter
 
 RACINE = Path(__file__).resolve().parent.parent
 SORTIES = Path(__file__).resolve().parent / "results"

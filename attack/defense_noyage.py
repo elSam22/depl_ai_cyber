@@ -1,4 +1,4 @@
-"""TP2, étape 3 : mesure l'effet de la défense anti-noyage (fenêtres glissantes dans api/modeles.py).
+"""TP2, étape 3 : mesure l'effet de la défense anti-noyage (fenêtres glissantes dans api_locale/modeles.py).
 
 Principe de l'attaque noyage : on envoie un long texte neutre AVANT le commentaire toxique,
 ce qui fait que le tokenizer (tronquant à droite) ne voit que du neutre → proba toxic chute.
@@ -58,7 +58,7 @@ def construire_texte_noye(phrase_toxique: str, n_chars: int) -> str:
 
 def _sans_defense(modele, texte: str) -> float:
     """Simule l'ancien comportement (tronquage droit) pour DistilBERT."""
-    from api.modeles import LONGUEUR_BERT, DEVICE
+    from api_locale.modeles import LONGUEUR_BERT, DEVICE
     enc = modele.tokenizer(
         [texte], truncation=True, padding="max_length",
         max_length=LONGUEUR_BERT, return_tensors="pt"
@@ -77,7 +77,7 @@ def _avec_defense(modele, texte: str) -> float:
 
 
 def main():
-    from api.modeles import obtenir
+    from api_locale.modeles import obtenir
 
     print("Chargement de DistilBERT…", flush=True)
     modele = obtenir("distilbert")
@@ -143,7 +143,7 @@ def main():
     a2.legend(fontsize=8)
     a2.spines[["top", "right"]].set_visible(False)
 
-    fig.suptitle("Défense anti-noyage : fenêtres glissantes sur DistilBERT (api/modeles.py)",
+    fig.suptitle("Défense anti-noyage : fenêtres glissantes sur DistilBERT (api_locale/modeles.py)",
                  fontsize=12, fontweight="bold")
     fig.tight_layout()
     chemin = SORTIES / "defense_noyage.png"

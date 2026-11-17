@@ -59,7 +59,7 @@ Plus 15 commentaires sains (non attaqués, servent à vérifier l'absence de fau
 
 ## 3. Résultats
 
-![Détection avant/après par attaque](resultats_equipes/florentin_resultats.png)
+![Détection avant/après par attaque](resultats/florentin_resultats.png)
 
 | Attaque                | Rappel avant | Rappel après | Évasions         | Latence moyenne |
 | ---------------------- | ------------ | ------------- | ----------------- | --------------- |
@@ -82,7 +82,7 @@ Plus 15 commentaires sains (non attaqués, servent à vérifier l'absence de fau
 
 ### 3.2 Noyage (14/15) et mutation aléatoire (5/15) — données complètes
 
-Pour le noyage, le texte envoyé est le commentaire original précédé d'environ 4 000 caractères de texte neutre (trop long pour ce document) ; le score tombe à 3 pour 14 des 15 commentaires toxiques, quel que soit leur contenu. Le détail complet (textes exacts, scores, latences) est dans [resultats_equipes/florentin_evasions.csv](resultats_equipes/florentin_evasions.csv) et [resultats_equipes/florentin_noyage.sse](resultats_equipes/florentin_noyage.sse) — disponibles sur demande si vous voulez les données brutes.
+Pour le noyage, le texte envoyé est le commentaire original précédé d'environ 4 000 caractères de texte neutre (trop long pour ce document) ; le score tombe à 3 pour 14 des 15 commentaires toxiques, quel que soit leur contenu. Le détail complet (textes exacts, scores, latences) est dans [resultats_equipes/florentin_evasions.csv](resultats/florentin_evasions.csv) et [resultats_equipes/florentin_noyage.sse](resultats/florentin_noyage.sse) — disponibles sur demande si vous voulez les données brutes.
 
 Pour la recherche de synonymes, une seule évasion : `"You stupid idiot, contact me at john.doe@example.com..."`, score 95 → 48 après substitution de `stupid`→`stuid` (faute de frappe) et `idiot`→`fool`.
 

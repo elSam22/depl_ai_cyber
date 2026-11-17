@@ -1,4 +1,4 @@
-"""TP2, étape 3 : défense contre l'attaque par évasion (normaliser_anti_evasion, api/preprocess.py).
+"""TP2, étape 3 : défense contre l'attaque par évasion (normaliser_anti_evasion, api_locale/preprocess.py).
 
 Réexécute l'attaque du § 2 (attack/evasion.py) sur le même échantillon, avec et sans la
 défense, pour mesurer son effet : précision, rappel, taux d'évasion, faux positifs, latence.
@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from api import modeles
-from api.preprocess import anonymiser, clean_text, pretraiter
+from api_locale import modeles
+from api_locale.preprocess import anonymiser, clean_text, pretraiter
 from attack.evasion import ATTAQUES, SORTIES, attaquer, charger_echantillon, metriques, predire
 
 

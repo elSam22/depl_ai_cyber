@@ -10,7 +10,7 @@ Lancement (depuis la racine), avec les deux groupes configurés :
     export KEY_FLORENTIN=<leur-clé-api>
     export URL_AUREL=https://<adresse-aurel-baunell>
     export KEY_AUREL=<leur-clé-api>
-    .venv/bin/uvicorn attack.serveur:app --port 8050
+    .venv/bin/uvicorn attack.inter_equipes.serveur:app --port 8050
 Puis ouvrir http://127.0.0.1:8050/
 
 Si l'API d'un groupe présente un certificat HTTPS qui ne passe pas la vérification standard,
@@ -30,7 +30,7 @@ import requests
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 
-RACINE = Path(__file__).resolve().parent.parent
+RACINE = Path(__file__).resolve().parent.parent.parent
 PAGE = Path(__file__).resolve().parent / "dashboard.html"
 PHRASES = Path(__file__).resolve().parent / "phrases.csv"
 

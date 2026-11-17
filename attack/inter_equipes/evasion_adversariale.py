@@ -14,14 +14,14 @@ Ce qu'on mesure (métriques du TP) :
 
 Usage :
     export KEY="$(gcloud secrets versions access latest --secret=dss-api-key)"
-    URL=https://136-81-204-100.sslip.io python attack/evasion_adversariale.py run \
-        --data data/clean/test.csv --perturbation tous --sortie attack/resultats/avant.json
+    URL=https://136-81-204-100.sslip.io python attack/inter_equipes/evasion_adversariale.py run \
+        --data data/clean/test.csv --perturbation tous --sortie attack/inter_equipes/resultats/avant.json
 
     # après avoir déployé la défense (normalisation dans preprocessing.py) :
-    URL=... python attack/evasion_adversariale.py run --data ... --sortie attack/resultats/apres.json
+    URL=... python attack/inter_equipes/evasion_adversariale.py run --data ... --sortie attack/inter_equipes/resultats/apres.json
 
     # graphe avant/après :
-    python attack/evasion_adversariale.py compare attack/resultats/avant.json attack/resultats/apres.json
+    python attack/inter_equipes/evasion_adversariale.py compare attack/inter_equipes/resultats/avant.json attack/inter_equipes/resultats/apres.json
 
 À n'utiliser QUE contre une API dont on est responsable (la nôtre).
 """
@@ -300,7 +300,7 @@ def main():
     comp = sous.add_parser("compare", help="Graphe avant/après défense.")
     comp.add_argument("avant")
     comp.add_argument("apres")
-    comp.add_argument("--sortie", default="attack/resultats/comparaison.png")
+    comp.add_argument("--sortie", default="attack/inter_equipes/resultats/comparaison.png")
     comp.set_defaults(func=cmd_compare)
 
     args = ap.parse_args()

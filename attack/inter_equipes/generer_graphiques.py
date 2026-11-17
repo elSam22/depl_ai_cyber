@@ -1,8 +1,8 @@
-"""Parse les flux SSE sauvegardés (attack/resultats_equipes/*.sse) et produit, pour chaque
+"""Parse les flux SSE sauvegardés (attack/inter_equipes/resultats/*.sse) et produit, pour chaque
 équipe : un graphique récapitulatif des 4 attaques + un CSV des évasions (pour citer des
 exemples concrets dans le rapport envoyé à l'équipe visée).
 
-Usage : .venv/bin/python attack/generer_graphiques.py
+Usage : .venv/bin/python attack/inter_equipes/generer_graphiques.py
 """
 import json
 import re
@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-DOSSIER = Path(__file__).resolve().parent / "resultats_equipes"
+DOSSIER = Path(__file__).resolve().parent / "resultats"
 ATTAQUES = ["deguisement", "noyage", "synonymes", "mutation"]
 LIBELLES = {"deguisement": "Déguisement", "noyage": "Noyage", "synonymes": "Synonymes", "mutation": "Mutation"}
 

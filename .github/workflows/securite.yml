@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
       - run: pip install bandit
       # -ll : échoue à partir de la sévérité moyenne. Les tests et le dossier model/ (poids) sont exclus.
-      - run: bandit -r api -x api/tests,api/model -ll
+      - run: bandit -r api api_locale -x api/tests,api/model -ll
 
   conformite:
     name: Conformité IA Act (model_card.json)

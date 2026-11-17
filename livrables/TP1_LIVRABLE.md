@@ -374,7 +374,7 @@ curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"
 | Trop de requêtes, ou trop de clés fausses depuis une adresse | 429 | Couche de protection |
 | Plus de 3 calculs simultanés sur un pod pendant plus de 0,25 s | 503 (`Retry-After: 1`) | Plafond de calcul |
 
-**API locale.** Une seconde API (`api/main_local.py`, route `/predire`, sans clé) sert au développement : elle permet de **choisir le modèle** (BiLSTM, DistilBERT ou LAYA) et renvoie le détail des étapes. Le front `front/index.html` s'appuie dessus (§ 9).
+**API locale.** Une seconde API (`api_locale/main_local.py`, route `/predire`, sans clé) sert au développement : elle permet de **choisir le modèle** (BiLSTM, DistilBERT ou LAYA) et renvoie le détail des étapes. Le front `front/index.html` s'appuie dessus (§ 9).
 
 ### 4.5 Structure du code et tests
 
@@ -719,7 +719,7 @@ Le professeur a confirmé ensuite être à l'origine des requêtes entre 10 h et
 
 ### 8.1 Schéma
 
-![Architecture en service le 17 novembre 2026](../images/architecture_cloud.png)
+![Architecture en service le 17 novembre 2026](images/architecture_cloud.png)
 
 *Architecture en service le 17 novembre 2026*
 
@@ -877,7 +877,7 @@ pip install -r requirements.txt                # inclut spaCy en_core_web_sm
 # 3. notebooks/train.ipynb  (BiLSTM ~3 min, DistilBERT ~64 min, LAYA ~2 h) -> models/
  
 # API locale et front
-.venv/bin/uvicorn api.main_local:app --port 8000   # API locale + front, http://127.0.0.1:8000/
+.venv/bin/uvicorn api_locale.main_local:app --port 8000   # API locale + front, http://127.0.0.1:8000/
  
 # Mise en place GCP (une fois), puis déploiement
 PROJECT_ID=<projet> bash api/deploy/gke_setup.sh

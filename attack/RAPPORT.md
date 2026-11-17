@@ -23,10 +23,10 @@ Script : [evasion.py](evasion.py). Résultats : [results/](results/).
 ## 2. Mise en œuvre et mesures (étape 2)
 
 **Protocole.**
-- **Échantillon :** 500 commentaires toxiques et 500 non toxiques du test officiel (lignes à -1 exclues, graine 42). Les toxiques sont choisis parmi ceux qui contiennent au moins un mot de la liste de mots toxiques du prétraitement (`api/preprocess.py`) : sans cela, l'attaque n'aurait rien à déguiser.
+- **Échantillon :** 500 commentaires toxiques et 500 non toxiques du test officiel (lignes à -1 exclues, graine 42). Les toxiques sont choisis parmi ceux qui contiennent au moins un mot de la liste de mots toxiques du prétraitement (`api_locale/preprocess.py`) : sans cela, l'attaque n'aurait rien à déguiser.
 - **Attaque :** seuls les mots toxiques sont déguisés, le reste du texte est intact. L'attaque est appliquée à tous les textes : un commentaire non toxique peut contenir un gros mot.
 - **Chaîne de traitement :** la même que l'API (anonymisation, nettoyage, DistilBERT, seuils par label). Un commentaire est « toxique prédit » si au moins un label dépasse son seuil.
-- **Seuils :** ceux de `models/seuils.json`, recalculés sur la validation par `api.export_seuils`.
+- **Seuils :** ceux de `models/seuils.json`, recalculés sur la validation par `api_locale.export_seuils`.
 - **Machine :** Mac M3. La latence inclut le prétraitement et le modèle, sans le réseau.
 
 **Exemple** (`You are a stupid idiot and a moron`), tel que le modèle le reçoit après prétraitement :
@@ -69,7 +69,7 @@ Script : [evasion.py](evasion.py). Résultats : [results/](results/).
 
 ## 3. Défense contre l'évasion : tableau et graphique avant/après (étape 3)
 
-**Défense implémentée** (`normaliser_anti_evasion`, `api/preprocess.py`) : branchée tout au début du traitement, avant l'anonymisation et le nettoyage existants, sans toucher au modèle. Elle défait les 4 déguisements du § 1-2 : unification Unicode (NFKC), suppression des caractères invisibles, conversion des homoglyphes cyrilliques vers le latin, regroupement des mots espacés lettre par lettre, et dé-leet (uniquement dans les mots contenant déjà une vraie lettre, pour ne pas abîmer un numéro ou une adresse IP).
+**Défense implémentée** (`normaliser_anti_evasion`, `api_locale/preprocess.py`) : branchée tout au début du traitement, avant l'anonymisation et le nettoyage existants, sans toucher au modèle. Elle défait les 4 déguisements du § 1-2 : unification Unicode (NFKC), suppression des caractères invisibles, conversion des homoglyphes cyrilliques vers le latin, regroupement des mots espacés lettre par lettre, et dé-leet (uniquement dans les mots contenant déjà une vraie lettre, pour ne pas abîmer un numéro ou une adresse IP).
 
 **Réexécution de l'attaque initiale** (`attack/defense.py`), même protocole, même échantillon que le § 2 (500 + 500 commentaires) :
 
@@ -95,7 +95,7 @@ Script : [evasion.py](evasion.py). Résultats : [results/](results/).
 
 ## 4. Dashboard inter-équipes : 4 attaques contre les API des autres groupes
 
-En plus de l'attaque sur notre propre modèle (§ 1-2), on a construit un outil pour tester les mêmes familles d'attaque contre les API **déployées par d'autres groupes**, avec leur accord et leur clé API. Scripts : [serveur.py](serveur.py) (serveur local FastAPI + flux SSE) et [dashboard.html](dashboard.html) (page de suivi en direct).
+En plus de l'attaque sur notre propre modèle (§ 1-2), on a construit un outil pour tester les mêmes familles d'attaque contre les API **déployées par d'autres groupes**, avec leur accord et leur clé API. Scripts : [serveur.py](inter_equipes/serveur.py) (serveur local FastAPI + flux SSE) et [dashboard.html](inter_equipes/dashboard.html) (page de suivi en direct).
 
 Les 4 attaques sont communes aux trois groupes :
 
@@ -106,13 +106,13 @@ Les 4 attaques sont communes aux trois groupes :
 | **Recherche de synonymes** | Recherche gloutonne : essaie mot par mot un synonyme ou une faute de frappe, garde la substitution si le score baisse, s'arrête dès que le verdict bascule. | ≤ 15 (budget plafonné) |
 | **Mutation aléatoire** | Modifie un caractère au hasard dans un mot, garde la mutation si le score baisse, recommence depuis la meilleure version trouvée. | ≤ 15 (budget plafonné) |
 
-Testées sur les mêmes 15 commentaires toxiques + 15 sains (voir [attack/phrases.csv](phrases.csv)), le 2026-11-16.
+Testées sur les mêmes 15 commentaires toxiques + 15 sains (voir [attack/inter_equipes/phrases.csv](inter_equipes/phrases.csv)), le 2026-11-16.
 
-Chaque équipe testée a reçu son propre rapport, pour nourrir son étape 3 : [rapport_florentin_gilane.md](rapport_florentin_gilane.md), [rapport_exauce_gilbert.md](rapport_exauce_gilbert.md). Ce qui suit réunit les résultats.
+Chaque équipe testée a reçu son propre rapport, pour nourrir son étape 3 : [rapport_florentin_gilane.md](inter_equipes/rapport_florentin_gilane.md), [rapport_exauce_gilbert.md](inter_equipes/rapport_exauce_gilbert.md). Ce qui suit réunit les résultats.
 
 ### 4.1 Florentin & Gilane (`<adresse retirée>`)
 
-![Détection avant/après par attaque — Florentin & Gilane](resultats_equipes/florentin_resultats.png)
+![Détection avant/après par attaque — Florentin & Gilane](inter_equipes/resultats/florentin_resultats.png)
 
 | Attaque | Rappel avant | Rappel après | Évasions | Latence moyenne |
 |---|---|---|---|---|
@@ -131,7 +131,7 @@ Chaque équipe testée a reçu son propre rapport, pour nourrir son étape 3 : [
 | Call me at +33 6 12 34 56 78 you pathetic loser... | с​а​l​l m3 47 +33 6 12 34 56 78 yоu р​а​t​h​3​t​1​c l​0​s​3​r $о I c4n с​u​r​s​e у0u оut | 99 | 13 |
 | Worthless clown, my IP is 192.168.1.42... | W​o​r​7​h​l​3​$​s с​l​o​w​n​, mу ір 1s 1​9​2​.​1​6​8​.​1​.​4​2 c​0​m​3 f​і​g​h​7 m3 іf уou d​4​r​е | 88 | 42 |
 
-**Noyage (14/15) :** texte envoyé = commentaire précédé d'environ 4 000 caractères de texte neutre ; score à 3 pour 14 des 15 commentaires, quel que soit leur contenu — détail complet dans [resultats_equipes/florentin_evasions.csv](resultats_equipes/florentin_evasions.csv).
+**Noyage (14/15) :** texte envoyé = commentaire précédé d'environ 4 000 caractères de texte neutre ; score à 3 pour 14 des 15 commentaires, quel que soit leur contenu — détail complet dans [resultats_equipes/florentin_evasions.csv](inter_equipes/resultats/florentin_evasions.csv).
 
 **Synonymes (1/15) :** une seule évasion, `"You stupid idiot, contact me at john.doe@example.com..."`, score 95 → 48 après `stupid`→`stuid`, `idiot`→`fool`.
 
@@ -139,7 +139,7 @@ Chaque équipe testée a reçu son propre rapport, pour nourrir son étape 3 : [
 
 ### 4.2 Exauce & Gilbert (`<adresse retirée>`)
 
-![Détection avant/après par attaque — Exauce & Gilbert](resultats_equipes/exauce_resultats.png)
+![Détection avant/après par attaque — Exauce & Gilbert](inter_equipes/resultats/exauce_resultats.png)
 
 | Attaque | Rappel avant | Rappel après | Évasions | Latence moyenne |
 |---|---|---|---|---|
@@ -191,7 +191,7 @@ Lecture croisée de tout ce qui a été mesuré, pour décider quoi corriger en 
 
 ### 5.2 Alerte : notre propre API a la même faille
 
-**Vérifié le 2026-11-16, en local, avec notre propre `api/modeles.py` :** notre DistilBERT tronque l'entrée à **128 tokens** (`LONGUEUR_BERT = 128`, `truncation=True` dans `ModeleDistilBERT.probabilites`). Le même texte de noyage qui fait tomber les autres équipes fait tomber le nôtre :
+**Vérifié le 2026-11-16, en local, avec notre propre `api_locale/modeles.py` :** notre DistilBERT tronque l'entrée à **128 tokens** (`LONGUEUR_BERT = 128`, `truncation=True` dans `ModeleDistilBERT.probabilites`). Le même texte de noyage qui fait tomber les autres équipes fait tomber le nôtre :
 
 | | Probabilité `toxic` |
 |---|---|
@@ -266,7 +266,7 @@ Lecture croisée de tout ce qui a été mesuré, pour décider quoi corriger en 
 
 **Vulnérabilité identifiée (§ 5.2).** Notre modèle DistilBERT ne regarde que les **128 premiers tokens** d'un texte (troncature droite par défaut du tokenizer HuggingFace). L'attaque noyage envoie plusieurs milliers de caractères neutres *avant* la phrase toxique : le contenu toxique est alors coupé et le modèle ne voit que du neutre — il répond `toxique: false`.
 
-**Défense implémentée** (`api/modeles.py`, méthode `ModeleDistilBERT.probabilites` et `ModeleBiLSTM.probabilites`) : scan en **fenêtres glissantes** de 128 tokens (DistilBERT) ou 200 mots (BiLSTM). Pour un texte court (≤ seuil), une seule passe comme avant. Pour un texte long, on découpe en fenêtres consécutives sans chevauchement et on retourne la **probabilité maximale** observée sur toutes les fenêtres. Le contenu toxique est détecté peu importe sa position dans le texte.
+**Défense implémentée** (`api_locale/modeles.py`, méthode `ModeleDistilBERT.probabilites` et `ModeleBiLSTM.probabilites`) : scan en **fenêtres glissantes** de 128 tokens (DistilBERT) ou 200 mots (BiLSTM). Pour un texte court (≤ seuil), une seule passe comme avant. Pour un texte long, on découpe en fenêtres consécutives sans chevauchement et on retourne la **probabilité maximale** observée sur toutes les fenêtres. Le contenu toxique est détecté peu importe sa position dans le texte.
 
 **Coût de la défense.** Sur les textes courants (< 128 tokens) il n'y a aucun surcost : une seule passe. Le nombre de passes croît linéairement avec la longueur uniquement pour les textes anormalement longs, qui représentent typiquement moins de 1 % du trafic réel.
 
