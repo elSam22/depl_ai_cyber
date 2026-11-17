@@ -111,10 +111,10 @@ async def version():
 
 
 # Au plus MAX_INFERENCES calculs en même temps par pod (1 CPU) ; une requête de plus attend ATTENTE_MAX_S au plus, puis
-# reçoit 503. Sans cela, 168 requêtes simultanées font monter la latence de ×76 à ×108 chez d'autres équipes : mieux vaut
-# refuser vite que répondre en 30 s. 3 calculs + 1 s d'attente gardent la latence sous le critère de 2 s de l'étape 5.
+# reçoit 503. Sans cela, la latence monte de ×76 (chez nous, rapport du professeur) à ×108 (autres équipes) : mieux vaut
+# refuser vite que répondre en 30 s. Attente ramenée de 1 s à 0,25 s : une requête acceptée attend au plus 0,25 s.
 INFERENCES = asyncio.Semaphore(int(os.environ.get("MAX_INFERENCES", "3")))
-ATTENTE_MAX_S = float(os.environ.get("ATTENTE_MAX_S", "1.0"))
+ATTENTE_MAX_S = float(os.environ.get("ATTENTE_MAX_S", "0.25"))
 
 
 def _evaluer(texte_brut: str) -> Reponse:

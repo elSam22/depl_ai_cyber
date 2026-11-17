@@ -8,7 +8,9 @@ os.environ["METRICS_PORT"] = "0"
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from limiteur_debit import LimiteurDebit  # noqa: E402
+import time  # noqa: E402
+
+from limiteur_debit import LimiteurDebit, Sanctions, SeauJetons  # noqa: E402
 from protection import Protection, empreinte, ip_client  # noqa: E402
 
 
@@ -121,3 +123,37 @@ def test_surcharge_renvoie_503(monkeypatch):
     monkeypatch.setattr(main, "ATTENTE_MAX_S", 0.05)
     r = TestClient(main.app).post("/score", json={"text": "hello"}, headers={"X-API-Key": "test-key"})
     assert r.status_code == 503 and r.headers["retry-after"] == "1"
+
+
+def test_seau_rafale_puis_debit_lisse(monkeypatch):
+    horloge = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: horloge[0])
+    seau = SeauJetons(3, 1.0)                         # rafale de 3, puis 1 par seconde
+    assert [seau.autoriser("a")[0] for _ in range(4)] == [True, True, True, False]
+    horloge[0] += 1.0
+    assert seau.autoriser("a")[0] and not seau.autoriser("a")[0]
+    assert seau.autoriser("b")[0]                     # un autre client n'est pas touché
+
+
+def test_sanction_progressive(monkeypatch):
+    horloge = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: horloge[0])
+    s = Sanctions(seuil_refus=3, fenetre_s=60, base_s=30, max_s=100, oubli_s=900)
+    assert [s.enregistrer_refus("a") for _ in range(3)] == [0.0, 0.0, 30]
+    assert s.bloque("a")[0]
+    horloge[0] += 31
+    assert not s.bloque("a")[0]
+    assert [s.enregistrer_refus("a") for _ in range(3)][-1] == 60    # récidive : durée doublée
+    horloge[0] += 61
+    assert [s.enregistrer_refus("a") for _ in range(3)][-1] == 100   # plafond
+    horloge[0] += 2000
+    assert [s.enregistrer_refus("a") for _ in range(3)][-1] == 30    # oubliée après une longue période de calme
+
+
+def test_client_qui_insiste_est_bloque_partout_sauf_health():
+    c = petite_app(limite_ip=lim(2), limite_score=lim(99), echecs=lim(99), sanctions=Sanctions(seuil_refus=3))
+    codes = [c.get("/x").status_code for _ in range(6)]
+    assert codes[:2] == [200, 200] and set(codes[2:]) == {429}
+    r = c.post("/score")
+    assert r.status_code == 429 and int(r.headers["retry-after"]) >= 25   # bloqué : même /score est refusé
+    assert c.get("/health").status_code == 200
