@@ -84,6 +84,13 @@ class BiLSTMScorer:
         return [dict(zip(LABELS, p)) for p in probas]
 
 
+# Défense anti-noyage (TP2, étape 3) : longueur des fenêtres d'analyse, en tokens. Mesure (60 insultes noyées après
+# 1 000 / 3 000 caractères neutres ; 300 vrais textes sains de 400 à 5 000 caractères) : fenêtres de 128 -> 30 et 38
+# détectées sur 60, 9 % de fausses alertes ; de 64 -> 38 et 45 sur 60, 12 % ; de 32 -> 47 et 51 sur 60, 15 %
+# (avant : 4 et 2 sur 60, 4 %). 64 = compromis retenu. Réglable sans reconstruire l'image (variable d'environnement).
+FENETRE_NOYAGE = int(os.environ.get("FENETRE_NOYAGE", "64"))
+
+
 class DistilBertScorer:
     """DistilBERT fine-tuné de notebooks/train.ipynb (dossier save_pretrained)."""
 
@@ -99,11 +106,39 @@ class DistilBertScorer:
         self.model = AutoModelForSequenceClassification.from_pretrained(model_dir)  # nosec B615
         self.model.eval()
 
-    def predict(self, texts: list[str]) -> list[dict[str, float]]:
-        enc = self.tokenizer(texts, truncation=True, max_length=self.max_len, padding=True, return_tensors="pt")
+    def _passe(self, texts: list[str], longueur: int, chevauchement: int | None = None):
+        """Probabilités par texte. Avec `chevauchement`, le texte est découpé en fenêtres de `longueur` tokens qui se
+        recouvrent, toutes évaluées en un seul passage, et chaque label garde son MAXIMUM sur les fenêtres."""
+        options = dict(truncation=True, max_length=longueur, padding=True, return_tensors="pt")
+        if chevauchement is not None:
+            options.update(stride=chevauchement, return_overflowing_tokens=True)
+        enc = self.tokenizer(texts, **options)
+        origine = enc.pop("overflow_to_sample_mapping", None)
         with self.torch.no_grad():
             probas = self.torch.sigmoid(self.model(**enc).logits).tolist()
-        return [dict(zip(LABELS, p)) for p in probas]
+        origine = origine.tolist() if origine is not None else range(len(texts))
+        maxima = [[0.0] * len(LABELS) for _ in texts]
+        for i, p in zip(origine, probas):
+            maxima[i] = [max(x, y) for x, y in zip(maxima[i], p)]
+        return maxima, len(probas)
+
+    def predict(self, texts: list[str]) -> list[dict[str, float]]:
+        """1. Passe complète, comme à l'entraînement (le texte est tronqué à max_len tokens).
+        2. Défense anti-noyage : si le texte dépasse FENETRE_NOYAGE tokens, il est AUSSI lu par fenêtres de
+           FENETRE_NOYAGE tokens chevauchantes. Sans cela, une insulte placée après ~1 000 caractères neutres n'était
+           jamais vue (troncature), et même dans un texte de taille normale elle était diluée par le texte neutre.
+        Chaque label garde le maximum des deux lectures. Un texte court ne fait qu'une passe : rien ne change pour lui.
+        Coût : proportionnel à la longueur, plafonné par MAX_CHARS (5 000 caractères)."""
+        complet, n = self._passe(texts, self.max_len)
+        longueurs = [len(ids) for ids in self.tokenizer(texts, add_special_tokens=False)["input_ids"]]
+        longs = [i for i, lg in enumerate(longueurs) if lg > FENETRE_NOYAGE]
+        if longs:
+            fenetres, m = self._passe([texts[i] for i in longs], FENETRE_NOYAGE, FENETRE_NOYAGE // 2)
+            for i, f in zip(longs, fenetres):
+                complet[i] = [max(x, y) for x, y in zip(complet[i], f)]
+            n += m
+        self.dernier_nb_passes = n            # nombre de séquences évaluées (tests, mesure du coût)
+        return [dict(zip(LABELS, p)) for p in complet]
 
 
 class LayaScorer:
