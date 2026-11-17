@@ -129,7 +129,7 @@ Le TP demande de **proposer** des améliorations. Voici ce qui existe déjà, ce
 
 | Amélioration | État | Justification (liée aux mesures) |
 |---|---|---|
-| **Load balancer** | **En place** (Ingress Google, déployé par Enzo) ; testé indirectement par tous les tests | Répartit les requêtes entre les pods ; sans lui, le failover (§ 6) n'aurait pas été transparent. |
+| **Load balancer** | **En place** (Ingress Google, déployé par Jean-Philippe) ; testé indirectement par tous les tests | Répartit les requêtes entre les pods ; sans lui, le failover (§ 6) n'aurait pas été transparent. |
 | **Redondance** : 2 pods minimum + autoscaler jusqu'à 5 | **En place et testée** (failover : 0 erreur ; autoscaler : 5 pods atteints à la 2e montée) | Le service continue quand un pod disparaît. |
 | **Au moins 3 pods en permanence** | Proposée | Avec 2 pods, la perte d'un pod divise la capacité par 2 (≈ 4 requêtes/s restantes) ; le failover a été testé avec 5 pods, pas avec 2. |
 | **Pods prêts plus vite** (minimum relevé avant un pic prévu, cible de CPU plus basse) | Proposée | Un pod neuf a mis **5 min 29 s** à être prêt (5 min 10 s de `Pending`) : trop lent pour une montée de 5 minutes. |

@@ -2,7 +2,7 @@
 
 À lancer **dans Cloud Shell**, connecté au cluster (`gcloud container clusters get-credentials dss-cluster --region europe-west9`). Ces commandes n'ont **pas été testées** sur ce cluster : GKE Autopilot refuse certains composants, il faudra peut-être ajuster. Elles n'installent rien dans le namespace de l'API (`default`) et ne modifient pas ses pods.
 
-**Prévenir Enzo avant** : la supervision consomme du crédit (les pods de Prometheus et Grafana s'ajoutent à ceux de l'API).
+**Prévenir Jean-Philippe avant** : la supervision consomme du crédit (les pods de Prometheus et Grafana s'ajoutent à ceux de l'API).
 
 ## 1. Vérifications
 

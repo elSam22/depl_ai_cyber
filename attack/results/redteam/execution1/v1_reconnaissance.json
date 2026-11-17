@@ -1,0 +1,248 @@
+{
+ "vague": "v1_reconnaissance",
+ "date_utc": "2026-11-17 18:37:53",
+ "routes": [
+  {
+   "methode": "GET",
+   "chemin": "/",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/health",
+   "attendu": 200,
+   "obtenu": 200,
+   "note": null,
+   "taille": 15,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/version",
+   "attendu": 401,
+   "obtenu": 401,
+   "note": null,
+   "taille": 41,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/score",
+   "attendu": 405,
+   "obtenu": 405,
+   "note": null,
+   "taille": 31,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/docs",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/redoc",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/openapi.json",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/metrics",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "POST",
+   "chemin": "/predict",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "POST",
+   "chemin": "/v1/analyze",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "POST",
+   "chemin": "/model",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "POST",
+   "chemin": "/predire",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/.git/config",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/.env",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/phpinfo.php",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "POST",
+   "chemin": "/xmlrpc.php",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/wp-login.php",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/admin",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/server-status",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/actuator/health",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": null,
+   "taille": 22,
+   "empreinte": {
+    "via": "1.1 google"
+   }
+  },
+  {
+   "methode": "GET",
+   "chemin": "/%2e%2e/%2e%2e/etc/passwd",
+   "attendu": 404,
+   "obtenu": 404,
+   "note": "302 (chemin normalisé par le load balancer) puis 404",
+   "taille": 0,
+   "empreinte": {}
+  }
+ ],
+ "ports": {
+  "22": "filtré",
+  "80": "ouvert",
+  "443": "ouvert",
+  "3000": "filtré",
+  "5000": "filtré",
+  "8000": "filtré",
+  "8080": "filtré",
+  "8443": "filtré",
+  "9090": "filtré"
+ },
+ "ecarts": [],
+ "verdict": "conforme"
+}

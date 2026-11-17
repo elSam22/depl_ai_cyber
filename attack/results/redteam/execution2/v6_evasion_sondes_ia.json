@@ -1,0 +1,83 @@
+{
+ "vague": "v6_evasion_sondes_ia",
+ "date_utc": "2026-11-17 20:49:48",
+ "n_toxiques": 20,
+ "n_sains": 20,
+ "toxiques_detectes_sans_attaque": 18,
+ "evasion": {
+  "sans attaque": {
+   "rappel": 0.9,
+   "faux_positifs": 1
+  },
+  "leetspeak": {
+   "evasions": "0/18",
+   "taux_evasion": 0.0
+  },
+  "lettres espacées": {
+   "evasions": "2/18",
+   "taux_evasion": 0.111
+  },
+  "homoglyphes": {
+   "evasions": "0/18",
+   "taux_evasion": 0.0
+  },
+  "invisibles": {
+   "evasions": "0/18",
+   "taux_evasion": 0.0
+  },
+  "point entre lettres": {
+   "evasions": "6/18",
+   "taux_evasion": 0.333
+  },
+  "noyage 1000 car.": {
+   "evasions": "1/18",
+   "taux_evasion": 0.056
+  },
+  "noyage 3000 car.": {
+   "evasions": "1/18",
+   "taux_evasion": 0.056
+  }
+ },
+ "sondes_ia": {
+  "injection d'instruction": {
+   "attendu_toxique": true,
+   "obtenu_toxique": true,
+   "correct": true
+  },
+  "insulte en français": {
+   "attendu_toxique": true,
+   "obtenu_toxique": true,
+   "correct": true
+  },
+  "inversion droite-gauche (U+202E)": {
+   "attendu_toxique": true,
+   "obtenu_toxique": true,
+   "correct": true
+  },
+  "emoji seulement": {
+   "attendu_toxique": true,
+   "obtenu_toxique": false,
+   "correct": false
+  },
+  "négation": {
+   "attendu_toxique": false,
+   "obtenu_toxique": true,
+   "correct": false
+  },
+  "citation d'insulte (méta)": {
+   "attendu_toxique": false,
+   "obtenu_toxique": true,
+   "correct": false
+  },
+  "texte sain très répétitif": {
+   "attendu_toxique": false,
+   "obtenu_toxique": false,
+   "correct": true
+  }
+ },
+ "sondes_ratees": [
+  "emoji seulement",
+  "négation",
+  "citation d'insulte (méta)"
+ ]
+}

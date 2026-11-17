@@ -1,0 +1,21 @@
+{
+ "vague": "v5_extraction",
+ "date_utc": "2026-11-17 16:10:25",
+ "requetes": 400,
+ "duree_s": 2.7,
+ "debit_tente_par_min": 8852,
+ "reponses_exploitables": 7,
+ "exploitables_par_min": 155,
+ "codes": {
+  "200": 7,
+  "429": 384,
+  "503": 9
+ },
+ "premier_429_apres_s": 0.0,
+ "exploitables_avant_premier_429": 0,
+ "reference_professeur": {
+  "sans_limite": "400 en 12 s, 2 005/min, 0 × 429",
+  "limite_partielle": "30 puis 429 en masse, 489/min"
+ },
+ "verdict": "freiné"
+}
