@@ -171,6 +171,11 @@ jobs:
           mkdir -p models
           gcloud storage cp -r "${{ vars.GCP_MODEL_BUCKET }}/distilbert" models/
           gcloud storage cp "${{ vars.GCP_MODEL_BUCKET }}/seuils.json" models/seuils.json
+          # Provenance : les poids doivent être EXACTEMENT ceux enregistrés dans api/model_empreintes.sha256 (relu en pull request).
+          # Un fichier modifié ou ajouté dans le bucket (empoisonnement, porte dérobée) arrête le déploiement ici.
+          (cd models && grep -v '^#' ../api/model_empreintes.sha256 | sha256sum --check --strict)
+          # Aucun fichier de plus que la liste (sha256sum ne voit pas un fichier ajouté).
+          diff <(cd models && find . -type f | sed 's|^\./||' | sort) <(grep -v '^#' api/model_empreintes.sha256 | awk '{print $2}' | sort)
           python api/export_model.py --type distilbert
           chmod a+r api/model/*       # le conteneur est non-root : il doit pouvoir lire les poids
       - name: Test du vrai modèle (avant de construire l'image)
