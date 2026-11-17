@@ -77,3 +77,9 @@ def test_json_invalide_422():                              # S4
 def test_logs_sans_donnees_personnelles(caplog):           # S5
     client.post("/score", json={"text": "John Smith from 192.168.0.12 is a moron"}, headers=OK)
     assert "John" not in caplog.text and "192.168.0.12" not in caplog.text
+
+
+def test_cle_non_ascii_refusee_proprement():
+    """S2b : une clé avec un caractère non ASCII provoquait une erreur 500 (TypeError dans compare_digest)."""
+    r = client.get("/version", headers={"X-API-Key": "clé-fausse-é".encode("utf-8")})
+    assert r.status_code == 401
