@@ -27,7 +27,14 @@ h3{font-size:13pt;margin-top:20px} h4{font-size:11.5pt}
 table{border-collapse:collapse;width:100%;margin:10px 0;font-size:9.5pt} th,td{border:1px solid #bbb;padding:4px 6px;vertical-align:top} th{background:#eef3fa}
 code{background:#f3f3f3;padding:1px 3px;border-radius:3px;font-size:9pt} pre{background:#f3f3f3;padding:8px;overflow-x:auto;font-size:8.5pt;white-space:pre-wrap}
 img{max-width:100%;height:auto;display:block;margin:10px auto;border:1px solid #ddd} em{color:#444}
-h2,h3{page-break-after:avoid} img,table,pre{page-break-inside:avoid}
+h1,h2,h3,h4{page-break-after:avoid;break-after:avoid;break-inside:avoid}
+/* Un titre ne reste jamais seul en bas de page : chaque titre « réserve » la place de quelques lignes sous lui ;
+   s'il n'y a pas cette place, le titre passe à la page suivante avec la suite. Même règle pour les étiquettes en gras
+   qui introduisent un tableau ou une liste (« Interprétation. », « Ce que demande l'énoncé… »). */
+h2::after,h3::after,h4::after,p.etiquette::after{content:"";display:block;height:7em;margin-bottom:-7em}
+div.bloc{break-inside:avoid;page-break-inside:avoid}
+p.etiquette{break-inside:avoid;break-after:avoid;page-break-after:avoid}
+img,pre,tr{page-break-inside:avoid;break-inside:avoid} p{orphans:3;widows:3}
 """
 
 
@@ -59,7 +66,14 @@ def aerer_listes(texte: str) -> str:
 
 def main():
     corps = markdown.markdown(aerer_listes(SOURCE.read_text(encoding="utf-8")), extensions=["tables", "fenced_code", "sane_lists"])
-    html = f'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Digital Social Score</title><style>{CSS}</style></head><body>{integrer_images(corps)}</body></html>'
+    # Étiquettes : paragraphe entièrement en gras, ou court paragraphe qui se termine par « : » avant un tableau/liste
+    corps = re.sub(r"<p>(<strong>[^<]{1,120}</strong>)</p>", r'<p class="etiquette">\1</p>', corps)
+    corps = re.sub(r"<p>([^<]{0,40}<strong>[^<]{1,160}</strong>[^<]{0,80}:)</p>", r'<p class="etiquette">\1</p>', corps)
+    # Une phrase qui présente une image reste sur la même page que l'image
+    corps = re.sub(r"<p>((?:(?!</p>).){1,400})</p>\s*(<p><img [^>]*></p>)", r'<div class="bloc"><p>\1</p>\2</div>', corps, flags=re.S)
+    # Une phrase courte qui annonce un bloc de code (« Extrait commenté du Dockerfile : ») reste avec lui
+    corps = re.sub(r"<p>((?:(?!</p>).){1,200}:)</p>\s*(<pre>(?:(?!</pre>).){1,1500}</pre>)", r'<div class="bloc"><p>\1</p>\2</div>', corps, flags=re.S)
+    html = f'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{SOURCE.stem}</title><style>{CSS}</style></head><body>{integrer_images(corps)}</body></html>'
     HTML.write_text(html, encoding="utf-8")
     print("écrit :", HTML)
     nav = next((n for n in NAVIGATEURS if Path(n).exists()), None)

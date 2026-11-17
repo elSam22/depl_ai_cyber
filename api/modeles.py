@@ -54,15 +54,26 @@ class ModeleBiLSTM:
             raise ModeleIndisponible(f"{dossier / 'bilstm.pt'} introuvable : entraîner le modèle avec notebooks/train.ipynb")
         self.vocab = json.loads((dossier / "vocab.json").read_text(encoding="utf-8"))
         self.modele = BiLSTM(len(self.vocab))
-        self.modele.load_state_dict(torch.load(dossier / "bilstm.pt", map_location="cpu"))
+        self.modele.load_state_dict(torch.load(dossier / "bilstm.pt", map_location="cpu", weights_only=True))
         self.modele.to(DEVICE).eval()
 
     @torch.no_grad()
     def probabilites(self, texte: str) -> np.ndarray:
-        ids = [self.vocab.get(m, 1) for m in texte.split()[:LONGUEUR_LSTM]] or [1]   # texte vide -> un jeton <unk>
-        x = torch.zeros((1, LONGUEUR_LSTM), dtype=torch.long)
-        x[0, :len(ids)] = torch.tensor(ids)
-        return torch.sigmoid(self.modele(x.to(DEVICE)))[0].cpu().numpy()
+        mots = texte.split() or [""]
+        if len(mots) <= LONGUEUR_LSTM:
+            ids = [self.vocab.get(m, 1) for m in mots]
+            x = torch.zeros((1, LONGUEUR_LSTM), dtype=torch.long)
+            x[0, :len(ids)] = torch.tensor(ids)
+            return torch.sigmoid(self.modele(x.to(DEVICE)))[0].cpu().numpy()
+        # Texte long : fenêtres glissantes → prend le max (défense anti-noyage)
+        resultats = []
+        for debut in range(0, len(mots), LONGUEUR_LSTM):
+            chunk = mots[debut:debut + LONGUEUR_LSTM]
+            ids = [self.vocab.get(m, 1) for m in chunk]
+            x = torch.zeros((1, LONGUEUR_LSTM), dtype=torch.long)
+            x[0, :len(ids)] = torch.tensor(ids)
+            resultats.append(torch.sigmoid(self.modele(x.to(DEVICE)))[0].cpu().numpy())
+        return np.max(resultats, axis=0)
 
 
 class ModeleDistilBERT:
@@ -73,14 +84,37 @@ class ModeleDistilBERT:
         if not (dossier / "model.safetensors").exists():
             raise ModeleIndisponible(f"{dossier} introuvable : lancer notebooks/train.ipynb (entraînement de DistilBERT)")
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        self.tokenizer = AutoTokenizer.from_pretrained(dossier)
-        self.modele = AutoModelForSequenceClassification.from_pretrained(dossier).to(DEVICE).eval()
+        # Dossier LOCAL (models/distilbert) : rien n'est téléchargé, donc pas de révision à épingler
+        self.tokenizer = AutoTokenizer.from_pretrained(dossier)  # nosec B615
+        self.modele = AutoModelForSequenceClassification.from_pretrained(dossier).to(DEVICE).eval()  # nosec B615
 
     @torch.no_grad()
     def probabilites(self, texte: str) -> np.ndarray:
-        enc = self.tokenizer([texte], truncation=True, padding="max_length", max_length=LONGUEUR_BERT, return_tensors="pt")
-        logits = self.modele(input_ids=enc["input_ids"].to(DEVICE), attention_mask=enc["attention_mask"].to(DEVICE)).logits
-        return torch.sigmoid(logits)[0].cpu().numpy()
+        # Tokenise sans troncature pour connaître la longueur réelle
+        tokens = self.tokenizer(texte, add_special_tokens=False)["input_ids"]
+        pas = LONGUEUR_BERT - 2  # réserve [CLS] et [SEP]
+        if len(tokens) <= pas:
+            enc = self.tokenizer([texte], truncation=True, padding="max_length",
+                                 max_length=LONGUEUR_BERT, return_tensors="pt")
+            logits = self.modele(input_ids=enc["input_ids"].to(DEVICE),
+                                 attention_mask=enc["attention_mask"].to(DEVICE)).logits
+            return torch.sigmoid(logits)[0].cpu().numpy()
+        # Texte long : fenêtres glissantes → prend le max (défense anti-noyage)
+        resultats = []
+        for debut in range(0, len(tokens), pas):
+            chunk = tokens[debut:debut + pas]
+            ids = [self.tokenizer.cls_token_id] + chunk + [self.tokenizer.sep_token_id]
+            masque = [1] * len(ids)
+            pad_id = self.tokenizer.pad_token_id
+            while len(ids) < LONGUEUR_BERT:
+                ids.append(pad_id)
+                masque.append(0)
+            ids_t = torch.tensor([ids[:LONGUEUR_BERT]], dtype=torch.long)
+            masque_t = torch.tensor([masque[:LONGUEUR_BERT]], dtype=torch.long)
+            logits = self.modele(input_ids=ids_t.to(DEVICE),
+                                 attention_mask=masque_t.to(DEVICE)).logits
+            resultats.append(torch.sigmoid(logits)[0].cpu().numpy())
+        return np.max(resultats, axis=0)
 
 
 class ModeleLaya:

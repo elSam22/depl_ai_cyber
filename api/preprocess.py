@@ -7,6 +7,7 @@ Ce fichier est une COPIE du code des notebooks `notebooks/anonyme_2.ipynb` et `n
 import re
 import time
 import ipaddress
+import unicodedata
 
 import spacy
 
@@ -314,8 +315,45 @@ def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()     # 4. espaces multiples et retours à la ligne -> un espace
 
 
+# ======================= Défense anti-évasion (TP2, étape 3) =======================
+# Contre-mesure à l'attaque par déguisement (leetspeak, lettres espacées, homoglyphes
+# cyrilliques, caractères invisibles) : voir attack/RAPPORT.md. Branchée tout au début
+# du traitement, avant l'anonymisation existante — le modèle n'est pas modifié.
+
+HOMOGLYPHES_INVERSE = {
+    "а": "a", "е": "e", "о": "o", "і": "i", "с": "c", "р": "p", "у": "y", "х": "x",
+    "А": "A", "Е": "E", "О": "O", "І": "I", "С": "C", "Р": "P", "У": "Y", "Х": "X",
+}
+LEET_INVERSE = {"0": "o", "1": "i", "3": "e", "4": "a", "7": "t", "$": "s"}
+
+RE_INVISIBLE = re.compile("[​‌‍⁠﻿]")
+# Suite de >= 3 lettres isolées séparées par des espaces : "i d i o t" -> "idiot"
+RE_MOTS_ESPACES = re.compile(r"\b(?:[A-Za-zА-Яа-я]\s+){2,}[A-Za-zА-Яа-я]\b")
+
+
+def _deleet_prudent(mot: str) -> str:
+    """Remplace les chiffres/symboles leet par leur lettre — seulement si le mot contient déjà
+    une vraie lettre, pour ne pas abîmer un nombre, une adresse IP ou un numéro de téléphone."""
+    if not re.search(r"[a-zA-Zа-яА-Я]", mot):
+        return mot
+    return "".join(LEET_INVERSE.get(c, c) for c in mot)
+
+
+def normaliser_anti_evasion(texte: str) -> str:
+    """Défait les 4 déguisements de l'attaque par évasion, avant tout autre traitement :
+    unification Unicode (NFKC), suppression des caractères invisibles, conversion des
+    homoglyphes cyrilliques vers leur équivalent latin, regroupement des mots espacés
+    lettre par lettre, et dé-leet prudent (uniquement dans les mots contenant déjà une lettre)."""
+    texte = unicodedata.normalize("NFKC", texte)
+    texte = RE_INVISIBLE.sub("", texte)
+    texte = "".join(HOMOGLYPHES_INVERSE.get(c, c) for c in texte)
+    texte = RE_MOTS_ESPACES.sub(lambda m: re.sub(r"\s+", "", m.group()), texte)
+    return " ".join(_deleet_prudent(m) for m in texte.split())
+
+
 def pretraiter(texte: str, avec_anonymisation: bool = True) -> str:
-    """Texte brut -> texte prêt pour les modèles (anonymisé si demandé, puis nettoyé)."""
+    """Texte brut -> texte prêt pour les modèles (défense anti-évasion, anonymisé si demandé, puis nettoyé)."""
+    texte = normaliser_anti_evasion(texte)
     return clean_text(anonymiser(texte) if avec_anonymisation else texte)
 
 

@@ -41,7 +41,7 @@ Si l'API ne répond pas : le cluster est parfois mis en pause pour économiser l
 | `model_card.json` | TP2 : fiche du modèle (IA Act), contrôlée par la pipeline |
 | `front/index.html` | Interface de démonstration (un seul fichier, rien à installer) |
 | `notebooks/` | Anonymisation, nettoyage, entraînement des 3 modèles (BiLSTM, DistilBERT, LAYA) |
-| `api/` | API locale de développement (route `/predire`). Le code de l'API **déployée** (route `/score`, manifestes Kubernetes, scripts Google Cloud) est sur la branche **`ci`** (c'est elle que la pipeline déploie ; elle contient le travail des branches `Enzo` et `Eliana`, le CORS et la pipeline). `main` ne contient que l'API locale |
+| `api/` | Code des deux API. **API déployée** : `main.py` (route `/score`, clé, protections dans `protection.py`), `scorer.py`, `preprocessing.py`, `Dockerfile`, manifestes `k8s/`, scripts `deploy/`, tests `tests/` (détail : `api/README.md`). **API locale de développement** : `main_local.py` (3 modèles, route `/predire`, sert le front). La pipeline déploie depuis la branche `ci` |
 | `loadtest/` | Tests de charge Locust, rapport et courbes |
 | `supervision/` | Grille de tests, plan de supervision, tableau de bord Grafana importable (`grafana_dashboard.json`, avec une section de détection d'attaque), installation de Prometheus et Grafana, **registre des incidents** (`INCIDENTS.md`) et script d'analyse des journaux |
 | `images/` | Schéma d'architecture cloud et son script |
@@ -50,7 +50,7 @@ Si l'API ne répond pas : le cluster est parfois mis en pause pour économiser l
 ## Aller plus loin (optionnel)
 
 - **Refaire l'entraînement** : voir la section « Reproduire » de la documentation. Compter environ 1 h pour DistilBERT et 2 h pour LAYA, sur un Mac M3 ; les modèles ne sont pas dans le dépôt (trop lourds) et les données brutes viennent du *Toxic Comment Classification Dataset* (Kaggle).
-- **API locale** : `pip install -r requirements.txt` (Python 3.12), puis `uvicorn api.main:app --port 8000` après l'entraînement, et `front/index.html` en choisissant « API locale ».
+- **API locale** : `pip install -r requirements.txt` (Python 3.12), puis `uvicorn api.main_local:app --port 8000` après l'entraînement, et `front/index.html` en choisissant « API locale ».
 - **Tests de charge** : `locust -f loadtest/locustfile.py,loadtest/montee.py --host https://<adresse>` avec la clé dans la variable d'environnement `API_KEY` (voir l'Annexe B). Ces tests consomment du crédit Google Cloud : à ne pas lancer sans prévenir l'équipe.
 - **Régénérer le PDF** : `python outils/exporter_documentation.py` (nécessite Chrome ou Brave).
 

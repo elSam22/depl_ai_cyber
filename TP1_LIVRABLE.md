@@ -129,7 +129,7 @@ Minuscules → suppression des emojis → suppression de la ponctuation (`[^\w\s
 
 - **Pourquoi 30 000 lignes :** temps d'entraînement acceptable sur Mac M3 16 Go (DistilBERT : 64 min).
 - **Pourquoi stratifier :** les classes rares (`threat`) restent présentes dans l'échantillon.
-- **Pourquoi retirer les -1 du test :** 8elles ne sont pas évaluées par Kaggle (89 186 sur 153 164). Retirées **avant** toute prédiction ; il reste 63 978 lignes.
+- **Pourquoi retirer les -1 du test :** elles ne sont pas évaluées par Kaggle (89 186 sur 153 164). Retirées **avant** toute prédiction ; il reste 63 978 lignes.
 - **Pourquoi un test séparé :** les seuils sont réglés sur la validation ; le test ne sert à aucun réglage, donc le résultat n'est pas optimiste.
 
 ### 2.2 Choix de modélisation
@@ -335,7 +335,7 @@ curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"
 | ------------- | ------------------------------------------------ |
 | Dénomination | Équipe Digital Social Score                     |
 | Projet        | Digital Social Score API — analyse de toxicité |
-| Contact       | contact@digitalsocialscore.fr                    |
+| Contact       | Les membres de l'équipe, joignables par l'ESIGELEC (adresses non publiées : dépôt public). Projet pédagogique : aucune adresse dédiée n'existe |
 | Localisation  | France                                           |
 
 #### 4.1.2 Traitement A : anonymisation du jeu de données (notebooks)
@@ -348,7 +348,7 @@ curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"
 | **Source et volume**            | *Toxic Comment Classification Dataset* : 159 571 commentaires (train), 153 164 (test) ; textes CC-BY-SA 3.0, labels CC0 (§ 1.1).                                                                            |
 | **Minimisation**                | Identifiants directs remplacés par des balises avant l'entraînement ; fichiers d'origine inchangés.                                                                                                         |
 | **Conservation**                | `data/anonymise/` et `data/clean/` : gardés en local jusqu'à la remise du projet, puis supprimés. Ils ne servent qu'au TP. |
-| **Destinataires et transferts** | Traitement local : rien n'est envoyé à un tiers. Le dépôt GitHub (États-Unis) ne contient aucune donnée brute : seuls le code, la documentation et les résultats y sont publiés. |
+| **Destinataires et transferts** | Traitement local : rien n'est envoyé à un tiers. Le dépôt GitHub (États-Unis) contient le code, la documentation, les résultats **et les fichiers CSV d'origine du jeu Kaggle** (`data/train.csv`, `test.csv`, `test_labels.csv`, `sample_submission.csv`). Ce sont des données **déjà publiques** (licences CC-BY-SA 3.0 pour les textes, CC0 pour les labels) : leur présence ne crée pas de nouvelle diffusion. Les versions anonymisées et nettoyées (`data/anonymise/`, `data/clean/`) et les modèles ne sont pas publiés. |
 | **Risques résiduels**          | Anonymisation incomplète (§ 1.5) ; ré-identification possible par recoupement avec Wikipédia.                                                                                                              |
 
 #### 4.1.3 Traitement B : API de score en service
@@ -468,7 +468,7 @@ Ligne type : `score=87 longueur=142 duree_ms=14.2`
 
 **Droit de réclamation** (Art. 77 RGPD) : CNIL — 3 place de Fontenoy, TSA 80715 — 75334 Paris Cedex 07 — www.cnil.fr
 
-**Contact pour exercer ses droits** : contact@digitalsocialscore.fr
+**Contact pour exercer ses droits** : les membres de l'équipe, par l'ESIGELEC. En service réel, une adresse dédiée (et un délégué à la protection des données si l'organisme y est tenu) serait obligatoire ; elle n'existe pas pour ce projet pédagogique.
 
 > **Note** : le journal ne contient pas de hash de clé : les droits d'accès, de portabilité et d'opposition « par clé » ne sont applicables que si ce hash est ajouté au journal.
 
@@ -851,7 +851,8 @@ pip install -r requirements.txt        # inclut spaCy en_core_web_sm
 # 1. notebooks/anonyme_2.ipynb  (~20 min)   → data/anonymise/
 # 2. notebooks/clean_text.ipynb             → data/clean/
 # 3. notebooks/train.ipynb  (BiLSTM ~3 min, DistilBERT ~64 min, LAYA test ~2 h) → models/
-.venv/bin/uvicorn api.main:app --port 8000   # API locale → http://127.0.0.1:8000/
+.venv/bin/uvicorn api.main_local:app --port 8000   # API locale (3 modèles + front) → http://127.0.0.1:8000/
+# API déployée (/score, clé, protections) : voir api/README.md ; tests : cd api && pytest
 ```
 
 ---

@@ -1,0 +1,32 @@
+# Load balancer HTTPS de Google devant le Service : certificat géré par Google,
+# HTTP redirigé vers HTTPS (test S3 de la grille).
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: dss-frontend
+spec:
+  redirectToHttps:
+    enabled: true
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: dss-cert
+spec:
+  domains:
+    - DOMAIN                                  # <ip>.sslip.io, remplacé par deploy_gke.sh
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dss-api
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.global-static-ip-name: dss-ip
+    networking.gke.io/managed-certificates: dss-cert
+    networking.gke.io/v1beta1.FrontendConfig: dss-frontend
+spec:
+  defaultBackend:
+    service:
+      name: dss-api
+      port: {number: 80}

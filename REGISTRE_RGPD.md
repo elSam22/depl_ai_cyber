@@ -1,166 +1,148 @@
-# Registre des activités de traitement — Art. 30 RGPD
+<!-- Copie du registre en Annexe C de TP1_LIVRABLE.md (version 1.1) : modifier les deux ensemble. -->
+# Registre des activités de traitement — article 30 RGPD
 
 **Référence** : DSS-RGPD-2026-001
-**Version** : 1.0
-**Date de création** : 12 novembre 2026
+**Version** : 1.1 (relue contre le code en service, branche `ci`)
+**Date** : 17 novembre 2026
 **Statut** : En vigueur
 
 ---
 
 ## 1. Responsable du traitement
 
-| Champ         | Valeur                        |
-| ------------- | ----------------------------- |
-| Dénomination | Équipe Digital Social Score                    |
-| Projet        | Digital Social Score API — analyse de toxicité |
-| Contact       | contact@digitalsocialscore.fr                  |
-| Localisation  | France                                         |
+| Champ | Valeur |
+|---|---|
+| Dénomination | Équipe Digital Social Score (CAKPOSSA Jean-Philippe, OUEDRAOGO Eliana, NOUDEGBE Situ) |
+| Projet | Digital Social Score API — analyse de toxicité (TP ESIGELEC) |
+| Contact | Les membres de l'équipe, joignables par l'ESIGELEC (adresses non publiées : dépôt public). Projet pédagogique : aucune adresse dédiée n'existe |
+| Localisation | France |
 
 ---
 
-## 2. Description du traitement
+## 2. Traitement A — Préparation du jeu d'entraînement (notebooks)
 
-| Champ                              | Valeur                                                                                                                                                                                                                                                                                                                        |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nom du traitement                  | Digital Social Score API — Analyse automatisée de toxicité                                                                                                                                                                                                                                                                 |
-| Finalité principale               | Fournir une plateforme d'analyse automatisée de la toxicité de commentaires en ligne, restituant un score de 0 à 100 et une ventilation par catégorie de risque (toxic, severe_toxic, obscene, threat, insult, identity_hate)                                                                                             |
-| Finalités secondaires             | Journalisation pseudonymisée des appels API à des fins de traçabilité et de conformité RGPD ; détection d'abus et d'utilisation anormale du service                                                                                                                                                                     |
-| Base légale                       | **Art. 6.1.f RGPD — Intérêt légitime** à fournir une plateforme de détection et modération de commentaires toxiques. L'intérêt légitime a été mis en balance avec les droits des personnes concernées : l'anonymisation préalable des commentaires réduit l'impact sur la vie privée.                  |
-| Traitement automatisé / Profilage | **Oui** — le score est calculé par un modèle ML (DistilBERT) sans intervention humaine. Aucune décision individuelle à effet juridique dans la version actuelle. Une AIPD (Art. 35) serait obligatoire si le score était intégré dans un processus décisionnel (modération automatique, accès, recrutement). |
-
----
-
-## 3. Données à caractère personnel traitées
-
-### Catégories de personnes concernées (Art. 30.1.c)
-
-- **Utilisateurs de l'API** — développeurs et intégrateurs identifiés par leur clé API (la clé n'est pas journalisée)
-- **Auteurs des commentaires analysés** — toute personne dont le commentaire est soumis à analyse 
-
-### Catégories de données traitées (Art. 30.1.c)
-
-| Donnée                     | Nature                                                                                                 | Traitement appliqué                                       | Stockage                                 |
-| --------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------- |
-| Commentaire brut soumis     | Données à caractère personnel potentielles (contenu personnel, opinions, données sensibles Art. 9) | Anonymisé via spaCy NER + regex avant inférence          | Non — traitement en mémoire uniquement |
-| Commentaire prétraité     | Pseudonymisé                                                                                         | Retourné en réponse à l'appelant                        | Non conservé côté serveur             |
-| Score de toxicité          | Non DCP (résultat agrégé)                                                                           | Calcul : moyenne des scores des labels dont la probabilité atteint leur seuil, sinon score de `toxic` | Oui — journal applicatif (Cloud Logging)     |
-| Longueur du commentaire     | Non DCP (métadonnée)                                                                                 | Nombre de caractères                                      | Oui — journal applicatif (Cloud Logging)     |
-| Horodatage UTC              | Non DCP                                                                                                | ISO 8601                                                   | Oui — journal applicatif (Cloud Logging)     |
-| Durée d'inférence (ms)    | Non DCP (performance)                                                                                  | Mesure temps réel                                         | Oui — journal applicatif (Cloud Logging)     |
-
-### Données sensibles (Art. 9 & 10 RGPD)
-
-Les commentaires soumis peuvent contenir des données sensibles (opinions politiques, santé, orientation sexuelle, origine ethnique). L'anonymisation préalable réduit ce risque.
-
-**Dataset d'entraînement** : Toxic Comment Classification Challenge (Jigsaw / Google, 2017).
-
-| Caractéristique    | Détail                                                                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Source des données | Commentaires des pages de discussion Wikipedia (talk pages), en anglais                                                           |
-| Taille              | 159 571 commentaires d'entraînement + 63 978 de test                                                                             |
-| Annotation          | Annotation binaire par vote majoritaire d'évaluateurs humains                                                                    |
-| Labels              | `toxic`, `severe_toxic`, `obscene`, `threat`, `insult`, `identity_hate` (multi-label)                                 |
-| Licence labels      | CC0 (domaine public)                                                                                                              |
-| Licence texte       | CC-BY-SA 3.0 (texte Wikipedia)                                                                                                    |
-| Biais identifiés   | Corpus exclusivement anglophone, issu de Wikipedia — peut refléter des biais culturels dans la classification `identity_hate` |
+| Rubrique | Contenu |
+|---|---|
+| Finalité | Réduire la présence de données personnelles dans les commentaires avant l'entraînement des modèles (cadre pédagogique) |
+| Base légale | Art. 6.1.f — intérêt légitime : commentaires publics publiés sous licence libre, utilisés pour un exercice de détection de toxicité ; données pseudonymisées avant tout usage |
+| Source | Toxic Comment Classification Dataset (Jigsaw / Google, 2017) : 159 571 commentaires d'entraînement, 153 164 de test ; texte CC-BY-SA 3.0 (Wikipédia), labels CC0 |
+| Données | Texte libre pouvant contenir noms, pseudos, adresses IP, e-mails, téléphones, URL, adresses postales. Les labels (notamment `identity_hate`) peuvent révéler des attaques visant des groupes : données potentiellement sensibles (art. 9) |
+| Personnes concernées | Auteurs et personnes citées dans les commentaires Wikipédia |
+| Minimisation | Identifiants directs remplacés par 8 balises typées (regex + spaCy NER) avant l'entraînement. **Pseudonymisation, pas anonymisation** : le texte d'origine reste public sur Wikipédia |
+| Stockage | Fichiers anonymisés et nettoyés (`data/anonymise/`, `data/clean/`) : en local seulement, exclus de Git |
+| **Jeu brut** | **`data/train.csv` et `data/test.csv` (≈ 130 Mo) sont publiés dans le dépôt GitHub public** `elSam22/depl_ai_cyber`. Texte déjà public et sous licence, mais republié sans pseudonymisation, sur un hébergement situé aux États-Unis. **Action : retirer ces fichiers de l'historique Git et documenter le téléchargement depuis Kaggle** |
+| Conservation | Fichiers anonymisés et nettoyés : supprimés après la notation du projet |
+| Destinataires | Équipe projet |
+| Transferts hors UE | GitHub (États-Unis) : code, documentation, résultats agrégés **et jeu brut public** (voir ci-dessus) |
+| Risques résiduels | Anonymisation incomplète (aucun jeu annoté pour la mesurer) ; ré-identification par recoupement avec Wikipédia |
 
 ---
 
-## 4. Journal de traçabilité
+## 3. Traitement B — API de score en service
 
-**Où** : sortie standard de l'API, collectée par Cloud Logging (GKE). L'API ne tient ni fichier CSV ni hash de clé (d'après `api/main.py`).
-**Principe** : aucun texte brut ni donnée directement identifiante n'est enregistré.
+| Rubrique | Contenu |
+|---|---|
+| Nom | Digital Social Score API — analyse automatisée de toxicité |
+| Finalité principale | Restituer, pour un texte soumis, un score de toxicité de 0 à 100 (arrondi à la dizaine) et un verdict (`toxique`) |
+| Finalité secondaire | Sécurité du service : détection et analyse d'abus (journaux du load balancer, refus pseudonymisés) |
+| Base légale | Art. 6.1.f — intérêt légitime à fournir un outil d'aide à la modération ; mis en balance par la minimisation (texte jamais conservé, anonymisé avant le modèle) |
+| Décision automatisée / profilage | Le score est calculé sans intervention humaine. Aucune décision à effet juridique dans la version actuelle. **Une AIPD (art. 35) serait obligatoire** si le score était intégré à un processus décisionnel (modération automatique, accès, recrutement) |
 
-| Champ        | Type             | Description                                                                |
-| ------------ | ---------------- | -------------------------------------------------------------------------- |
-| horodatage   | datetime UTC     | ajouté par Cloud Logging                                                   |
-| `score`      | entier [0–100]   | score de toxicité calculé — résultat agrégé, non ré-identifiable          |
-| `longueur`   | entier           | nombre de caractères du texte soumis — aucune information sur le contenu |
-| `duree_ms`   | décimal          | durée d'inférence en millisecondes                                         |
+### 3.1 Personnes concernées
 
-Ligne type : `score=87 longueur=142 duree_ms=14.2`
+- **Utilisateurs de l'API** (développeurs, intégrateurs) : identifiés par une clé d'API **unique et partagée** ; la clé n'est jamais journalisée.
+- **Auteurs des commentaires soumis**, et personnes citées dans ces commentaires.
 
----
+### 3.2 Données traitées
 
-## 5. Destinataires et sous-traitants (Art. 30.1.d)
-
-### Destinataires internes
-
-- Équipe technique Digital Social Score (accès aux logs de traçabilité pour monitoring et support)
-
-### Sous-traitants (Art. 28 RGPD)
-
-| Sous-traitant               | Rôle                                       | Localisation des données     | Garanties RGPD                                                            |
-| --------------------------- | ------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
-| Google Cloud Platform (GKE) | Hébergement Kubernetes, Artifact Registry | UE — europe-west9 (Paris) | Clauses contractuelles types (CCT) — DPA disponible sur cloud.google.com |
-| Google Secret Manager       | Stockage sécurisé des clés API           | UE — europe-west9 (Paris) | Certifié ISO 27001, SOC 2 Type II                                        |
-
-### Transferts hors UE (Art. 30.1.e)
-
-**Aucun transfert hors UE.** Le déploiement est restreint à la région `europe-west9` (Paris, France). Aucun traitement n'est réalisé dans des pays tiers sans décision d'adéquation de la Commission européenne.
+| Donnée | Nature | Traitement | Stockage |
+|---|---|---|---|
+| Commentaire soumis | Données personnelles potentielles, y compris sensibles (art. 9 : opinions, santé, origine…) | Anonymisé (regex + spaCy NER) puis nettoyé, en mémoire, avant le modèle | **Aucun** — ni disque, ni journal, ni réponse |
+| Réponse | Score arrondi à la dizaine + verdict | Renvoyée à l'appelant | Non conservée côté serveur |
+| Journal de l'API | Score, longueur du texte, durée de calcul, horodatage : non personnel | Une ligne par analyse | Cloud Logging, 30 jours |
+| Journal des refus (401, 429, 503, 413) | Motif, route, **empreinte HMAC de 10 caractères de l'adresse IP** (clé secrète du serveur) : donnée pseudonymisée | Au plus une ligne par minute et par client | Cloud Logging, 30 jours |
+| **Journaux du load balancer** | **Adresse IP du client, chemin, code de réponse, user-agent, horodatage : données personnelles** | Activés volontairement (`sampleRate: 1.0`) pour pouvoir reconstituer une attaque | Cloud Logging, 30 jours |
+| Métriques Prometheus | Compteurs par route, code, motif de refus ; CPU, mémoire : non personnel | Dans le cluster, port non exposé | Durée de rétention de Prometheus |
 
 ---
 
-## 6. Durées de conservation (Art. 30.1.f)
+## 4. Destinataires et sous-traitants (art. 28)
 
-| Données                                         | Durée de conservation                                              | Justification                                |
-| ------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------- |
-| Texte brut                                       | **Aucune** — traitement en mémoire uniquement               | Principe de minimisation (Art. 5.1.c)        |
-| Texte prétraité                                | **Aucune** côté serveur — retourné en réponse uniquement | Principe de minimisation                     |
-| Journal applicatif (Cloud Logging) | **90 jours glissants** — purge automatique                   | Obligation de traçabilité vs. minimisation |
-| Poids du modèle DistilBERT                      | Durée du service — révision à chaque nouvelle version           | Nécessité opérationnelle                  |
+**Destinataires internes** : les trois membres de l'équipe (journaux et supervision). Note : les trois membres ont le rôle `Owner` du projet Google Cloud (voir le rapport, § 5.3).
 
-> **Action requise** : Purger les logs de plus de 90 jours.
+| Sous-traitant | Rôle | Localisation | Garanties |
+|---|---|---|---|
+| Google Cloud (GKE, Artifact Registry, Cloud Build, Cloud Logging, Cloud Storage) | Hébergement, construction de l'image, journaux, stockage des poids du modèle | europe-west9 (Paris) pour le cluster et le dépôt d'images | Avenant de traitement des données Google Cloud (CCT) |
+| Google Secret Manager | Stockage de la clé d'API | **Réplication automatique (multi-régions choisies par Google)** : créé avec `--replication-policy=automatic` | ISO 27001, SOC 2 ; **action : restreindre la réplication à europe-west9** |
+| GitHub (Microsoft) | Code source, pipeline | États-Unis | Pas de donnée de production ; jeu brut public (traitement A) |
+| Google Fonts | Police du front de démonstration | Hors UE possible | Connexion directe du navigateur vers Google (adresse IP) ; **action : héberger la police localement** |
 
----
+### Transferts hors UE (art. 30.1.e)
 
-## 7. Mesures de sécurité techniques et organisationnelles (Art. 32 RGPD)
-
-| Mesure                               | Description technique                                                                                                       | Statut                  |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| Authentification API                 | Clé API via header `X-API-Key`, comparaison à temps constant `secrets.compare_digest` — protection timing attack (`api/main.py`) | Implémentée |
-| Chiffrement en transit               | HTTPS forcé via `FrontendConfig` GKE (`redirectToHttps: enabled`) + `ManagedCertificate` Google (`api/k8s/ingress.yaml`) | Implémentée |
-| Anonymisation des commentaires       | spaCy NER + regex — 8 balises de remplacement : `personne_tag`, `organisation_tag`, `email_tag`, `url_tag`, `ip_tag`, `telephone_tag`, `pseudo_tag`, `adresse_tag` (`api/preprocessing.py`) | Implémentée |
-| Minimisation des logs                | `log.info` sans texte brut : longueur, score, durée uniquement — aucun stockage du contenu (`api/main.py`) | Implémentée |
-| Gestion des secrets                  | `secretKeyRef: {name: dss-api-key, key: API_KEY}` dans `api/k8s/deployment.yaml` — clé absente du code source et de l'image Docker | Implémentée |
-| Conteneur non-root                   | `useradd --uid 1000 appuser` + `USER 1000` dans `api/Dockerfile` ; `runAsNonRoot: true` + `runAsUser: 1000` dans `api/k8s/deployment.yaml` | Implémentée |
-| Réduction des privilèges système     | `allowPrivilegeEscalation: false` + `capabilities: {drop: ["ALL"]}` dans `api/k8s/deployment.yaml` | Implémentée |
-| Validation des entrées               | Pydantic `Field(min_length=1, max_length=5000)` — HTTP 422 si dépassement (`api/main.py`) | Implémentée |
-| Haute disponibilité                  | `replicas: 2` minimum + `startupProbe` / `readinessProbe` / `livenessProbe` sur `/health` (`api/k8s/deployment.yaml`) | Implémentée |
-| Journalisation des accès             | Logs Cloud Logging GKE (rétention 30 jours par défaut) | Par défaut GCP |
-| AIPD (Art. 35 RGPD)                  | Analyse d'impact requise si le score est utilisé dans un processus décisionnel à effet juridique | À évaluer selon usage |
+Le calcul du score et les journaux de production restent dans l'UE. Il existe trois flux hors UE ou non localisés : le dépôt GitHub (jeu brut public), la réplication du secret, et la police Google Fonts chargée par le front de démonstration.
 
 ---
 
-## 8. Droits des personnes concernées (Art. 12–22 RGPD)
+## 5. Durées de conservation
 
-| Droit                    | Article RGPD | Applicable  | Modalités d'exercice                                                                                     |
-| ------------------------ | ------------ | ----------- | --------------------------------------------------------------------------------------------------------- |
-| Droit d'accès           | Art. 15      | Oui         | Demande par email — les logs pseudonymisés correspondant à la clé sont communicables                  |
-| Droit de rectification   | Art. 16      | Limité     | Données pseudonymisées — ré-identification impossible sans la clé d'origine                          |
-| Droit à l'effacement    | Art. 17      | Oui         | Purge des logs sur demande — délai max 30 jours                                                         |
-| Droit à la limitation   | Art. 18      | Oui         | Suspension de l'enregistrement des logs pour la clé concernée                                           |
-| Droit à la portabilité | Art. 20      | Partiel     | Export CSV des logs liés à une clé — format structuré, sur demande                                   |
-| Droit d'opposition       | Art. 21      | Oui         | Révocation de la clé API et purge des enregistrements associés                                         |
-| Décision automatisée   | Art. 22      | À garantir | Le score DSS ne doit pas être la seule base d'une décision à effet juridique sans intervention humaine |
+| Données | Durée | Justification |
+|---|---|---|
+| Texte soumis | Aucune — mémoire uniquement | Minimisation (art. 5.1.c) |
+| Journaux de l'API, des refus et du load balancer | **30 jours** — rétention par défaut de Cloud Logging, non modifiée | Sécurité et traçabilité, mises en balance avec la minimisation |
+| Poids du modèle | Durée du service | Nécessité opérationnelle |
+| Fichiers du traitement A | Jusqu'à la notation | Projet pédagogique |
 
-> **Note** : le journal ne contient pas de hash de clé : les droits d'accès, de portabilité et d'opposition « par clé » ne sont applicables que si ce hash est ajouté au journal.
+---
 
-**Contact pour exercer ses droits** : contact@digitalsocialscore.fr
+## 6. Mesures de sécurité (art. 32)
 
-**Droit de réclamation** (Art. 77 RGPD) :
-CNIL — 3 place de Fontenoy, TSA 80715 — 75334 Paris Cedex 07 — www.cnil.fr
+| Mesure | Mise en œuvre | Statut |
+|---|---|---|
+| Authentification | Clé `X-API-Key`, comparaison à temps constant ; 429 après 10 clés fausses par minute et par adresse | En service — défaut : une clé non ASCII donne 500 au lieu de 401 |
+| Chiffrement en transit | HTTPS forcé (certificat géré, redirection) ; pas de TLS entre le load balancer et les pods | En service |
+| Minimisation | Anonymisation avant le modèle ; texte jamais journalisé (prouvé par un canari) ; réponse réduite | En service |
+| Secrets | Secret Manager → Secret Kubernetes ; jamais dans le code, l'image ou Git ; poids du modèle dans un bucket privé | En service |
+| Durcissement | Non-root, `drop ALL`, pas d'élévation, système de fichiers en lecture seule, aucun rôle Google Cloud pour les pods | En service |
+| Protection en entrée | Limites par adresse (429), corps ≤ 40 Ko (413), au plus 3 calculs par pod (503), `/docs` fermé | En service depuis le 16 novembre |
+| Disponibilité | 2 à 5 pods, sondes de santé | En service |
+| Supervision | Prometheus, Grafana, 7 règles d'alerte (sans notification) | En service |
+| Droits d'accès | 3 comptes `Owner` | **À réduire** |
+
+---
+
+## 7. Droits des personnes (art. 12 à 22)
+
+Les journaux ne contiennent **aucun identifiant de clé** et aucun texte. Les droits s'exercent donc ainsi :
+
+| Droit | Applicable | Modalités |
+|---|---|---|
+| Accès (art. 15) | Limité | Le texte n'est pas conservé. Pour les journaux du load balancer, une personne peut demander les lignes liées à **son adresse IP** sur les 30 derniers jours |
+| Rectification (art. 16) | Sans objet | Aucune donnée conservée qui puisse être inexacte au sujet d'une personne |
+| Effacement (art. 17) | Oui | Suppression des lignes liées à une adresse IP sur demande ; suppression automatique à 30 jours |
+| Limitation (art. 18) | Limité | Pas de donnée à geler, en dehors des journaux du load balancer |
+| Portabilité (art. 20) | Sans objet | Traitement fondé sur l'intérêt légitime, aucune donnée fournie et conservée |
+| Opposition (art. 21) | Oui | Arrêt de l'envoi de textes ; la clé étant partagée, une révocation individuelle est impossible (clé par client à prévoir) |
+| Décision automatisée (art. 22) | À garantir | Le score ne doit pas être la seule base d'une décision à effet juridique |
+
+**Contact** : les membres de l'équipe, par l'ESIGELEC (en service réel, une adresse dédiée serait obligatoire). **Réclamation** (art. 77) : CNIL, 3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07, www.cnil.fr.
+
+---
+
+## 8. Risques résiduels
+
+- Anonymisation non mesurée et incomplète ; ré-identification possible par recoupement avec Wikipédia.
+- Données sensibles possibles dans les commentaires soumis (traitées en mémoire seulement).
+- Jeu brut publié sur GitHub.
+- Score non calibré : ne doit pas fonder seul une décision.
+- Accès trop larges au projet (trois `Owner`) : chacun peut lire la clé et les journaux.
 
 ---
 
 ## 9. Historique des révisions
 
-| Version | Date       | Auteur                       | Modifications      |
-| ------- | ---------- | ---------------------------- | ------------------ |
-| 1.0     | 12/11/2026 | Équipe Digital Social Score | Création initiale |
+| Version | Date | Modifications |
+|---|---|---|
+| 1.0 | 12/11/2026 | Création initiale |
+| 1.1 | 17/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) et des refus (empreinte HMAC) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; réponse réduite ; droits reformulés selon ce qui est réellement possible |
 
----
-
----
-
-*Document établi en application de l'article 30 du Règlement (UE) 2016/679 (RGPD).*
+*Établi en application de l'article 30 du règlement (UE) 2016/679 (RGPD).*

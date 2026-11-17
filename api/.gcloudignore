@@ -1,0 +1,14 @@
+# Fichiers envoyés à Cloud Build. IMPORTANT : ce fichier remplace .gitignore,
+# sinon gcloud ignorerait model/ (exclu de Git) et l image partirait sans le modèle.
+__pycache__/
+*.pyc
+tests/
+deploy/
+export_model.py
+requirements-dev.txt
+README.md
+.pytest_cache/
+pytest.ini
+k8s/
+model/hf_cache/hub/*/blobs/
+model/hf_cache/xet/

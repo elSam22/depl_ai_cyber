@@ -41,9 +41,9 @@ Documentation de l'anonymisation et registre de traitement : `TP1_LIVRABLE.md`.
 
 ## API locale (test des modèles)
 
-Dossier `api/` : `main.py` (routes FastAPI), `modeles.py` (chargement BiLSTM / DistilBERT / LAYA), `preprocess.py` (copie du code d'anonymisation et de nettoyage des notebooks : à régénérer si on les modifie), `export_seuils.py` (recalcule `models/seuils.json` depuis les prédictions enregistrées).
+Dossier `api/` (le même sur `main` et sur `ci`, la branche que la pipeline déploie) : **API déployée** = `main.py` (`/score`, clé, `protection.py`, `scorer.py`, `preprocessing.py`, `Dockerfile`, `k8s/`, `deploy/`, `tests/`) ; **API locale** = `main_local.py` (routes FastAPI), `modeles.py` (chargement BiLSTM / DistilBERT / LAYA), `preprocess.py` (copie du code d'anonymisation et de nettoyage des notebooks : à régénérer si on les modifie), `export_seuils.py` (recalcule `models/seuils.json` depuis les prédictions enregistrées).
 
-- Lancer (depuis la racine) : `.venv/bin/uvicorn api.main:app --port 8000` ; interface de test : http://127.0.0.1:8000/docs.
+- Lancer (depuis la racine) : `.venv/bin/uvicorn api.main_local:app --port 8000` ; interface de test : http://127.0.0.1:8000/docs.
 - `GET /sante` : état et modèles disponibles. `POST /predire` : `{"texte": "...", "modele": "bilstm" | "distilbert" | "laya", "anonymiser": true}`.
 - Chaîne : texte -> anonymisation (regex + NER, comme à l'entraînement) -> nettoyage -> modèle -> 6 probabilités -> seuils par label (`models/seuils.json`, sinon 0,5 avec avertissement).
 - **Score 0-100** : score d'un label = **probabilité × 100**. Un label est « true » si sa probabilité ≥ son seuil. `score_global` = la **moyenne des scores des labels true** s'il y en a (un seul : son score), sinon le score du label `toxic` ; `toxique` = au moins un label true.
@@ -62,7 +62,7 @@ Dossier `loadtest/` : `locustfile.py` (POST /score, 1 000 textes de `test_clean.
 - Les percentiles du CSV de Locust sont cumulés depuis le début : ne pas les utiliser par palier.
 - Dépôt public : ne jamais mettre l'URL complète avec la clé, ni la clé, dans un fichier.
 
-- Registre RGPD fusionné (traitement du jeu de données + API en service) dans `TP1_LIVRABLE.md` § 4.1 ; copie d'origine d'Eliana corrigée : `REGISTRE_RGPD.md`.
+- Registre RGPD fusionné (traitement du jeu de données + API en service) dans `TP1_LIVRABLE.md` § 4.1.
 
 Étape 7 (schéma d'architecture) : `images/architecture_cloud.png`, généré par `images/architecture_cloud.py`, avec texte explicatif, flux et zero trust dans `TP1_LIVRABLE.md` § 7.1 ; exemples de requêtes et réponses réels (API déployée) au § 5.3 ; correspondance avec les livrables du TP au § 8.
 

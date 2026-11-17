@@ -1,0 +1,9 @@
+# Empreintes SHA-256 des poids de référence (provenance du modèle, TP2). Vérifiées par la pipeline avant chaque construction :
+# des poids modifiés dans le bucket (empoisonnement, porte dérobée) bloquent le déploiement. Changer de modèle = changer
+# ce fichier par une pull request sur la branche ci (protégée). Regénérer : cd models && shasum -a 256 distilbert/* seuils.json
+e939ba0d713c358341da0e0c428580f74873609e5476432e1803d8c71bb64228  distilbert/config.json
+56f8ec67b9e91c54bc1b66fdf33f946010440cac8b0fe8d454fa73b843bbe4c9  distilbert/model.safetensors
+c962591527e6ec247cf10d507f4480d6391d03c28c0d7f7087a1216a37e228f4  distilbert/temps_train.json
+da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0  distilbert/tokenizer.json
+e1c2a61a99bda00f6c55303a210b30e2f92dcf8b555e215812e2eb583e177ffd  distilbert/tokenizer_config.json
+fed310483b604cd6361a1fdf9aeec43cc830426fc95f8e6a251c4b8ed6e261ca  seuils.json
