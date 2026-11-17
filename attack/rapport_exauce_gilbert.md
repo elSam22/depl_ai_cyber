@@ -1,13 +1,13 @@
 # Rapport d'attaque — API Digital Social Score (Exauce & Gilbert)
 
-TP2, étape 2 : attaque contre votre API déployée (`http://34.53.169.140/score`), avec votre accord et votre clé API, 15 commentaires toxiques + 15 commentaires sains, 4 familles d'attaque. Ce rapport sert de base à votre étape 3 (conception d'une défense) : il détaille ce qui fonctionne contre votre modèle, avec les textes exacts utilisés, pour que vous puissiez reproduire le test et corriger.
+TP2, étape 2 : attaque contre votre API déployée (`<adresse retirée>`), avec votre accord et votre clé API, 15 commentaires toxiques + 15 commentaires sains, 4 familles d'attaque. Ce rapport sert de base à votre étape 3 (conception d'une défense) : il détaille ce qui fonctionne contre votre modèle, avec les textes exacts utilisés, pour que vous puissiez reproduire le test et corriger.
 
 **Test réalisé le 2026-11-16**, contre l'adresse ci-dessus. Le code du script d'attaque est disponible si vous voulez l'exécuter vous-mêmes.
 
 ## 0. Reproduire — exemple de requête réelle
 
 ```bash
-curl -X POST http://34.53.169.140/score \
+curl -X POST <adresse retirée> \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <votre clé>" \
   -d '{"text":"You are a stupid idiot and everyone hates you"}'
@@ -22,7 +22,7 @@ Réponse reçue (commentaire original, avant toute attaque) :
 Après déguisement (même commentaire, voir § 2) :
 
 ```bash
-curl -X POST http://34.53.169.140/score \
+curl -X POST <adresse retirée> \
   -H "Content-Type: application/json" -H "X-API-Key: <votre clé>" \
   -d '{"text":"уоu 4r3 4рid 1dі07 аnd 3v3rуonе h4te$ yоu"}'
 ```

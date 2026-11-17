@@ -3,7 +3,7 @@ cible, en version ORIGINALE et PIÉGÉE (combo). Juste pour voir ce que le modè
 
 Usage :
     export KEY="<clé>"
-    URL=http://34.140.180.53 python attack/voir_scores.py --endpoint score --champ texte
+    URL=<adresse retirée> python attack/voir_scores.py --endpoint score --champ texte
 """
 import argparse
 import os

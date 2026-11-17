@@ -34,9 +34,9 @@ helm install monitoring prometheus-community/kube-prometheus-stack \
   --set grafana.adminPassword="$(openssl rand -hex 12)"
 ```
 
-Pourquoi ces options (à garder pour la justification) :
+Pourquoi ces options :
 - `admissionWebhooks.enabled=false` et `tls.enabled=false` : le job de configuration des webhooks n'a jamais terminé sur Autopilot (son compte de service était supprimé par Helm après le délai). On perd seulement la validation de syntaxe des règles Prometheus à leur création. **C'est la configuration finale qui a fonctionné le 12 novembre (release `deployed`, révision 2).**
-- `nodeExporter.enabled=false` : il demande un accès aux machines que GKE Autopilot refuse (à vérifier).
+- `nodeExporter.enabled=false` : il demande un accès aux machines que GKE Autopilot n'accorde pas.
 - `kubeEtcd`, `kubeScheduler`, `kubeControllerManager`, `kubeProxy`, `coreDns` à `false` : ces composants sont gérés par Google et ne sont pas accessibles à Prometheus, ils ne produiraient que des alertes d'erreur.
 - `retention=2d` et ressources réduites : limiter le crédit consommé.
 - Mot de passe Grafana aléatoire (voir étape 4) : pas de mot de passe par défaut.

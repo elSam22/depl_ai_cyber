@@ -1,0 +1,33 @@
+{
+ "protocole": "60 commentaires toxiques courts du test officiel (graine 1), précédés de 0, 1 000 ou 3 000 caractères tirés de commentaires non toxiques ; 300 commentaires sains de 400 à 5 000 caractères pour les fausses alertes ; vrai modèle DistilBERT et vrais seuils par label (models/seuils.json), chaîne de prétraitement de l'API",
+ "avant (troncature à 128 tokens)": {
+  "detectes_0": 52,
+  "detectes_1000": 4,
+  "detectes_3000": 2,
+  "fausses_alertes_textes_longs": 0.043
+ },
+ "fenetres 128, chevauchement 32": {
+  "detectes_0": 52,
+  "detectes_1000": 30,
+  "detectes_3000": 38,
+  "fausses_alertes_textes_longs": 0.093
+ },
+ "fenetres 64, chevauchement 32": {
+  "detectes_0": 52,
+  "detectes_1000": 38,
+  "detectes_3000": 45,
+  "fausses_alertes_textes_longs": 0.117
+ },
+ "fenetres 64, chevauchement 16 (retenu)": {
+  "detectes_0": 52,
+  "detectes_1000": 40,
+  "detectes_3000": 48,
+  "fausses_alertes_textes_longs": 0.117
+ },
+ "fenetres 32, chevauchement 16": {
+  "detectes_0": 52,
+  "detectes_1000": 47,
+  "detectes_3000": 51,
+  "fausses_alertes_textes_longs": 0.153
+ }
+}

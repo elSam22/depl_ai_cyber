@@ -5,7 +5,11 @@ clé API → validation → anonymisation → nettoyage → modèle → score. L
 
 | Fichier | Rôle |
 |---|---|
-| `main.py` | Routes `/health` et `/score`, clé API, validation, logs sans texte |
+| `main.py` | **API déployée** : routes `/health`, `/version` (clé) et `/score`, clé API, validation, plafond de calculs simultanés, logs sans texte |
+| `protection.py`, `limiteur_debit.py` | Protection en entrée : limites par IP, seau à jetons sur `/score`, sanction progressive, clés fausses, taille du corps, en-têtes |
+| `defense_extraction.py` | Score arrondi à la dizaine (réponse réduite) |
+| `model_empreintes.sha256` | Empreintes des poids de référence, vérifiées par la pipeline |
+| `main_local.py`, `modeles.py`, `preprocess.py`, `export_seuils.py` | **API locale** de développement (3 modèles, `/predire`, front) : `uvicorn api.main_local:app` depuis la racine |
 | `preprocessing.py` | Anonymisation + nettoyage : **source unique**, aussi importée par les notebooks |
 | `scorer.py` | Chargement du modèle (factice, BiLSTM ou DistilBERT) d'après `model/meta.json` |
 | `export_model.py` | Copie `models/<type>` dans `api/model/` et écrit `meta.json` |
@@ -19,7 +23,7 @@ clé API → validation → anonymisation → nettoyage → modèle → score. L
 ```bash
 cd api
 pip install -r requirements-dev.txt --extra-index-url https://download.pytorch.org/whl/cpu
-pytest                                     # 15 tests (+ parité si data/clean existe)
+pytest                                     # tests de l'API, de la protection et du prétraitement (+ vrai modèle et parité si présents)
 API_KEY=test123 uvicorn main:app --reload --port 8000
 ```
 

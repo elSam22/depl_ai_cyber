@@ -1,54 +1,94 @@
 # Digital Social Score : API de détection de toxicité
 
-API qui note la toxicité d'un commentaire de **0 à 100**, avec anonymisation RGPD, déployée sur Google Cloud (Kubernetes). Projet de l'équipe NOUDEGBE Situ, OUEDRAOGO Eliana, CAKPOSSA Enzo (TP « API Digital Social Score », ESIGELEC).
+[![Sécurité et tests](https://github.com/elSam22/depl_ai_cyber/actions/workflows/securite.yml/badge.svg?branch=ci)](https://github.com/elSam22/depl_ai_cyber/actions/workflows/securite.yml)
 
-## Où lire
+API qui note la toxicité d'un commentaire de **0 à 100**. Elle anonymise le texte (RGPD) avant le modèle DistilBERT. Elle est déployée sur Google Kubernetes Engine (Paris) et protégée contre les attaques étudiées au TP2.
 
-**`DOCUMENTATION.pdf`** (même contenu que `DOCUMENTATION.md`, images incluses) : c'est le livrable. Il suit les étapes 1 à 7 du TP, justifie chaque choix et indique ce qui reste faible. Il contient en annexe la grille de tests (A) et le rapport de charge (B).
+**Équipe** : CAKPOSSA Jean-Philippe, OUEDRAOGO Eliana, NOUDEGBE Situ. Module « Déploiement de solutions IA et cybersécurité », ESIGELEC, novembre 2026.
 
-## Tester l'API déployée (aucune installation)
+## Livrables
 
-L'API tourne sur Google Cloud. **L'adresse et la clé d'API vous sont remises séparément** (elles ne sont pas dans ce dépôt, qui est public). Le modèle utilisé est celui du serveur (DistilBERT) : inutile de rien entraîner ni télécharger.
+Ils sont tous dans [`livrables/`](livrables/). Il y a un document par TP, en PDF, avec les images intégrées. Chaque document suit les étapes de l'énoncé, puis reprend ses livrables et ses critères d'évaluation.
 
-**1. Avec le front de démonstration** (le plus simple)
-1. Ouvrir `front/index.html` dans un navigateur (double-clic).
-2. En haut, choisir **« API distante (GKE) »**.
-3. Coller l'**adresse** de l'API et la **clé** dans les deux champs, puis écrire un commentaire et cliquer sur **Analyser**.
+| Document | Contenu |
+|---|---|
+| [**TP1_LIVRABLE.pdf**](livrables/TP1_LIVRABLE.pdf) ([source Markdown](livrables/TP1_LIVRABLE.md)) | Étapes 1 à 7 : anonymisation, 3 modèles comparés, API, déploiement GKE, tests de charge, sécurité et supervision, architecture. En annexe : la grille de tests, le rapport de charge et le registre RGPD |
+| [**TP2_LIVRABLE.pdf**](livrables/TP2_LIVRABLE.pdf) ([source Markdown](livrables/TP2_LIVRABLE.md)) | Étapes 1 à 5 : attaque par évasion, défense mesurée (en local et sur l'API déployée), conformité IA Act, pipeline DevSecOps, analyse critique |
+| [REGISTRE_RGPD.md](livrables/REGISTRE_RGPD.md) | Registre des traitements, version 1.1 (également reproduit dans l'annexe C du TP1) |
+| [model_card.json](model_card.json) | Fiche du modèle (IA Act). Elle reste à la racine parce que la pipeline la contrôle à chaque modification |
 
-La clé n'est jamais enregistrée : elle reste dans le champ le temps de la page. Le voyant à côté de « API locale » devient vert quand l'API répond.
+## Résultats principaux
 
-**2. Avec `curl`**
+- **Modèle** : sur 10 000 lignes du test officiel, DistilBERT atteint une ROC-AUC de **0,977**. Il est comparé au BiLSTM (0,916) et à LAYA (0,969), avec les mêmes données pour les trois.
+- **RGPD** : le texte est anonymisé avant le modèle (regex et NER spaCy). Il n'est jamais enregistré, et les journaux n'en contiennent pas. Nous l'avons vérifié dans Cloud Logging.
+- **Haute disponibilité** : l'autoscaler fait varier le nombre de pods de 2 à 5. Pendant une panne provoquée (suppression d'un pod), il n'y a eu **aucune erreur sur 1 192 requêtes**.
+- **Robustesse à l'évasion** (mesurée par HTTP sur l'API déployée) : sans défense, 47 à 57 % des insultes déguisées passent. Avec la défense, il en passe **0 %** (homoglyphes, caractères invisibles) et **6 à 10 %** (leetspeak, lettres espacées).
+- **Résistance au déni de service** : nous avons envoyé un flot de 201 requêtes par seconde sur `/score`. Un utilisateur légitime a obtenu **29 réponses sur 29**, avec un P95 multiplié par **2,3** (contre 76 lors de l'attaque du 16 novembre).
+- **Pipeline DevSecOps** : 7 contrôles (secrets, code, configuration, image, IA Act, tests, dépendances) bloquent tout déploiement en cas d'échec.
+  - On ne déploie que depuis la branche protégée `ci`.
+  - Les actions GitHub sont figées par empreinte.
+  - Google Cloud est joint sans clé stockée, par OIDC.
+  - L'empreinte des poids du modèle est vérifiée avant chaque construction.
+
+## Tester l'API déployée
+
+**L'adresse et la clé d'API sont remises séparément** : ce dépôt est public, elles n'y figurent pas.
+
 ```bash
 curl -X POST https://<adresse>/score \
   -H "Content-Type: application/json" -H "X-API-Key: <clé>" \
   -d '{"text":"You are a stupid idiot"}'
 ```
-Réponse : `score` (0 à 100), `labels` (probabilité de chacun des 6 labels), `seuils`, `labels_detectes`, `toxique`, `model_version`. Codes d'erreur : 401 (clé absente ou fausse), 422 (texte vide ou de plus de 5 000 caractères).
 
-**3. Avec la documentation interactive** : `https://<adresse>/docs` (la route `/score` s'y teste avec la clé dans l'en-tête `X-API-Key`).
+Réponse : `{"score":100,"toxique":true}`. Le score est arrondi à la dizaine ; probabilités et seuils ne sont pas renvoyés, pour gêner le contournement et le vol du modèle.
 
-Si l'API ne répond pas : le cluster est parfois mis en pause pour économiser le crédit Google Cloud. Prévenir l'équipe.
+Codes renvoyés :
 
-## Contenu du dépôt
-
-| Dossier ou fichier | Contenu |
+| Code | Cause |
 |---|---|
-| `DOCUMENTATION.md` / `.pdf` | Documentation complète, étapes 1 à 7, annexes |
-| `front/index.html` | Interface de démonstration (un seul fichier, rien à installer) |
-| `notebooks/` | Anonymisation, nettoyage, entraînement des 3 modèles (BiLSTM, DistilBERT, LAYA) |
-| `api/` | API locale de développement (route `/predire`). Le code de l'API **déployée** (route `/score`, manifestes Kubernetes, scripts Google Cloud) est sur la branche `Enzo` |
-| `loadtest/` | Tests de charge Locust, rapport et courbes |
-| `supervision/` | Grille de tests, plan de supervision, tableau de bord Grafana importable (`grafana_dashboard.json`), installation de Prometheus et Grafana |
-| `images/` | Schéma d'architecture cloud et son script |
-| `outils/` | Export de la documentation en PDF |
+| 401 | Clé absente ou fausse |
+| 413 | Corps de plus de 40 Ko |
+| 422 | Texte vide ou de plus de 5 000 caractères |
+| 429 | Débit dépassé, réponse avec `Retry-After` |
+| 503 | Pod saturé, réessayer une seconde plus tard |
 
-## Aller plus loin (optionnel)
+**Interface graphique** : ouvrir [`front/index.html`](front/index.html) dans un navigateur, choisir « API distante », coller l'adresse et la clé. La clé n'est jamais enregistrée.
 
-- **Refaire l'entraînement** : voir la section « Reproduire » de la documentation. Compter environ 1 h pour DistilBERT et 2 h pour LAYA, sur un Mac M3 ; les modèles ne sont pas dans le dépôt (trop lourds) et les données brutes viennent du *Toxic Comment Classification Dataset* (Kaggle).
-- **API locale** : `pip install -r requirements.txt` (Python 3.12), puis `uvicorn api.main:app --port 8000` après l'entraînement, et `front/index.html` en choisissant « API locale ».
-- **Tests de charge** : `locust -f loadtest/locustfile.py,loadtest/montee.py --host https://<adresse>` avec la clé dans la variable d'environnement `API_KEY` (voir l'Annexe B). Ces tests consomment du crédit Google Cloud : à ne pas lancer sans prévenir l'équipe.
-- **Régénérer le PDF** : `python outils/exporter_documentation.py` (nécessite Chrome ou Brave).
+## Organisation du dépôt
+
+```
+livrables/      Livrables TP1 et TP2 (PDF + source Markdown), registre RGPD
+notebooks/      TP1, étapes 1-2 : anonymisation, nettoyage, entraînement des 3 modèles
+api/            API déployée (main.py, protection.py, scorer.py, Dockerfile, k8s/, deploy/, tests/)
+                et API locale de développement (main_local.py, 3 modèles) ; détail dans api/README.md
+front/          Interface de démonstration (un seul fichier HTML)
+loadtest/       TP1, étape 5 : tests de charge Locust, rapport, courbes, résultats bruts
+supervision/    TP1, étape 6 : Prometheus/Grafana, alertes, tableau de bord, registre des incidents
+attack/         TP2 : scripts d'attaque et de défense, mesures sur l'API déployée, rapport technique
+images/         Schéma d'architecture cloud (et le script qui le génère)
+outils/         Export des livrables en PDF, contrôle de mise en page, contrôle de la fiche modèle
+.github/        Pipeline DevSecOps (securite.yml) et mises à jour automatiques (Dependabot)
+data/           Jeu de données public (Toxic Comment Classification, Kaggle)
+cours/          Énoncés des TP et critères d'évaluation
+```
+
+**Branches** : `main` contient le code et les livrables. `ci` est la branche protégée que la pipeline déploie : on n'y entre que par une pull request dont les contrôles sont verts.
+
+## Reproduire
+
+- **Environnement** : Python 3.12, `pip install -r requirements.txt`.
+- **Entraînement** : exécuter les notebooks dans l'ordre (`anonyme_2`, `clean_text`, `train`). Il faut environ 1 h pour DistilBERT sur un Mac M3. Les modèles ne sont pas dans le dépôt, à cause de leur taille.
+- **API locale** : `uvicorn api.main_local:app --port 8000`, puis http://127.0.0.1:8000.
+- **Tests** : `pytest api/tests`.
+- **Attaque rejouée sur l'API déployée** : `URL=https://<adresse> API_KEY=<clé> python -m attack.mesure_api_deployee`.
+- **Régénérer un PDF** : `python outils/exporter_documentation.py livrables/TP2_LIVRABLE.md`. Il faut Chrome ou Brave.
+
+Les tests de charge et d'attaque consomment du crédit Google Cloud. Ils ne visent que notre propre API.
 
 ## Limites connues
 
-Elles sont détaillées dans la documentation : pas de limitation de débit, documentation `/docs` publique, une clé d'API partagée, trafic non chiffré entre le load balancer et les pods, latence du P95 non mesurable au-delà de 1 s dans Prometheus, et un compte Google Cloud limité (le remplacement d'un pod peut prendre plusieurs minutes).
+Elles sont détaillées et priorisées dans les livrables (TP1 § 10, TP2 § 9) :
+- la limitation de débit s'applique par pod, sans pare-feu applicatif, car le quota du projet a refusé Cloud Armor ;
+- une seule clé d'API est partagée ;
+- les alertes s'affichent à l'écran, sans notification ;
+- la défense contre le noyage réduit l'attaque mais ne l'élimine pas.

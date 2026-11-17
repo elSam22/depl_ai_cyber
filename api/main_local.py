@@ -1,7 +1,8 @@
-"""API locale « Digital Social Score » : reçoit un texte, renvoie un score de toxicité de 0 à 100.
+"""API LOCALE de développement « Digital Social Score » (3 modèles, route /predire, front de démonstration).
+L'API DÉPLOYÉE est api/main.py (route /score, clé, protections).
 
 Lancement (depuis la racine du projet) :
-    .venv/bin/uvicorn api.main:app --port 8000
+    .venv/bin/uvicorn api.main_local:app --port 8000
 Documentation interactive (pour tester dans le navigateur) : http://127.0.0.1:8000/docs
 
 RGPD : le texte reçu n'est ni enregistré ni écrit dans les logs. Il est anonymisé avant d'être donné au modèle.

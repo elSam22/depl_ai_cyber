@@ -1,5 +1,7 @@
 # TP2 : attaque par évasion sur le modèle Digital Social Score
 
+Rapport technique détaillé (scripts, protocoles, mesures intermédiaires). **Le document de référence, à jour, est [livrables/TP2_LIVRABLE.md](../livrables/TP2_LIVRABLE.md)** : il reprend ces résultats, les mesures sur l'API déployée et les corrections signalées ci-dessous.
+
 Script : [evasion.py](evasion.py). Résultats : [results/](results/).
 
 ## 1. Fiche d'analyse « Attaque IA » (étape 1)
@@ -93,7 +95,7 @@ Script : [evasion.py](evasion.py). Résultats : [results/](results/).
 
 ## 4. Dashboard inter-équipes : 4 attaques contre les API des autres groupes
 
-En plus de l'attaque sur notre propre modèle (§ 1-2, le livrable officiel du TP), on a construit un outil pour tester les mêmes familles d'attaque contre les API **déployées par d'autres groupes**, avec leur accord et leur clé API. Scripts : [serveur.py](serveur.py) (serveur local FastAPI + flux SSE) et [dashboard.html](dashboard.html) (page de suivi en direct).
+En plus de l'attaque sur notre propre modèle (§ 1-2), on a construit un outil pour tester les mêmes familles d'attaque contre les API **déployées par d'autres groupes**, avec leur accord et leur clé API. Scripts : [serveur.py](serveur.py) (serveur local FastAPI + flux SSE) et [dashboard.html](dashboard.html) (page de suivi en direct).
 
 Les 4 attaques sont communes aux trois groupes :
 
@@ -106,9 +108,9 @@ Les 4 attaques sont communes aux trois groupes :
 
 Testées sur les mêmes 15 commentaires toxiques + 15 sains (voir [attack/phrases.csv](phrases.csv)), le 2026-11-16.
 
-Des rapports autonomes et indépendants (sans comparaison entre eux) existent aussi, pour être envoyés tels quels à chaque équipe afin de nourrir leur propre étape 3 : [rapport_florentin_gilane.md](rapport_florentin_gilane.md), [rapport_aurel_baunell.md](rapport_aurel_baunell.md), [rapport_exauce_gilbert.md](rapport_exauce_gilbert.md). Ce qui suit est notre lecture à nous, en interne, avec les trois résultats réunis.
+Chaque équipe testée a reçu son propre rapport, pour nourrir son étape 3 : [rapport_florentin_gilane.md](rapport_florentin_gilane.md), [rapport_exauce_gilbert.md](rapport_exauce_gilbert.md). Ce qui suit réunit les résultats.
 
-### 4.1 Florentin & Gilane (`http://35.195.88.189/score`)
+### 4.1 Florentin & Gilane (`<adresse retirée>`)
 
 ![Détection avant/après par attaque — Florentin & Gilane](resultats_equipes/florentin_resultats.png)
 
@@ -135,7 +137,7 @@ Des rapports autonomes et indépendants (sans comparaison entre eux) existent au
 
 **Leur point faible :** la troncature du contexte (noyage, 93 %→0 %). **Leur point fort :** la robustesse sémantique (synonymes, seulement 1 évasion).
 
-### 4.2 Exauce & Gilbert (`http://34.53.169.140/score`)
+### 4.2 Exauce & Gilbert (`<adresse retirée>`)
 
 ![Détection avant/après par attaque — Exauce & Gilbert](resultats_equipes/exauce_resultats.png)
 
@@ -162,19 +164,19 @@ Des rapports autonomes et indépendants (sans comparaison entre eux) existent au
 
 **Le plus préoccupant chez eux : la recherche de synonymes atteint 0 % de rappel.** Contrairement au déguisement, elle change le sens des mots sans aucune faute — signe que leur modèle s'appuie sur des mots-clés plutôt que sur le sens global de la phrase. Leur API ne renvoie d'ailleurs pas de verdict explicite (`label`), juste un `score` — seuil de 50 utilisé par analogie avec la nôtre.
 
-### 4.3 Aurel & Baunell (`https://34.54.213.190/score`)
+### 4.3 Aurel & Baunell (`<adresse retirée>`)
 
-**Pas encore de résultats.** Leur API est en HTTPS sur IP brute avec un certificat qui ne passe la vérification standard ni avec `curl` ni avec `requests`. Décision prise : désactiver la vérification TLS pour ce groupe seulement (`VERIFIER_TLS_AUREL=0`), explicitement plutôt que par défaut — en attente que le serveur tourne avec ce réglage pour lancer les 4 attaques.
+**Non testée.** Leur API est en HTTPS sur une adresse IP brute, avec un certificat que ni `curl` ni `requests` n'acceptent. Nous n'avons pas lancé l'attaque : il aurait fallu désactiver la vérification TLS. `serveur.py` le permet pour ce seul groupe, et seulement sur demande explicite (`VERIFIER_TLS_AUREL=0`), jamais par défaut.
 
 ### 4.4 Ce qui ressort, toutes équipes confondues
 
-**Le noyage est systématiquement l'attaque la plus dévastatrice** chez les deux groupes testés (14/15 et 9/15, soit évasion totale pour Exauce & Gilbert) — et pour une seule requête par commentaire, contre jusqu'à 15 pour les attaques itératives. Voir § 5 : c'est aussi vrai pour notre propre modèle.
+**Le noyage est systématiquement l'attaque la plus dévastatrice** chez les deux équipes testées (14/15 et 9/15, soit évasion totale pour Exauce & Gilbert) — et pour une seule requête par commentaire, contre jusqu'à 15 pour les attaques itératives. Voir § 5 : c'est aussi vrai pour notre propre modèle.
 
 ---
 
-## 5. Synthèse interne — ce qu'on garde pour nous
+## 5. Synthèse : ce que ces résultats impliquent pour notre API
 
-Cette section n'est **pas** destinée aux autres groupes : c'est la lecture croisée de tout ce qu'on a mesuré, pour décider quoi corriger en priorité sur **notre propre** API avant l'étape 3.
+Lecture croisée de tout ce qui a été mesuré, pour décider quoi corriger en priorité sur **notre propre** API (étape 3).
 
 ### 5.1 Comparaison des 4 attaques, toutes cibles confondues
 
@@ -200,11 +202,11 @@ Cette section n'est **pas** destinée aux autres groupes : c'est la lecture croi
 - Refuser (HTTP 422) un texte dépassant une longueur raisonnable, plutôt que de le tronquer silencieusement à 128 tokens.
 - Ou segmenter le texte en plusieurs fenêtres et agréger les scores (max ou moyenne), plutôt qu'une seule passe tronquée.
 
-### 5.3 Travail restant
+### 5.3 Suites données
 
-- **Tester noyage, recherche de synonymes et mutation aléatoire sur notre propre API déployée** (pas seulement en local comme au § 5.2), avec le même protocole que pour les autres groupes — on n'a pour l'instant que le déguisement en conditions complètes (§ 1-2).
-- **Corriger la troncature** (§ 5.2) et mesurer l'effet du correctif avec le même script, pour avoir un avant/après chiffré à présenter à l'étape 3.
-- Compléter le rapport Aurel & Baunell dès que leur connexion HTTPS est réglée côté serveur.
+- **Troncature corrigée** : lecture par fenêtres (§ 7), puis version déployée dans `api/scorer.py` (fenêtres de 64 tokens qui se chevauchent).
+- **Noyage et déguisement rejoués par HTTP sur l'API déployée** (`attack/mesure_api_deployee.py`) : 47 insultes noyées sur 52 détectées ; évasion de 0 % (homoglyphes, invisibles) à 6-10 % (leetspeak, espaces). Détail : livrable TP2, § 4.2.
+- **Non fait, et signalé comme limite dans le livrable** : recherche de synonymes et mutation aléatoire contre notre propre API.
 
 ---
 
@@ -256,3 +258,33 @@ Cette section n'est **pas** destinée aux autres groupes : c'est la lecture croi
 **Effet concret.** Sans limite, un attaquant obtient en 20 secondes largement de quoi entraîner un clone à 94 % de fidélité (le seuil de 100 requêtes est atteint en moins de 2 s). Avec la limite à 60 requêtes/minute, il lui faudrait environ **33 minutes** pour réunir les 2 000 requêtes utilisées par l'attaque reçue — largement le temps de détecter un usage anormal et de révoquer la clé, et ça empêche directement l'effet de surcharge (latence doublée, erreurs 502) observé lors de l'incident réel (§ 6, constat).
 
 **Limite assumée :** le quota ne rend pas le vol de modèle impossible (un attaquant patient sur plusieurs heures peut toujours réunir assez de requêtes), mais il le ralentit radicalement, le rend détectable, et supprime l'effet de surcharge du service — ce que la quantification du score (§ 6.2) ne faisait pas du tout.
+
+
+---
+
+## 7. Défense contre le noyage : fenêtres glissantes (étape 3)
+
+**Vulnérabilité identifiée (§ 5.2).** Notre modèle DistilBERT ne regarde que les **128 premiers tokens** d'un texte (troncature droite par défaut du tokenizer HuggingFace). L'attaque noyage envoie plusieurs milliers de caractères neutres *avant* la phrase toxique : le contenu toxique est alors coupé et le modèle ne voit que du neutre — il répond `toxique: false`.
+
+**Défense implémentée** (`api/modeles.py`, méthode `ModeleDistilBERT.probabilites` et `ModeleBiLSTM.probabilites`) : scan en **fenêtres glissantes** de 128 tokens (DistilBERT) ou 200 mots (BiLSTM). Pour un texte court (≤ seuil), une seule passe comme avant. Pour un texte long, on découpe en fenêtres consécutives sans chevauchement et on retourne la **probabilité maximale** observée sur toutes les fenêtres. Le contenu toxique est détecté peu importe sa position dans le texte.
+
+**Coût de la défense.** Sur les textes courants (< 128 tokens) il n'y a aucun surcost : une seule passe. Le nombre de passes croît linéairement avec la longueur uniquement pour les textes anormalement longs, qui représentent typiquement moins de 1 % du trafic réel.
+
+**Réexécution** (`attack/defense_noyage.py`) : 5 phrases toxiques, 5 niveaux de rembourrage neutre (0 → 4 000 caractères), mesuré localement sur DistilBERT.
+
+![Défense anti-noyage](results/defense_noyage.png)
+
+| Rembourrage neutre ajouté | Proba toxic sans défense | Proba toxic avec défense | Évasion sans défense | Évasion avec défense |
+|---|---|---|---|---|
+| 0 car. (texte normal) | **0,986** | **0,986** | 0 % | 0 % |
+| 500 car. | 0,904 | 0,904 | 0 % | 0 % |
+| 1 000 car. | 0,096 | **0,926** | **100 %** | **0 %** |
+| 2 000 car. | 0,096 | **0,942** | **100 %** | **0 %** |
+| 4 000 car. | 0,096 | **0,917** | **100 %** | **0 %** |
+
+**Interprétation.**
+- **L'attaque est neutralisée à partir de 1 000 caractères de rembourrage** : sans défense, la probabilité chute à 0,096 (sous le seuil 0,5, évasion = 100 %) ; avec défense, elle reste à 0,92-0,94 (évasion = 0 %) quel que soit le volume de rembourrage.
+- **Sous 500 caractères**, les deux donnent le même résultat (0,90) : à ce niveau, le texte toxique tient encore dans la fenêtre de 128 tokens et aucune défense n'est nécessaire.
+- **Le comportement normal est préservé** : sur un texte sans rembourrage (0 car.), la proba reste exactement à 0,986 — la défense ne dégrade pas la détection habituelle.
+
+**Correction (17 novembre).** Ce tableau compare la probabilité au seuil 0,5. L'API, elle, décide avec les seuils par label de `models/seuils.json` (0,88 à 0,97 pour `toxic` et les labels voisins). Remesuré avec ces vrais seuils, sur 60 insultes réelles noyées dans 1 000 puis 3 000 caractères : 4 puis 2 détectées sans défense, **40 puis 48 avec** (fenêtres de 64 tokens qui se chevauchent), au prix de 11,7 % de fausses alertes sur des textes sains longs (contre 4,3 %). La défense réduit donc fortement le noyage sans l'éliminer ; c'est ce résultat qui figure dans le livrable TP2 (§ 4.3, graphique `results/noyage_seuils_reels.png`).

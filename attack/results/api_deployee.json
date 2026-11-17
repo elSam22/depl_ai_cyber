@@ -1,0 +1,50 @@
+{
+ "n": 60,
+ "date": "2026-11-17 14:07 UTC",
+ "resultats": {
+  "sans attaque": {
+   "precision": 0.912,
+   "rappel": 0.867,
+   "taux_faux_positifs": 0.083,
+   "latence_mediane_ms": 941
+  },
+  "leetspeak": {
+   "precision": 0.922,
+   "rappel": 0.783,
+   "taux_faux_positifs": 0.067,
+   "latence_mediane_ms": 944,
+   "taux_evasion": 0.096
+  },
+  "espaces": {
+   "precision": 0.907,
+   "rappel": 0.817,
+   "taux_faux_positifs": 0.083,
+   "latence_mediane_ms": 940,
+   "taux_evasion": 0.058
+  },
+  "homoglyphes": {
+   "precision": 0.912,
+   "rappel": 0.867,
+   "taux_faux_positifs": 0.083,
+   "latence_mediane_ms": 961,
+   "taux_evasion": 0.0
+  },
+  "invisibles": {
+   "precision": 0.912,
+   "rappel": 0.867,
+   "taux_faux_positifs": 0.083,
+   "latence_mediane_ms": 946,
+   "taux_evasion": 0.0
+  },
+  "noyage 1000 car.": {
+   "detectes": "47/52",
+   "taux_evasion": 0.096,
+   "latence_mediane_ms": 2855
+  },
+  "noyage 3000 car.": {
+   "detectes": "47/52",
+   "taux_evasion": 0.096,
+   "latence_mediane_ms": 5407
+  }
+ }
+}
