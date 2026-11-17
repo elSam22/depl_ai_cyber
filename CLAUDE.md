@@ -11,7 +11,7 @@ Jeu de données : *Toxic Comment Classification Dataset* (`comment_text` + 6 lab
 | 1b. Nettoyage (minuscules, emojis, ponctuation) | `notebooks/clean_text.ipynb` | `data/anonymise/` | `data/clean/train_clean.csv`, `test_clean.csv` |
 | 2. Entraînement des modèles | `notebooks/train.ipynb` | `data/clean/train_clean.csv` | `models/` (non commité) |
 
-Documentation de l'anonymisation et registre de traitement : `DOCUMENTATION.md`.
+Documentation de l'anonymisation et registre de traitement : `TP1_LIVRABLE.md`.
 
 ## Conventions
 
@@ -58,13 +58,13 @@ Dossier `api/` : `main.py` (routes FastAPI), `modeles.py` (chargement BiLSTM / D
 
 Dossier `loadtest/` : `locustfile.py` (POST /score, 1 000 textes de `test_clean.csv`, clé dans la variable d'environnement `API_KEY`, journal par requête si `LOG_REQUETES` est défini), `montee.py` (profil 1 -> 10 -> 50 -> 100 utilisateurs sur 5 min), `failover.py` (5 utilisateurs pendant 4 min), `stress.py` (+10 utilisateurs/20 s jusqu'à P95 > 2 s pendant 10 s), `report.py` (tableau par palier + graphique), `RAPPORT.md` (méthode, résultats, courbes, limites, améliorations), `images/`, `results/` (CSV). Cible : l'API d'Enzo sur GKE (2 à 5 pods), pas l'API locale ; les mesures incluent donc le réseau.
 - Relancer : `API_KEY=... LOG_REQUETES=loadtest/results/montee_requetes.csv .venv/bin/locust -f loadtest/locustfile.py,loadtest/montee.py --host https://<domaine>.sslip.io --web-host 127.0.0.1 --csv loadtest/results/montee` (interface http://localhost:8089, cliquer sur Start), puis `.venv/bin/python loadtest/report.py montee`. Failover : `failover.py` à la place de `montee.py`, supprimer un pod (`kubectl delete $(kubectl get pods -o name | head -1); date -u +%T`), puis `report.py failover <HH:MM:SS UTC>`.
-- Résultats : stress : rupture (P95 > 2 s) à 20 utilisateurs en 33 s, 0 erreur ; le débit plafonne vers 8 requêtes/s avec 2 pods (exécution 1), jusqu'à 17-20 avec l'autoscaler (exécution 2) ; latence moyenne > 2 s dès 50 utilisateurs ; < 0,2 % d'erreurs ; autoscaler : un pod neuf met ~5,5 min à être prêt (Autopilot prépare une machine) ; failover : 0 erreur sur 1 192 requêtes (suppression propre d'un pod, avec 5 pods prêts, observée 59 s). Résumé dans `DOCUMENTATION.md` § 6.
+- Résultats : stress : rupture (P95 > 2 s) à 20 utilisateurs en 33 s, 0 erreur ; le débit plafonne vers 8 requêtes/s avec 2 pods (exécution 1), jusqu'à 17-20 avec l'autoscaler (exécution 2) ; latence moyenne > 2 s dès 50 utilisateurs ; < 0,2 % d'erreurs ; autoscaler : un pod neuf met ~5,5 min à être prêt (Autopilot prépare une machine) ; failover : 0 erreur sur 1 192 requêtes (suppression propre d'un pod, avec 5 pods prêts, observée 59 s). Résumé dans `TP1_LIVRABLE.md` § 5.
 - Les percentiles du CSV de Locust sont cumulés depuis le début : ne pas les utiliser par palier.
 - Dépôt public : ne jamais mettre l'URL complète avec la clé, ni la clé, dans un fichier.
 
-- Registre RGPD fusionné (traitement du jeu de données + API en service) dans `DOCUMENTATION.md` § 7 ; copie d'origine d'Eliana corrigée : `REGISTRE_RGPD.md`.
+- Registre RGPD fusionné (traitement du jeu de données + API en service) dans `TP1_LIVRABLE.md` § 4.1 ; copie d'origine d'Eliana corrigée : `REGISTRE_RGPD.md`.
 
-Étape 7 (schéma d'architecture) : `images/architecture_cloud.png`, généré par `images/architecture_cloud.py`, avec texte explicatif, flux et zero trust dans `DOCUMENTATION.md` § 5.2 ; exemples de requêtes et réponses réels (API déployée) au § 5.3 ; correspondance avec les livrables du TP au § 8.
+Étape 7 (schéma d'architecture) : `images/architecture_cloud.png`, généré par `images/architecture_cloud.py`, avec texte explicatif, flux et zero trust dans `TP1_LIVRABLE.md` § 7.1 ; exemples de requêtes et réponses réels (API déployée) au § 5.3 ; correspondance avec les livrables du TP au § 8.
 
 ## Étape 6 : sécurité et supervision (préparée, pas commencée)
 
@@ -87,6 +87,6 @@ Macro-moyenne sur les 6 labels. Entraînement : mêmes 30000 lignes (LAYA : zér
 
 <!-- RESULTATS:FIN -->
 
-## Livrable unique : DOCUMENTATION.pdf
+## Un livrable par TP : TP1_LIVRABLE.pdf et TP2_LIVRABLE.pdf
 
-Le prof ne veut qu'un seul document, images affichées (pas de liens vers des fichiers). `DOCUMENTATION.md` est la source et contient tout. Plan fusionné le 12 novembre : structure par étapes 1 à 7 d'Eliana (`DOCUMENTATION2.md`) + nos résultats (étape 5 : charge, étape 6 : supervision, panne, attaque, § 4.2 : IAM) ; annexe A : grille de tests, annexe B : rapport de charge. Le schéma `images/architecture_cloud.py` est la version d'Eliana corrigée (chevauchements, supervision installée). Les images sont intégrées avec `![légende](chemin)`, jamais avec un lien. Après chaque modification : `.venv/bin/pip install markdown` (une fois) puis `.venv/bin/python outils/exporter_documentation.py` -> `DOCUMENTATION.pdf` (images incluses, via Brave ou Chrome) et `DOCUMENTATION.html` (non commité).
+Un seul livrable par TP (décision du 17 novembre), chacun structuré comme son énoncé (étapes, livrables de chaque étape, livrables globaux, critères d'évaluation de l'énoncé et de `cours/Criteres_Evaluation_TP.pdf`). Pas de document à côté : `TP1_LIVRABLE.md` est l'ancien `DOCUMENTATION.md` (renommé), sans le contenu TP2 ; `TP2_LIVRABLE.md` contient l'attaque (évasion), la défense, l'IA Act, la pipeline et l'analyse critique. Images intégrées avec `![légende](chemin)`, jamais avec un lien. Après chaque modification : `.venv/bin/python outils/exporter_documentation.py TP1_LIVRABLE.md` (ou `TP2_LIVRABLE.md`) -> PDF avec images incluses (via Brave ou Chrome) ; le `.html` n'est pas commité.

@@ -1,9 +1,9 @@
-"""Exporte DOCUMENTATION.md en un seul fichier HTML (images intégrées) puis en PDF (via Brave ou Chrome).
+"""Exporte un livrable Markdown (TP1_LIVRABLE.md par défaut) en un seul fichier HTML (images intégrées) puis en PDF (via Brave ou Chrome).
 
 Le prof reçoit un seul document : les images sont incluses dans le fichier, pas des liens vers des fichiers.
 Prérequis : pip install markdown ; un navigateur Chrome/Brave pour le PDF.
-Lancement (depuis la racine) : .venv/bin/python outils/exporter_documentation.py
-Sorties : DOCUMENTATION.html et DOCUMENTATION.pdf
+Lancement (depuis la racine) : .venv/bin/python outils/exporter_documentation.py [fichier.md]  (par défaut TP1_LIVRABLE.md ; TP2 : TP2_LIVRABLE.md)
+Sorties : <fichier>.html et <fichier>.pdf
 """
 import base64
 import re
@@ -14,9 +14,9 @@ from pathlib import Path
 import markdown
 
 RACINE = Path(__file__).resolve().parent.parent
-SOURCE = RACINE / "DOCUMENTATION.md"
-HTML = RACINE / "DOCUMENTATION.html"
-PDF = RACINE / "DOCUMENTATION.pdf"
+SOURCE = RACINE / (sys.argv[1] if len(sys.argv) > 1 else "TP1_LIVRABLE.md")   # ex. : TP2_LIVRABLE.md
+HTML = SOURCE.with_suffix(".html")
+PDF = SOURCE.with_suffix(".pdf")
 NAVIGATEURS = ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
 
@@ -64,7 +64,7 @@ def main():
     print("écrit :", HTML)
     nav = next((n for n in NAVIGATEURS if Path(n).exists()), None)
     if not nav:
-        print("Aucun navigateur trouvé : ouvrir DOCUMENTATION.html et faire Imprimer > PDF.")
+        print("Aucun navigateur trouvé : ouvrir le fichier HTML produit et faire Imprimer > PDF.")
         return
     subprocess.run([nav, "--headless", "--disable-gpu", "--no-pdf-header-footer", "--run-all-compositor-stages-before-draw", "--virtual-time-budget=60000", f"--print-to-pdf={PDF}", HTML.as_uri()],
                    check=True, capture_output=True, timeout=180)

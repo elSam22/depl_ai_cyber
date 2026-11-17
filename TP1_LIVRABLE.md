@@ -1,8 +1,17 @@
-# Digital Social Score — choix et justifications
+# TP1 : API « Digital Social Score » — livrable
 
 **Membres** : NOUDEGBE Situ, OUEDRAOGO Eliana, CAKPOSSA Enzo
 
-API qui note la toxicité d'un commentaire de 0 à 100, en protégeant les données personnelles (RGPD). Ce document explique **pourquoi** chaque choix a été fait, ce que les chiffres montrent, et ce qui reste faible.
+API qui note la toxicité d'un commentaire de 0 à 100, en protégeant les données personnelles (RGPD), déployée sur Google Kubernetes Engine (Paris). Ce document est **le livrable unique du TP1** : il suit les **7 étapes de l'énoncé**, rappelle au début de chacune ce qui était demandé et où c'est fait, explique **pourquoi** chaque choix a été fait, ce que les chiffres montrent et ce qui reste faible. La fin du document reprend les **livrables globaux** et les **critères d'évaluation** (énoncé et grille du 12 novembre). Le TP2 a son propre livrable (`TP2_LIVRABLE.md`).
+
+| Objectif de l'énoncé | Réponse dans ce document |
+|---|---|
+| Détecter la toxicité d'un texte | Étape 2 (3 modèles comparés), DistilBERT déployé |
+| Score de 0 à 100 | § 2.5 |
+| RGPD : aucune donnée personnelle stockée en clair | Étapes 1 et 4 (anonymisation, registre) |
+| Varier d'échelle sans rupture | Étape 5 (charge, autoscaler, failover) |
+| Observable et auditable (logs, métriques, alertes) | Étape 6 |
+| Schéma d'architecture lisible et justifié | Étape 7 |
 
 Données : *Toxic Comment Classification Dataset* (commentaires de pages de discussion Wikipédia ; colonne `comment_text` + 6 labels : toxic, severe_toxic, obscene, threat, insult, identity_hate).
 
@@ -18,6 +27,16 @@ Données : *Toxic Comment Classification Dataset* (commentaires de pages de disc
 ---
 
 ## Étape 1 : Exploration, analyse et anonymisation des données
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Télécharger un jeu de données adapté | § 1.1 (Toxic Comment Classification) |
+| Anonymiser avec un algorithme NER (spaCy) | § 1.2 et 1.3 (regex + NER spaCy) |
+| Comparer la version initiale et anonymisée, justifier chaque choix | § 1.3 et 1.4 (choix, corrections après lecture des sorties), § 1.5 (limites) |
+| Documenter le registre de traitement | § 4.1 (registre fusionné : jeu de données et API) |
+
 
 ### 1.1 Jeu de données retenu
 
@@ -91,6 +110,15 @@ Minuscules → suppression des emojis → suppression de la ponctuation (`[^\w\s
 
 ## Étape 2 : Préparation et entraînement d'un modèle IA
 
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Nettoyer les textes (ponctuation, emojis, casse) | § 1.6 |
+| Entraîner LSTM, BERT et LAYA | § 2.1 et 2.2 (BiLSTM, DistilBERT, LAYA en zéro-shot, et pourquoi) |
+| Comparer précision, rappel et temps de traitement | § 2.3 (même test de 10 000 lignes pour les trois), § 2.4 (choix du modèle déployé) |
+
+
 ### 2.1 Protocole commun aux trois modèles
 
 | Jeu                  | Contenu                                                                                                         | Rôle                                       |
@@ -148,6 +176,15 @@ L'**AUC-PR** est l'indicateur principal : elle ne dépend pas du seuil et pénal
 
 ## Étape 3 : Déploiement du modèle en API Cloud
 
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Exporter le modèle et le déployer dans le Cloud | § 3.2 (GKE Autopilot, image Docker, poids hors de Git) |
+| Créer une API qui reçoit un texte et renvoie un score | § 3.1 et 2.5 (FastAPI, `POST /score`) |
+| Tester plusieurs exemples de requêtes | § 3.3 (requêtes et réponses réelles sur l'API déployée) |
+
+
 ### 3.1 Choix de l'API et du front
 
 | Choix                                                                     | Justification                                                                                                                                                   |
@@ -186,7 +223,7 @@ Déployé par Enzo (scripts dans `api/deploy/`, manifestes dans `api/k8s/` de la
 | **Ressources par pod** : 2 CPU et 4 Go au départ (dimensionné pour LAYA, 421 M de paramètres), ramenées à **1 CPU et 2 Go** par Enzo le 12 novembre (dimensionné pour DistilBERT, 66 M de paramètres) | Autopilot facture les ressources demandées : on ne paie pas pour LAYA si on déploie DistilBERT. | Pods à 91-99 % de leur CPU pendant la montée : le CPU est saturé. Le déploiement demande **1 CPU et 2 Go** (vérifié le 12 novembre). C'est le ReplicaSet `69798c4847`, actif pendant tous nos tests : **les mesures de l'étape 5 ont été faites à 1 CPU et 2 Go par pod**, soit ≈ 4 requêtes/s par CPU. |
 | **Un seul worker uvicorn par pod** | Raison **non écrite dans le code**. | Un pod traite un commentaire à la fois : ≈ 4 requêtes/s par pod. |
 
-**Faiblesses constatées** : limitation de débit **ajoutée le 16 novembre** (§ 6.8), bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6). `/docs` était public : **fermé le 16 novembre** après l'attaque décrite au § 6.7.
+**Faiblesses constatées** : limitation de débit **ajoutée le 16 novembre** (livrable du TP2, étape 3), bogue de la clé d'API non ASCII (500 au lieu de 401, voir étape 6). `/docs` était public : **fermé le 16 novembre** après l'attaque décrite au § 6.6.
 
 **Redéployer l'API (leçons du 13 novembre).** Les poids du modèle ne sont **pas dans Git** (trop lourds, `api/model/` est ignoré) : l'image Docker n'embarque le modèle que si `api/model/` est rempli **sur la machine qui lance le déploiement**. Séquence correcte, depuis une machine qui possède `models/distilbert` :
 
@@ -264,7 +301,7 @@ curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"
 
 **Pourquoi une réponse aussi pauvre.** Jusqu'au 16 novembre, la réponse contenait aussi les 6 probabilités à 4 décimales, les seuils de décision, la version du modèle et les textes prétraités. Ce détail aide un attaquant : il peut chercher le texte qui passe juste sous un seuil (évasion) ou entraîner un clone du modèle sur nos réponses (vol de modèle par distillation). Nous gardons donc un score (la sortie centrale du TP) mais **arrondi**, et le verdict ; probabilités et seuils restent internes (journaux et métriques). Le compromis a un coût : un client perd le détail par label.
 
-**Documentation interactive fermée en production.** `/docs`, `/redoc` et `/openapi.json` répondent **404** depuis le 16 novembre à 10:31 UTC, après qu'un client a téléchargé le schéma complet de l'API puis envoyé 94 000 requêtes sur `/docs` (§ 6.7).
+**Documentation interactive fermée en production.** `/docs`, `/redoc` et `/openapi.json` répondent **404** depuis le 16 novembre à 10:31 UTC, après qu'un client a téléchargé le schéma complet de l'API puis envoyé 94 000 requêtes sur `/docs` (§ 6.6).
 
 **Erreurs**
 
@@ -280,6 +317,15 @@ curl https://<domaine>.sslip.io/version -H "X-API-Key: <CLE_API>"
 ---
 
 ## Étape 4 : Sécurisation et conformité RGPD
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Configurer JWT ou clé API | § 3.2 et 3.3 (clé `X-API-Key`, Secret Manager, comparaison à temps constant) |
+| Mettre en place HTTPS et IAM | § 3.2 (certificat géré, redirection HTTPS), § 4.2 (IAM) |
+| Registre RGPD, validation, logs pseudonymes | § 4.1 (registre, validation d'entrée, journaux sans texte) |
+
 
 ### 4.1 Registre de traitement (RGPD, article 30)
 
@@ -406,7 +452,7 @@ Ligne type : `score=87 longueur=142 duree_ms=14.2`
 | Désactivation des logs d'accès uvicorn | `--no-access-log` dans le CMD du `api/Dockerfile` — les logs uvicorn n'enregistrent aucune IP cliente                                                                                               | Implémentée            |
 | AIPD (Art. 35 RGPD)                 | Analyse d'impact requise si le score est utilisé dans un processus décisionnel à effet juridique                                                                                                         | À évaluer selon usage |
 
-**Limitation de débit :** en service depuis le 16 novembre (par adresse IP, voir § 6.8). **Front de démonstration :** l'historique reste dans le `sessionStorage` de l'onglet et ne contient que le texte **anonymisé** ; la clé d'API saisie en mode « API distante » n'est jamais stockée ; la police DM Sans est chargée depuis Google Fonts (connexion du navigateur vers Google).
+**Limitation de débit :** en service depuis le 16 novembre (par adresse IP, voir livrable du TP2, étape 3). **Front de démonstration :** l'historique reste dans le `sessionStorage` de l'onglet et ne contient que le texte **anonymisé** ; la clé d'API saisie en mode « API distante » n'est jamais stockée ; la police DM Sans est chargée depuis Google Fonts (connexion du navigateur vers Google).
 
 #### 4.1.10 Droits des personnes concernées
 
@@ -455,6 +501,15 @@ Relevé du 12 novembre 2026 (`gcloud projects get-iam-policy`). Les adresses ne 
 ---
 
 ## Étape 5 : Simulation de montée en charge
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Simuler croissance progressive, stress test et failover | Annexe B.3 (montée), B.4 (stress), B.6 (failover) |
+| Mesurer latence moyenne, P95/P99, taux d'erreur | Annexe B (tableaux par palier, courbes) |
+| Proposer des améliorations (cache, load balancer, redondance) | Annexe B.7 (fait ou proposé, avec la raison) |
+
 
 Méthode complète, captures et commandes : Annexe B. Cible : l'API déployée sur GKE (2 à 5 pods, autoscaler à 70 % de CPU), modèle DistilBERT.
 
@@ -506,6 +561,15 @@ Méthode complète, captures et commandes : Annexe B. Cible : l'API déployée s
 
 ## Étape 6 : Supervision et sécurité
 
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Tester la supervision Prometheus/Grafana | § 6.2 (installation, métriques, tableau de bord) |
+| Analyser les logs et les comportements anormaux | § 6.4 (Cloud Logging), § 6.6 (attaque réelle analysée dans les journaux) |
+| Simuler panne ou attaque, évaluer la continuité | § 6.3 (panne brutale), § 6.5 (attaque simulée), § 6.6 (attaque réelle) |
+
+
 ### 6.1 Tests de sécurité
 
 Grille complète : Annexe A.
@@ -518,7 +582,7 @@ Grille complète : Annexe A.
 | S3 — appel en HTTP | 301 vers HTTPS |
 | S4 — texte vide, trop long (> 5 000 caractères) ou corps non JSON | 422 |
 | S5 — le texte reçu n'apparaît pas dans les journaux | **Vérifié** : un texte avec un nom, une adresse IP et un mot unique a été envoyé ; la recherche de ces trois éléments dans Cloud Logging ne renvoie rien (voir 6.4) |
-| S6 — `/docs` accessible sans clé | 200 : publique le 12 nov. ; **404 depuis le 16 nov.** (voir § 6.7) |
+| S6 — `/docs` accessible sans clé | 200 : publique le 12 nov. ; **404 depuis le 16 nov.** (voir § 6.6) |
 | S7 — rafale de requêtes invalides | Service légitime maintenu (voir 6.5) |
 | S8 — limitation de débit | Aucune : aucun refus 429 (constat, voir 6.5) |
 
@@ -575,7 +639,7 @@ Grille complète : Annexe A.
 - **L'autoscaler réagit trop tard pour une montée brutale** (déjà mesuré à l'étape 5, visible ici) : justifie un minimum de pods plus élevé avant un pic annoncé.
 - **La supervision consomme de la place sur un cluster partagé** : au moment de l'essai, Google n'avait plus de machine disponible dans la zone (« GCE out of resources ») et Grafana est resté bloqué en attente. On a retiré **Alertmanager** (aucun canal de notification n'est configuré) pour libérer de la mémoire. Les règles d'alerte peuvent se lire dans Prometheus, mais aucune notification n'est envoyée.
 - Grafana a dû être ramené en version 10.4.2 : en version 13, l'interface ne se chargeait pas à travers l'aperçu web de Cloud Shell (fichier JavaScript non transmis par le relais).
-- Limitation de débit : absente pendant ces mesures, ajoutée le 16 novembre (§ 6.8, grille S8). `/docs` public : corrigé le 16 novembre (grille S6).
+- Limitation de débit : absente pendant ces mesures, ajoutée le 16 novembre (livrable du TP2, étape 3 ; grille S8). `/docs` public : corrigé le 16 novembre (grille S6).
 
 ![Tableau de bord Kubernetes prêt à l'emploi : panneaux d'usage vides](supervision/images/grafana_dashboard_pods.png)
 
@@ -597,65 +661,7 @@ Cloud Logging GKE collecte automatiquement la sortie standard des pods. Ligne ty
 
 2 minutes, 8 attaquants (sans clé, mauvaise clé, texte trop long, JSON invalide) et 2 utilisateurs légitimes. **5 812 requêtes d'attaque (≈ 49/s) toutes refusées avec le bon code (401 ou 422), médiane 25 ms** : un refus est environ 4 fois moins coûteux qu'un vrai calcul (90 ms). Les légitimes n'ont subi **aucune erreur** (276 requêtes, P95 170 ms). Limites : charge faible, et la comparaison avec des légitimes seuls n'a pas été faite avec les mêmes textes. **Aucune limitation de débit** : l'API répond à ≈ 49 requêtes/s d'un même client sans jamais envoyer de 429, donc une attaque plus forte consommerait le CPU sans être freinée (amélioration proposée : limite par clé ou par IP). Et le bogue de clé à accent (S2b) permet de produire des erreurs 500, que cette rafale n'a pas utilisées.
 
-### 6.6 Pipeline de sécurité et déploiement continu
-
-Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request** sur le dépôt public. Elle comprend **sept jobs** : six contrôles, puis le déploiement, qui ne démarre que si les six sont verts.
-
-| Job | Outil | Pourquoi ce choix | Résultat |
-|---|---|---|---|
-| **Secrets** | `gitleaks`, sur **tout l'historique** git | Une clé retirée d'un fichier reste lisible dans les anciens commits : c'est ce qui est arrivé (clé d'API dans `frontend/index.html`, branche Eliana). Un contrôle du seul état courant ne l'aurait pas vue. | Vert. Retrouve l'ancienne clé en local ; elle est révoquée depuis le 13 novembre et déclarée dans `.gitleaksignore` pour que seules les **nouvelles** fuites soient signalées. |
-| **Code** | `bandit`, échec dès la sévérité moyenne | Détecte les motifs dangereux en Python sans exécuter le code. | Vert après correction (voir ci-dessous). |
-| **Conformité IA Act** | `outils/verifier_model_card.py` | Le TP2 impose un `model_card.json` : on contrôle ses champs, que la catégorie de risque soit l'un des 4 niveaux du règlement et justifiée, et **qu'aucune affirmation ne soit faite sans preuve** (par exemple `bias_detected: false` sans évaluation décrite est refusé). | Vert. La fiche déclare `bias_detected: null` (non évalué) avec la raison. |
-| **Configuration Docker et Kubernetes** | `trivy`, échec dès la sévérité haute | Le Dockerfile et les manifestes de `api/k8s/` décident des protections réelles du conteneur : on les contrôle comme du code. | Vert, **sans aucune exception** (voir ci-dessous). |
-| **Image Docker** (ajouté le 16 nov.) | `trivy image`, échec dès la sévérité haute, failles avec correctif disponible | La configuration saine ne dit rien des paquets que l'image contient : on construit l'image et on l'analyse. | Rouge au premier essai (`zlib1g`, 2 failles hautes), vert après la mise à jour des paquets système dans le Dockerfile. |
-| **Tests et dépendances** | `pytest` ; `pip-audit` sur l'environnement installé | Rejoue la grille de sécurité (clé, validation d'entrée, anonymisation, CORS, réponse réduite) ; les versions sont libres (`fastapi>=0.115`), donc on audite ce que `pip` a réellement résolu. | 29 tests passent (modèle factice), dont ceux de la limitation de débit ; « No known vulnerabilities found ». |
-| **Déploiement** | Cloud Build, Kubernetes | Voir ci-dessous. | Vert depuis le 16 novembre à 10:14 UTC. |
-
-**Ce que la pipeline a trouvé.**
-- `bandit` : (1) `torch.load` sans `weights_only=True` dans `api/scorer.py` et `api/modeles.py` : un fichier de poids piégé pourrait exécuter du code au chargement. **Corrigé.** (2) et (3) `from_pretrained` « sans révision épinglée » : **faux positifs** justifiés (dossier local embarqué, rien n'est téléchargé), marqués `# nosec B615`.
-- `trivy` : le conteneur n'avait pas `readOnlyRootFilesystem: true` (KSV-0014, sévérité haute) : un attaquant maître du conteneur pouvait y déposer un exécutable. D'abord **accepté avec sa raison** dans `.trivyignore` (non testable sans remplacer les pods), puis **corrigé et déployé** le 16 novembre avec deux volumes temporaires en mémoire. Le fichier d'exceptions est maintenant vide.
-- **Les tests ont détecté une régression RGPD** au moment de réconcilier le code d'Enzo : sa normalisation anti-évasion « corrigeait » le leetspeak (3 en e, 1 en i, 0 en o…) **avant** l'anonymisation. Un numéro de téléphone ou une adresse IP collés à un mot (`me:0612345678`) devenait du texte illisible et **n'était plus reconnu : il traversait l'anonymisation**. Correctif : le dé-leet passe **après** l'anonymisation, quand les données personnelles sont déjà des balises ; la défense contre l'évasion fonctionne toujours.
-- `trivy image` : **2 failles de sévérité haute dans `zlib1g`** (bibliothèque système de l'image de base Debian), avec correctif publié. La pipeline a refusé la pull request ; `apt-get upgrade` ajouté au Dockerfile, contrôle repassé au vert (exécutions 43858297183 puis 43858725549).
-- Un échec de la première exécution, gardé volontairement : les tests importaient `pandas`, absent des dépendances de test. Cela montre que la pipeline détecte ce qui passe inaperçu sur une machine de développement.
-
-![Première exécution de la pipeline (échec sur les tests, secrets et code au vert), GitHub Actions, 16 novembre](supervision/images/ci_premiere_execution.png)
-
-**Le déploiement automatique, et pourquoi il est sûr.**
-- **Déclenchement** : push sur la branche `ci` (la branche `Enzo` en a été retirée le 16 novembre) quand `api/` a changé, ou à la demande ; **jamais sur une pull request** (le code peut venir d'un tiers). Un seul déploiement à la fois.
-- **Aucune clé stockée.** GitHub prouve son identité à Google par un jeton OIDC (*Workload Identity Federation*). Le fournisseur d'identité est limité à **ce dépôt** et à deux branches, dont seule `ci` déclenche un déploiement ; le compte de service dédié n'a que les rôles nécessaires (construire, déployer, lire la clé d'API et les poids), aucun rôle d'administrateur du projet.
-- **Poids du modèle dans un bucket privé** (accès public interdit, lecture seule pour la pipeline) : ils ne sont pas dans git, et c'est ce qui rend le déploiement reproductible depuis le seul dépôt.
-- **Avant de construire** : test du **vrai** modèle (un modèle factice ne passe pas).
-- **Après le déploiement**, un contrôle de 11 vérifications (`api/deploy/verifier_deploiement.py`) : `/health` répond sans rien révéler ; tous les pods annoncent la **même version** (le remplacement est progressif, anciens et nouveaux pods répondent tour à tour) ; le modèle n'est **pas** `dummy-…` (l'incident du 13 novembre) ; un texte toxique est jugé toxique et un texte neutre non ; la réponse ne contient que `score` et `toxique` ; 401 sans clé et avec une mauvaise clé ; `/version` exige la clé ; `/docs` répond 404.
-- **Retour arrière automatique** si le déploiement échoue, **seulement si un déploiement a réellement eu lieu** (comparaison du numéro de révision). Sans cette condition, une première version de la pipeline a fait reculer la production d'une version alors que rien n'avait été déployé : défaut trouvé et corrigé le jour même.
-
-**Les obstacles rencontrés** (le premier déploiement réussi a demandé une dizaine d'exécutions) :
-
-| Exécutions | Échec | Cause et correction |
-|---|---|---|
-| 1 à 5 | `gcloud builds submit` : « forbidden from accessing the bucket » | Le compte limité n'a pas les droits que cette commande exige sur le bucket de sources. Droits ajoutés (lecture du bucket, puis administration de ce seul bucket) : sans effet. |
-| 6 | Idem, avec une archive des sources déjà envoyée par le script | La commande revérifie quand même le bucket. **Contournement :** `--no-source`, le build lit lui-même l'archive. |
-| 7 et 8 | Le build réussit mais la commande échoue : lecture des journaux refusée | Réservée aux *Viewer* du projet ; `--suppress-logs` ne suffit pas. |
-| 9 | **Succès** | Soumission asynchrone puis lecture du **statut** du build (permis). |
-
-**Choix assumés et limites.**
-- **`main` est protégé** : une fusion n'y est acceptée que si **les contrôles sont verts**. Les administrateurs peuvent contourner la règle en urgence ; les poussées forcées sont interdites.
-- **Le déploiement part de la branche `ci`, pas de `main`**, parce que `main` contient l'API locale de développement et non le code déployé. Cette branche est **protégée depuis le 16 novembre** : pull request obligatoire, les 6 contrôles verts obligatoires (branche à jour), pas de poussée forcée ni de suppression, règles valables aussi pour les administrateurs. Le déploiement n'est plus possible depuis aucune autre branche (la branche `Enzo` en a été retirée).
-- **Ajouté le 16 novembre (§ 6.8)** : analyse de l'image Docker, actions GitHub référencées par empreinte de commit, Dependabot (mises à jour des dépendances et des actions proposées en pull request), détection de secrets au push, droits du jeton GitHub réduits à la lecture.
-- **Non couvert :** test dynamique de l'API en ligne dans la pipeline (le contrôle en 11 points après déploiement s'en approche mais ne cherche pas de failles) ; une seule clé d'API pour tous les clients.
-
-**Journal d'exécution** (GitHub Actions, dépôt public `elSam22/depl_ai_cyber`, onglet Actions ; chaque numéro s'ouvre à `https://github.com/elSam22/depl_ai_cyber/actions/runs/<numéro>`, les journaux détaillés de chaque job y sont consultables) :
-
-| Numéro | Heure (UTC, 16 nov.) | Branche et événement | Résultat | Ce qu'il montre |
-|---|---|---|---|---|
-| 43845955880 | 10:07 | `ci`, push | Succès | Premier déploiement entièrement automatique (contrôles verts, build, 11 vérifications) |
-| 43848111995 | 10:21 | `ci`, push | Succès | Déploiement de l'API réconciliée (réponse réduite, `/docs` fermé) |
-| 43858285417 et 43858297183 | 11:30 | `durcissement`, push et pull request | **Échec** | `trivy image` : 2 failles hautes dans `zlib1g` ; **le déploiement n'a pas démarré** (job ignoré) |
-| 43858717055 et 43858725549 | 11:32 | `durcissement`, push et pull request | Succès | Après correction, 6 contrôles verts, déploiement ignoré (pull request) |
-| 43859230303 | 11:36 | `ci`, fusion de la pull request | **Succès, 7 jobs** | 6 contrôles verts puis déploiement réel, vérifié en 11 points |
-- Chaque déploiement remplace les pods en service et consomme du crédit Google Cloud.
-
-
-### 6.7 Attaque réelle du 16 novembre (incident I-001)
+### 6.6 Attaque réelle du 16 novembre (incident I-001)
 
 Le 16 novembre, l'API a reçu du trafic hostile. Le détail complet (chronologie, méthode, corrections) est dans le registre `supervision/INCIDENTS.md` ; voici l'essentiel.
 
@@ -681,41 +687,24 @@ Le 16 novembre, l'API a reçu du trafic hostile. Le détail complet (chronologie
 |---|---|
 | `/docs`, `/redoc` et `/openapi.json` fermés en production | **Fait**, déployé le 16 nov. à 10:31 (404 vérifié) |
 | Réponse réduite (score arrondi à la dizaine, verdict) | **Fait** (§ 3.3) |
-| Normalisation anti-évasion avant le modèle | **Fait**, avec un défaut d'anonymisation corrigé en route (§ 6.6) |
+| Normalisation anti-évasion avant le modèle | **Fait**, avec un défaut d'anonymisation corrigé en route (livrable du TP2, étape 5) |
 | Tableau de bord Grafana « Détection d'attaque », script d'analyse des journaux, registre | **Fait** (`supervision/`) |
-| **Limitation de débit** (module d'Eliana, `api/limiteur_debit.py`, branché dans `api/protection.py`) | **Fait**, déployé le 16 nov., testé en réel (§ 6.8) |
-| Alertes Prometheus, journalisation des refus (sans clé ni texte, adresse pseudonymisée) | **Fait** (§ 6.8) |
-| Clés distinctes par client ; Cloud Armor | Non fait (voir § 6.8) |
+| **Limitation de débit** (module d'Eliana, `api/limiteur_debit.py`, branché dans `api/protection.py`) | **Fait**, déployé le 16 nov., testé en réel (livrable du TP2, étape 3) |
+| Alertes Prometheus, journalisation des refus (sans clé ni texte, adresse pseudonymisée) | **Fait** (livrable du TP2, étape 3) |
+| Clés distinctes par client ; Cloud Armor | Non fait (voir livrable du TP2, étape 3) |
 
 **Leçon principale.** Une défense qui n'est pas en service n'existe pas : le limiteur et la fermeture de `/docs` étaient écrits avant l'attaque, mais aucun des deux n'était déployé.
 
-### 6.8 Corrections tirées du bilan du professeur (16 novembre, après-midi)
-
-Le professeur a présenté les résultats de ses tests sur 9 équipes (29 failles confirmées, déni de service réussi sur toutes les cibles testées). Nous n'en retenons que les **causes**, pas les personnes : chacune est une faille que notre API avait encore ou aurait pu avoir.
-
-| Constat chez d'autres équipes | Notre situation avant | Correction déployée le 16 nov. | Vérifié en réel |
-|---|---|---|---|
-| Inférence sans authentification | Clé obligatoire (déjà) | Blocage temporaire d'une adresse après 10 clés fausses par minute (brute-force) | 30 clés fausses : 16 × 401, puis 14 × 429 |
-| Scores par classe, seuil de détection et modèle exposés dans chaque réponse | Réponse déjà réduite (§ 3.3) | Inchangé ; pas d'en-tête `Server` ; en-têtes de sécurité | `{"score":100,"toxique":true}` seul |
-| Modèle extractible : 2 005 requêtes/min sans aucun frein | **Aucune limite** | Limite par adresse IP : 60 `/score` par minute et par pod (≈ 2 × plus avec 2 pods) | 150 requêtes séquentielles : 106 × 200, 44 × 429 |
-| 43 685 requêtes acceptées en 4 min, latence × 76 ; latence × 108 ; service cassé à 168 requêtes simultanées ; hôte tombé 10 min | Tout était accepté, la latence montait | **Au plus 3 calculs simultanés par pod** ; une requête de plus attend 1 s au maximum, puis reçoit 503 : on refuse vite plutôt que de répondre en 30 s | 80 requêtes simultanées : 26 × 200, 54 × 503, `/health` toujours 200, aucun pod redémarré |
-| « L'attaque a réussi partout et personne ne l'a vue » | Aucune alerte | 7 règles Prometheus (`supervision/alertes.yaml`) : débit, refus, clés fausses, erreurs 5xx, P95 > 2 s, pods < 2, redémarrage ; métrique `dss_refus_total` par motif ; intervalles de latence élargis à 10 s (le P95 n'est plus bloqué à 1 s) | Règle chargée dans Prometheus |
-| Service cassé sous charge, pas de /docs public : bonne pratique | `/docs` déjà fermé | — | 404 |
-| Redirection HTTPS ajoutée pendant l'exercice | Déjà en place (FrontendConfig) | — | — |
-| Corps de requête non limité | 5 000 caractères, mais aucun plafond d'octets | Plafond de 40 Ko (413) ; délai du load balancer ramené à 15 s | Test automatique |
-
-**Choix et limites, à dire sans détour.**
-- **Les limites sont par pod** (mémoire locale). Avec 2 à 5 pods, la limite réelle par adresse est 2 à 5 fois plus haute. Une limite globale demanderait Redis ou Cloud Armor.
-- **Cloud Armor a été essayé et refusé** : le quota « politiques de sécurité » du projet étudiant est à 0 (`SECURITY_POLICIES`, limite 0). La limitation est donc faite dans l'API, après le load balancer : un flot de requêtes arrive toujours jusqu'au pod, qui le refuse en quelques millisecondes (429) au lieu de calculer.
-- **Adresse du client** : avant-dernière valeur de `X-Forwarded-For`, celle que le load balancer Google ajoute. Les valeurs plus à gauche sont inventées par le client et ignorées. Derrière un réseau partagé (le wifi de l'école), plusieurs personnes partagent une adresse et donc un quota : la limite de 60 par minute est volontairement large pour un usage normal (1 requête par seconde).
-- **RGPD** : une adresse IP est une donnée personnelle. Les journaux de refus n'en contiennent jamais : seulement une empreinte HMAC de 10 caractères (clé secrète du serveur), qui permet de reconnaître un client sans le nommer, et une seule ligne par minute et par client. Ni la clé ni le texte n'y figurent.
-- **Pas d'Alertmanager** : une alerte « firing » se lit dans Prometheus ou Grafana, elle n'envoie aucun message.
-- **Pipeline** (même jour) : branche `ci` protégée (pull request, 6 contrôles obligatoires, règles valables pour les administrateurs), déploiement possible depuis `ci` seulement, actions GitHub référencées par **empreinte de commit** (une étiquette de version peut être déplacée), analyse trivy de l'**image** Docker (a trouvé une faille de `zlib1g`, corrigée par la mise à jour des paquets système dans le Dockerfile), Dependabot, détection de secrets et blocage à la poussée activés sur le dépôt, droits par défaut du jeton GitHub réduits à la lecture.
-- **Reste non fait** : une clé par client (toujours une clé unique, à changer après la notation), test dynamique de l'API dans la pipeline, limite globale.
-
----
-
 ## Étape 7 : Modélisation de l'infrastructure Cloud — Synthèse
+
+**Ce que demande l'énoncé, et où c'est fait :**
+
+| Exercice | Où |
+|---|---|
+| Lister les composants (API, IA, stockage, supervision) | § 7.2 |
+| Dessiner les flux, authentifications et chiffrement | § 7.1 (schéma), § 7.3 |
+| Texte explicatif et légende du schéma ; approche zero trust | § 7.1, § 7.4, § 7.5 |
+
 
 ### 7.1 Schéma d'architecture
 
@@ -780,11 +769,11 @@ La **clé API** est stockée dans Secret Manager et injectée en variable d'envi
 
 **Manque :**
 
-- Des requêtes non authentifiées atteignent les pods (ni WAF ni Cloud Armor : quota à 0 sur le projet) ; elles sont refusées par la limite applicative (§ 6.8).
+- Des requêtes non authentifiées atteignent les pods (ni WAF ni Cloud Armor : quota à 0 sur le projet) ; elles sont refusées par la limite applicative (livrable du TP2, étape 3).
 - Pas de chiffrement interne (load balancer → pods).
 - Pas de `NetworkPolicy` dans les manifestes.
 - Une seule clé partagée — impossible d'identifier un appelant ou de révoquer un accès individuellement.
-- ~~`/docs` public~~ : fermé le 16 novembre (§ 6.7).
+- ~~`/docs` public~~ : fermé le 16 novembre (§ 6.6).
 
 ### 7.5 Tableau de synthèse des choix techniques
 
@@ -805,18 +794,52 @@ La **clé API** est stockée dans Secret Manager et injectée en variable d'envi
 
 ---
 
-## Livrables du TP
+## Livrables et critères d'évaluation
+
+### Livrables globaux de l'énoncé
 
 | Livrable | Où | État |
 |---|---|---|
-| API fonctionnelle et documentée | API déployée sur GKE (étape 3), `/docs`, ce document | Fait |
+| API fonctionnelle et documentée | API déployée sur GKE (étape 3) ; documentation : § 3.3 et ce document. `/docs` est fermé en production depuis le 16 novembre (sécurité) | Fait |
 | Exemples de requêtes et réponses | § 3.3 | Fait |
-| Schéma d'architecture cloud + texte explicatif | Étape 7 (§ 7.1 à 7.4) | Fait |
-| Registre RGPD | § 4.1 | Fait |
-| Droits d'accès (IAM) | § 4.2 | Fait (relevé du 12 novembre) |
-| Tableau de bord / captures de supervision | § 6.2, figures 6.1 à 6.9 ; fichier `grafana_dashboard.json` | Fait |
+| Schéma d'architecture Cloud + texte explicatif | Étape 7 (§ 7.1 à 7.4) | Fait |
+| Registre RGPD | § 4.1 (et IAM : § 4.2) | Fait |
+| Tableau de bord / captures de supervision | § 6.2, figures 6.1 à 6.9 ; fichier `supervision/grafana_dashboard.json` | Fait |
 | Rapport de simulation de charge | Étape 5 et Annexe B | Fait |
 | Grille de tests sécurité / stress / failover | Annexe A | Fait (F4, perte d'une machine entière, non réalisé) |
+
+### Critères d'évaluation de l'énoncé
+
+| Compétence | Indicateurs | Preuve |
+|---|---|---|
+| Fonctionnalité | API opérationnelle, scoring correct | § 3.3 (réponses réelles : texte toxique → 100, neutre → 0), § 2.3 (ROC-AUC 0,9771 sur le test) |
+| Sécurité | Authentification, validation d'entrée, chiffrement | § 3.2, § 4.1, § 6.1 (tests S1 à S8), Annexe A |
+| Scalabilité | Test de charge et analyse pertinente | Étape 5, Annexe B |
+| Supervision | Logs/métriques, dashboard | Étape 6 |
+| Conformité RGPD | Anonymisation, registre conforme | Étape 1, § 4.1 |
+| Présentation | Documentation claire, schéma lisible, code commenté | Ce document, § 7.1, code commenté en français |
+
+### Grille d'évaluation détaillée (12 novembre)
+
+| Critère | Preuve | Limite à connaître |
+|---|---|---|
+| **Code structuré** | Notebooks par étape (anonymisation, nettoyage, entraînement), API en modules séparés, tests automatiques | — |
+| **API fonctionnelle** | § 3.3 : requêtes et réponses réelles sur l'API déployée ; 11 vérifications automatiques après chaque déploiement | — |
+| **NER pour anonymisation et pseudonymisation** | § 1.2 et 1.3 : regex (e-mails, téléphones, IP) + NER spaCy, balises `xxx_tag` | Le NER laisse passer certains noms (§ 1.5) |
+| **Conformité RGPD documentée** | § 4.1 : finalités, bases légales, durées, droits des personnes ; texte jamais stocké ni journalisé | Le load balancer Google conserve les adresses IP 30 jours (dit dans le registre) |
+| **Authentification** | Clé d'API, comparaison à temps constant, 401 sans clé ou avec une fausse (§ 3.2, § 6.1) | Une seule clé pour tous les clients |
+| **Chiffrement, HTTPS, IAM** | Certificat géré, redirection HTTPS, Secret Manager, compte de service aux droits minimaux (§ 3.2, § 4.2, § 7.3) | Trafic non chiffré entre le load balancer et les pods |
+| **Simulation de charge réussie** | Montée progressive, stress, failover avec Locust (Annexe B) | Mesures faites depuis un poste, réseau inclus |
+| **Pertinence des métriques choisies** | Latence moyenne, P95, P99, débit, erreurs, CPU et mémoire par pod ; critère de rupture P95 > 2 s justifié (Annexe B.1) | Percentiles cumulés dans le CSV de Locust : recalculés par palier |
+| **Pertinence des propositions d'amélioration** | Annexe B.7, chacune marquée « fait » ou « proposé » avec sa raison | Plusieurs restent proposées |
+| **Pertinence des métriques exposées** | Métriques Prometheus sur un port séparé, non public : requêtes par route, erreurs, latence (§ 6.2) | Pas d'accès direct au CPU du kubelet sur Autopilot (contourné, § 6.2) |
+| **Qualité de la visualisation** | Tableau de bord Grafana construit à la main, captures sous charge et pendant l'attaque (§ 6.2, § 6.6) | Grafana accessible seulement par `port-forward` (choix de sécurité) |
+| **Schéma clair et complet** | § 7.1 : schéma avec flux, authentification, chiffrement, supervision | — |
+| **Documentation lisible, exécution, README** | Ce document, section « Reproduire », `README.md` | — |
+| **Justification des choix techniques** | Une justification à chaque décision ; tableau de synthèse (§ 7.5) | — |
+| **Exploration d'outils alternatifs** | LAYA évalué en zéro-shot (entraînement mesuré à 7,6 s par ligne, donc irréaliste), BiLSTM comparé ; Prometheus/Grafana plutôt que Cloud Monitoring seul (§ 7.5) | — |
+| **Amélioration personnelle** | Front de démonstration ; attaque réelle analysée dans les journaux (§ 6.6) | — |
+| **Scénarios de charge innovants** | Stress à arrêt automatique, failover propre et brutal, perte d'un pod sur 2, attaque avec utilisateurs légitimes en parallèle (§ 6.3, § 6.5, Annexe B) | — |
 
 ---
 
@@ -851,9 +874,9 @@ Légende : **OK** = vérifié sur le cluster ; **code** = prévu dans le code (t
 | S4b | Texte de 6 000 caractères (> 5 000) | 422 | 422 | **OK** |
 | S4c | Corps qui n'est pas du JSON | 422 | 422 | **OK** |
 | S5 | Les logs ne contiennent pas le texte reçu | aucun texte ni IP dans Cloud Logging | Texte envoyé : un nom, une IP et un mot unique (`ZEBRAXYZ123`). Recherche dans Cloud Logging (30 min) : **aucun résultat**. Les lignes du journal ont toutes la forme `score=60 longueur=67 duree_ms=80.2` (jamais le texte). | **OK** |
-| S6 | `/docs` (Swagger) accessible sans clé | à décider | **200 : publique** le 12 nov. ; **404 depuis le 16 nov.** | corrigé après l'attaque (§ 6.7) |
+| S6 | `/docs` (Swagger) accessible sans clé | à décider | **200 : publique** le 12 nov. ; **404 depuis le 16 nov.** | corrigé après l'attaque (§ 6.6) |
 | S7 | Rafale de requêtes invalides (sans clé, mauvaise clé, texte trop long, JSON invalide) pendant que des utilisateurs légitimes travaillent | le service légitime continue | 2 min, 2 légitimes + 8 attaquants (`loadtest/attaque.py`). **5 812 requêtes d'attaque (≈ 49/s), toutes refusées avec le bon code** (401 ou 422), médiane 25 ms. **Utilisateurs légitimes : 276 requêtes, 0 erreur, médiane 90 ms, P95 170 ms, maximum 391 ms.** | **OK** (limite : pas de mesure « légitimes seuls » avec les mêmes textes, donc la comparaison n'est qu'indicative) |
-| S8 | Limitation de débit | requêtes refusées (429) au-delà d'un seuil | Mesure du 12 nov. : aucun 429, les ≈ 49 requêtes/s d'un même client étaient toutes traitées. **Après correction (16 nov.)** : 150 requêtes séquentielles sur `/score` : 106 × 200 puis 44 × 429. | **OK** après correction (limite par IP et par pod, § 6.8) |
+| S8 | Limitation de débit | requêtes refusées (429) au-delà d'un seuil | Mesure du 12 nov. : aucun 429, les ≈ 49 requêtes/s d'un même client étaient toutes traitées. **Après correction (16 nov.)** : 150 requêtes séquentielles sur `/score` : 106 × 200 puis 44 × 429. | **OK** après correction (limite par IP et par pod, livrable du TP2, étape 3) |
 
 ### Supervision (Prometheus et Grafana)
 

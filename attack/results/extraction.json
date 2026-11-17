@@ -1,0 +1,62 @@
+{
+ "sans_defense": [
+  {
+   "accord_clone_cible": 0.9396,
+   "exactitude_clone": 0.9606,
+   "faux_positifs_clone": 0.0,
+   "n_requetes": 100,
+   "duree_s": 1.8
+  },
+  {
+   "accord_clone_cible": 0.9402,
+   "exactitude_clone": 0.9611,
+   "faux_positifs_clone": 0.0001,
+   "n_requetes": 500,
+   "duree_s": 7.2
+  },
+  {
+   "accord_clone_cible": 0.9415,
+   "exactitude_clone": 0.9622,
+   "faux_positifs_clone": 0.0002,
+   "n_requetes": 1000,
+   "duree_s": 14.9
+  },
+  {
+   "accord_clone_cible": 0.9439,
+   "exactitude_clone": 0.9628,
+   "faux_positifs_clone": 0.0017,
+   "n_requetes": 2000,
+   "duree_s": 36.0
+  }
+ ],
+ "avec_defense": [
+  {
+   "accord_clone_cible": 0.9396,
+   "exactitude_clone": 0.9606,
+   "faux_positifs_clone": 0.0,
+   "n_requetes": 100,
+   "duree_s": 1.5
+  },
+  {
+   "accord_clone_cible": 0.9402,
+   "exactitude_clone": 0.9609,
+   "faux_positifs_clone": 0.0001,
+   "n_requetes": 500,
+   "duree_s": 7.0
+  },
+  {
+   "accord_clone_cible": 0.9417,
+   "exactitude_clone": 0.9622,
+   "faux_positifs_clone": 0.0005,
+   "n_requetes": 1000,
+   "duree_s": 16.4
+  },
+  {
+   "accord_clone_cible": 0.9437,
+   "exactitude_clone": 0.9619,
+   "faux_positifs_clone": 0.0031,
+   "n_requetes": 2000,
+   "duree_s": 37.0
+  }
+ ]
+}

@@ -111,4 +111,4 @@ Entre le 15 novembre 21:39 et le 16 novembre 07:45, **181 requêtes** ont reçu 
 
 
 ## Corrections déployées après le bilan du professeur (16 novembre, 11 h 36 UTC)
-Limites de débit par adresse (429), blocage après clés fausses, plafond de 3 calculs simultanés par pod (503 au lieu d'une latence de 30 s), corps limité à 40 Ko, en-têtes de sécurité, 7 alertes Prometheus, journalisation des refus (adresse pseudonymisée), branche `ci` protégée, image Docker analysée. Détail, preuves et limites : DOCUMENTATION.md § 6.8.
+Limites de débit par adresse (429), blocage après clés fausses, plafond de 3 calculs simultanés par pod (503 au lieu d'une latence de 30 s), corps limité à 40 Ko, en-têtes de sécurité, 7 alertes Prometheus, journalisation des refus (adresse pseudonymisée), branche `ci` protégée, image Docker analysée. Détail, preuves et limites : TP2_LIVRABLE.md, étape 3.

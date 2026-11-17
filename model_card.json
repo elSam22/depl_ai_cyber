@@ -14,7 +14,7 @@
   "privacy_measures": [
     "anonymisation des données d'entraînement et de chaque texte reçu (regex et NER spaCy, balises xxx_tag)",
     "texte reçu jamais stocké ni journalisé (le journal contient score, longueur et durée)",
-    "pas de journal d'accès (adresses IP des clients non conservées)",
+    "adresses IP : le load balancer Google les conserve 30 jours dans ses journaux (diagnostic de sécurité) ; l'API n'écrit jamais une IP en clair : ses journaux de refus ne contiennent qu'une empreinte HMAC non réversible",
     "journaux Cloud Logging conservés 30 jours, chiffrés au repos par Google Cloud",
     "chiffrement en transit (HTTPS, certificat géré) et authentification par clé d'API (Secret Manager)",
     "hébergement dans l'Union européenne (région europe-west9, Paris)",
@@ -32,7 +32,7 @@
   "bias_note": "NON ÉVALUÉ : aucune mesure d'équité (taux de faux positifs selon les groupes cités) n'a été faite. Le jeu Jigsaw est connu pour associer à tort certains termes d'identité à la toxicité : un biais est plausible et doit être mesuré avant tout usage réel.",
   "limitations": [
     "Précision faible (0,49) : un commentaire signalé n'est pas forcément toxique, d'où la relecture humaine",
-    "Contournable par du texte déguisé (leetspeak, espaces, homoglyphes) : sur un petit échantillon de 6 textes toxiques, le rappel passe de 1,0 à 0,33 avant défense (voir attack/ sur la branche Enzo). Une normalisation avant le modèle (homoglyphes, caractères invisibles, lettres espacées, leetspeak, appliquée après l'anonymisation pour ne pas casser la détection des numéros et adresses) a été ajoutée ; son efficacité reste à mesurer sur un échantillon plus grand.",
+    "Contournable par du texte déguisé (leetspeak, espaces, homoglyphes) : sur un petit échantillon de 6 textes toxiques, le rappel passe de 1,0 à 0,33 avant défense (voir attack/RAPPORT.md). Une normalisation avant le modèle (homoglyphes, caractères invisibles, lettres espacées, leetspeak, appliquée après l'anonymisation pour ne pas casser la détection des numéros et adresses) a été ajoutée ; son efficacité reste à mesurer sur un échantillon plus grand.",
     "Anglais uniquement ; l'anonymisation par NER laisse passer certains noms (par exemple des personnalités publiques)"
   ],
   "version": "distilbert-2026-11-16",
