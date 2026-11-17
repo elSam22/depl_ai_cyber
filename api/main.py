@@ -13,6 +13,7 @@ import secrets
 import time
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
@@ -59,6 +60,14 @@ app.add_middleware(
     allow_credentials=False,
 )
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+@app.exception_handler(RecursionError)
+async def json_trop_imbrique(request: Request, exc: RecursionError) -> JSONResponse:
+    """Red Team interne du 17 novembre (RedTeamIA, vague 4) : un JSON imbriqué sur des milliers de niveaux
+    (« [[[[…]]]] », moins de 40 Ko) faisait échouer le décodeur JSON de Python (RecursionError) -> erreur 500 et trace
+    complète dans les journaux. Un tel corps n'est jamais une requête légitime : on le refuse proprement (422)."""
+    return JSONResponse(status_code=422, content={"detail": "Corps JSON trop imbriqué"})
 
 # --- Supervision (étape 6) : métriques Prometheus (requêtes, erreurs, latence par route).
 # Servies sur un port SÉPARÉ (9090), pas sur /metrics : le Service et l'Ingress n'exposent que le port 8080,

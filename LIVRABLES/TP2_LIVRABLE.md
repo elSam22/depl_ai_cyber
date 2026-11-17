@@ -2,7 +2,7 @@
 
 **Membres** : CAKPOSSA Jean-Philippe, OUEDRAOGO Eliana, NOUDEGBE Situ — TP2, Déploiement de solutions IA et cybersécurité, ESIGELEC, novembre 2026
 
-Renforcer une IA déployée dans le cloud : l'API Digital Social Score du TP1 (DistilBERT sur GKE à Paris, `POST /score` protégé par clé). Ce document est **le livrable unique du TP2**. Il suit les **5 étapes de l'énoncé** (§ 2 à 6) ; chaque étape s'ouvre sur ce que l'énoncé demande et où c'est fait. Les **livrables globaux et les critères d'évaluation** sont au § 11. Scripts d'attaque et résultats : dossier `attack/` ; fiche du modèle : `model_card.json` à la racine.
+Renforcer une IA déployée dans le cloud : l'API Digital Social Score du TP1 (DistilBERT sur GKE à Paris, `POST /score` protégé par clé). Ce document est **le livrable unique du TP2**. Il suit les **5 étapes de l'énoncé** (§ 2 à 6) ; chaque étape s'ouvre sur ce que l'énoncé demande et où c'est fait. Scripts d'attaque et résultats : dossier `attack/` ; fiche du modèle : `model_card.json` à la racine.
 
 ## Résumé
 
@@ -10,18 +10,8 @@ Renforcer une IA déployée dans le cloud : l'API Digital Social Score du TP1 (D
 - **Défense (étape 3)** : normalisation du texte avant le modèle. Évasion ramenée à **0 %** (homoglyphes, invisibles) et **6 à 10 %** (leetspeak, espaces), **mesuré par HTTP sur l'API déployée** (8 à 12 % en local). Défenses complémentaires contre les attaques **réellement subies** : noyage (4 → 40 insultes détectées sur 60), vol de modèle (la quantification échoue, la limite de débit réussit), déni de service : sous un flot de 201 req/s sur `/score`, un utilisateur légitime garde **100 % de ses requêtes** et un P95 multiplié par 2,3, **contre ×76** dans le rapport du professeur.
 - **IA Act (étape 4)** : **risque limité**, à condition que le score ne qualifie jamais une personne (sinon notation sociale interdite, art. 5). `model_card.json` contrôlée à chaque push ; biais déclaré **non évalué** plutôt qu'affirmé absent.
 - **DevSecOps (étape 5)** : 7 jobs à chaque push (secrets, code, conformité IA Act, configuration, image Docker, tests, déploiement), identité fédérée sans clé, **provenance des poids vérifiée**, retour arrière automatique ; blocages réels prouvés par les numéros d'exécution.
-- **Ce qui reste faible**, dit sans détour : attaque depuis plusieurs adresses, limites par pod sans WAF (Cloud Armor refusé par quota), clé unique, biais non mesuré, noyage seulement réduit.
-
-## Correspondance avec les critères d'évaluation
-
-| Critère de l'énoncé | Où le trouver |
-|---|---|
-| Réalisme de l'attaque (pertinence, complexité technique) | § 2 (fiche), § 3 (1 000 textes, 5 variantes), § 4.2 (attaque rejouée sur l'API déployée), § 4.3 (attaques réellement subies) |
-| Efficacité de la défense (mesure de l'impact) | § 4 : tableaux et graphiques avant/après pour chaque défense, y compris un résultat négatif |
-| Conformité IA Act (document complet et cohérent) | § 5 et `model_card.json` |
-| Pipeline DevSecOps (fonctionnel et automatisé) | § 6 |
-| Rigueur et clarté (documentation et structure) | Structure calquée sur l'énoncé ; limites dites à chaque section ; § 7, 9 et 10 |
-| Originalité et réflexion (créativité, approche critique) | § 8 |
+- **Rejeu de l'attaque du professeur (§ 4.4)** : sous le même flot (≈ 180 req/s), l'utilisateur légitime passe de ×76 à ×0,8 à ×1,1 de latence ; 19 à 46 requêtes d'attaque acceptées sur plus de 21 000 contre 43 685 ; extraction freinée (7 à 15 réponses exploitables sur 400) ; réponse réduite ; alertes déclenchées. Mesure à l'appui, deux exécutions, voir `attack/results/redteam/`.
+- **Ce qui reste faible**, dit sans détour : attaque depuis un réseau d'adresses plus large que nos deux adresses de test, limites par pod sans WAF (Cloud Armor refusé par quota), clé unique, biais non mesuré, noyage seulement réduit.
 
 ## Périmètre : TP1 et TP2
 
@@ -191,7 +181,7 @@ Même protocole, mais **par HTTP contre l'API en service**, défenses actives, a
 | **Fenêtres de 64, chevauchement 16 (retenu, déployé)** | 52 / **40** / **48** | 11,7 % |
 | Fenêtres de 32 | 52 / 47 / 51 | 15,3 % |
 
-**Compromis assumé** : des fenêtres plus courtes détectent mieux, mais un mot isolé de son contexte déclenche plus de fausses alertes. Nous retenons 64 tokens. Une première mesure annonçait « 0 % d'évasion » : elle comparait la probabilité à 0,5, alors que nos vrais seuils sont de 0,88 à 0,97 ; avec eux, la défense est réelle mais partielle.
+**Compromis assumé** : des fenêtres plus courtes détectent mieux, mais un mot isolé de son contexte déclenche plus de fausses alertes. Nous retenons 64 tokens. Une première mesure annonçait « 0 % d'évasion » : elle comparait la probabilité à 0,5, alors que nos vrais seuils sont de 0,92 à 0,97 ; avec eux, la défense est réelle mais partielle.
 
 **Une défense qui crée une faille, trouvée par la mesure.** Déployée le 17 novembre (en service à 13:46), la lecture par fenêtres a été mesurée dans le pod : un texte de 5 000 caractères demandait **5,3 à 6,8 s de calcul**, contre ~0,1 s pour un texte court. Avec 3 calculs simultanés par pod, **un seul client envoyant des textes longs à 1 requête/s pouvait occuper tout le service** : nous avions transformé une défense contre l'évasion en porte ouverte au déni de service. Correctif en service le jour même à 14:07 (exécution 44097581208) :
 - un texte long **coûte plus de jetons** au client (1 jeton + 1 par tranche de 500 octets ; un texte de 5 000 caractères vide son seau de 10 jetons) ;
@@ -215,7 +205,7 @@ Même protocole, mais **par HTTP contre l'API en service**, défenses actives, a
 
 ![Effet du limiteur de débit](../attack/results/debit.png)
 
-**Déni de service : l'attaque réelle du 16 novembre et le bilan du professeur.** Le 16 novembre, un client (le professeur, confirmé ensuite) a envoyé **94 000 requêtes en 2 heures** : reconnaissance (`/openapi.json`), énumération (`.git`, `.env`, `phpinfo.php`), appels à `/score` avec la clé, détection de ports, puis inondation de `/docs` (pic de 191 à 225 req/s). Son rapport consolidé (9 équipes, 29 failles, déni de service réussi sur toutes les cibles) mesure chez nous **43 685 requêtes acceptées en 4 minutes (~180 req/s), P95 de 4 276 ms contre 56 ms (×76), 0 % d'erreurs**, plus des en-têtes de sécurité manquants, aucune limitation de débit observable et pas de WAF. Analyse détaillée dans les journaux : livrable du TP1, § 7.4.
+**Déni de service : l'attaque réelle du 16 novembre et le bilan du professeur.** Le 16 novembre, un client (le professeur, confirmé ensuite) a envoyé **94 000 requêtes en 2 heures** : reconnaissance (`/openapi.json`), énumération (`.git`, `.env`, `phpinfo.php`), appels à `/score` avec la clé, détection de ports, puis inondation de `/docs` (pic de 191 à 225 req/s). Son rapport consolidé (9 équipes, 29 failles, déni de service réussi sur toutes les cibles) mesure chez nous **43 685 requêtes acceptées en 4 minutes (~180 req/s), P95 de 4 276 ms contre 56 ms (×76), 0 % d'erreurs**, plus des en-têtes de sécurité manquants, aucune limitation de débit observable et pas de WAF. Analyse détaillée dans les journaux : `supervision/INCIDENTS.md` (incident I-001).
 
 ![Attaque du 16 novembre : débit par route (Prometheus)](../supervision/images/incident_i001_debit.png)
 
@@ -224,11 +214,11 @@ Même protocole, mais **par HTTP contre l'API en service**, défenses actives, a
 | Constat chez d'autres équipes | Notre situation avant | Correction déployée le 16 nov. | Vérifié en réel |
 |---|---|---|---|
 | Inférence sans authentification | Clé obligatoire (déjà) | Blocage temporaire d'une adresse après 10 clés fausses par minute (brute-force) | 30 clés fausses : 16 × 401, puis 14 × 429 |
-| Scores par classe, seuil de détection et modèle exposés dans chaque réponse | Réponse déjà réduite (livrable du TP1, § 4.4) | Inchangé ; pas d'en-tête `Server` ; en-têtes de sécurité | `{"score":100,"toxique":true}` seul |
+| Scores par classe, seuil de détection et modèle exposés dans chaque réponse | Réponse complète : 6 probabilités, seuils, labels détectés, version (livrable du TP1, § 4.4) | Réponse **réduite au score arrondi à la dizaine et au verdict** ; pas d'en-tête `Server` ; en-têtes de sécurité | `{"score":100,"toxique":true}` seul |
 | Modèle extractible : 2 005 requêtes/min sans aucun frein | **Aucune limite** | Limite par adresse IP : 60 `/score` par minute et par pod ; remplacée le 17 nov. par un **seau à jetons** (rafale de 10 puis 1 par seconde, texte long = plus de jetons) | 150 requêtes séquentielles : 106 × 200, 44 × 429 (limite du 16 nov.) |
 | 43 685 requêtes acceptées en 4 min, latence × 76 ; latence × 108 ; service cassé à 168 requêtes simultanées ; hôte tombé 10 min | Tout était accepté, la latence montait | **Au plus 3 calculs simultanés par pod** ; une requête de plus attend 1 s au maximum (**0,25 s depuis le 17 nov.**), puis reçoit 503 : on refuse vite plutôt que de répondre en 30 s ; **sanction progressive** d'une adresse qui insiste (bloquée 30 s, puis 60, 120… jusqu'à 15 min) | 80 requêtes simultanées : 26 × 200, 54 × 503, `/health` toujours 200, aucun pod redémarré |
 | « L'attaque a réussi partout et personne ne l'a vue » | Aucune alerte | 7 règles Prometheus (`supervision/alertes.yaml`) : débit, refus, clés fausses, erreurs 5xx, P95 > 2 s, pods < 2, redémarrage ; métrique `dss_refus_total` par motif ; intervalles de latence élargis à 10 s (le P95 n'est plus bloqué à 1 s) | Règle chargée dans Prometheus |
-| Service cassé sous charge, pas de /docs public : bonne pratique | `/docs` déjà fermé | — | 404 |
+| Service cassé sous charge, pas de /docs public : bonne pratique | `/docs` public (livrable du TP1, S6) | Fermé en production (`ENV=prod`) | 404 sans clé |
 | Redirection HTTPS ajoutée pendant l'exercice | Déjà en place (FrontendConfig) | — | — |
 | Corps de requête non limité | 5 000 caractères, mais aucun plafond d'octets | Plafond de 40 Ko (413) ; délai du load balancer ramené à 15 s | Test automatique |
 
@@ -254,6 +244,44 @@ Côté attaquant : 12 083 requêtes, dont **12 000 refusées en 429**, 19 en 503
 
 **Lecture.** L'utilisateur légitime n'a perdu **aucune** requête ; sa latence médiane augmente de 11 % et son P95 est multiplié par **2,3** (177 → 401 ms), **contre ×76** dans le rapport du professeur. **Limites** : un seul attaquant, donc une seule adresse (plusieurs adresses contourneraient les limites par IP, § 9, priorité 1) ; P95 calculé sur 29 requêtes.
 
+### 4.4 Rejeu de l'attaque du professeur : avant / après
+
+Le professeur a attaqué notre API le 16 novembre et conclu que le déni de service avait réussi et que plusieurs protections manquaient (§ 4.3). Nous avons corrigé, puis **rejoué la même campagne contre notre propre API, défenses en service, deux fois** le 17 novembre, pour vérifier que la défense est meilleure et pas seulement écrite. Les résultats bruts sont dans `attack/results/redteam/execution1/` (16:03 à 16:20 UTC) et `execution2/` (20:45 à 21:01 UTC), un fichier par vague plus `synthese.md`.
+
+**Méthode.** L'outil `RedTeamIA/` reproduit les sondes du professeur : reconnaissance, en-têtes et TLS, authentification, fuite d'information, extraction, évasion et noyage, déni de service. Chaque tir est plafonné (180 req/s, 128 requêtes simultanées, 120 s) et s'arrête seul au-delà de 20 % d'erreurs serveur ou d'un P95 de 10 s. **Un utilisateur légitime est mesuré en continu** pendant l'attaque, depuis une autre adresse que l'attaquant : c'est ce que le rapport du professeur ne mesurait pas. « Avant » = mesures du professeur du 16 novembre (`cours/RAPPORT-CONSOLIDE.md`) ; « après » = nos deux rejeux.
+
+| Attaque | Avant (16 nov., professeur) | Après, exécution 1 | Après, exécution 2 | Source |
+|---|---|---|---|---|
+| **Déni de service sur `/score`**, ≈ 180 req/s avec la clé | **43 685** requêtes acceptées en 4 min | 21 600 tirées en 120 s : **22 acceptées**, 21 558 en 429 | 21 542 tirées : **19 acceptées**, 21 490 en 429 | `v7_deni_service.json` |
+| **Latence d'un utilisateur légitime** pendant l'attaque | P95 4 276 ms contre 56 ms au repos : **×76** | P95 274 ms contre 351 ms : **×0,8** ; 53 sur 53 réussies | P95 208 ms contre 219 ms : **×0,9** ; 55 sur 55 réussies | `v7_deni_service.json` |
+| **Attaque depuis deux adresses** (poste et pod) | non testée | 21 600 tirées, **37 acceptées** ; légitime : 54 sur 54, P95 257 ms (**×1,0**) | 21 600 tirées, **46 acceptées** ; légitime : **53 sur 54** (un 503), P95 217 ms (**×1,1**) | `v8_multi_adresses.json` |
+| **Extraction du modèle**, 400 requêtes rapides | chez une autre équipe : 2 005/min, aucun refus | **7** réponses exploitables (155/min), 384 en 429 | **15** exploitables (65/min), 383 en 429 | `v5_extraction.json` |
+| **Force brute sur la clé**, 30 essais | non testée chez nous | blocage au 10ᵉ essai : 12 × 401, 18 × 429 | blocage au 9ᵉ essai : 8 × 401, 22 × 429 ; la même adresse repasse en 200 après 70 s | `v3_authentification.json` |
+| **Fuite d'information** | chez une autre équipe : score, seuil et modèle dans chaque réponse | réponse réduite à `{"score":100,"toxique":true}` ; aucun indice de fuite sur 9 corps anormaux | identique | `v4_fuite_information.json` |
+| **Reconnaissance** | `/docs` public (TP1, S6) | `/docs`, `/openapi.json`, `/metrics`, `.git`, `.env` en 404 ; ports 80 et 443 seuls ouverts ; conforme | mêmes routes inexistantes ; **5 routes sondées répondent 429 au lieu de 404** (la rafale de sondes déclenche la limite) : aucune route révélée, mais la sonde les note en écart | `v1_reconnaissance.json` |
+| **En-têtes de sécurité** | manquants (HSTS, CSP, X-Frame-Options, X-Content-Type-Options) | HSTS, CSP, `nosniff`, `referrer-policy` présents ; **seul `X-Frame-Options` manque** ; TLS 1.3 | identique | `v2_sondes_web.json` |
+| **Clé non ASCII** (S2b) | 500 au lieu de 401 | 401 sur les 8 variantes de clé mal formée | identique | `v3_authentification.json` |
+| **Détection** | « personne ne l'a vue » : aucune alerte | `DssDebitAnormal` après ≈ 105 s, `DssRefusEnHausse` après ≈ 135 s ; aucun pod redémarré, 2 pods prêts | `DssDebitAnormal` après ≈ 75 s (une adresse) ou 105 s (deux), `DssRefusEnHausse` après ≈ 135 s ; aucun pod redémarré | `v7`, `v8` |
+
+![Déni de service, exécution 2 : requêtes acceptées, refusées et latence de l'utilisateur légitime](../attack/results/redteam/execution2/deni_service.png)
+
+**Évasion** (20 textes toxiques dont 18 détectés sans attaque, défenses en service ; mêmes résultats aux deux exécutions) : leetspeak 0/18, homoglyphes 0/18, caractères invisibles 0/18, lettres espacées 2/18 (11 %), noyage de 1 000 et 3 000 caractères 1/18 (6 %). Sans défense, ces variantes passaient à 47-57 % et le noyage à 4 puis 2 insultes détectées sur 60 (§ 3 et § 4.3). Les échantillons diffèrent (1 000 textes contre 18) : la comparaison est qualitative. Source : `v6_evasion_sondes_ia.json`.
+
+**Ce que le rejeu montre :** sous la même attaque (≈ 180 req/s, même route, même clé), l'utilisateur légitime ne voit plus de dégradation (×76 → ×0,8 à ×1,1), l'API ne traite plus que 19 à 46 requêtes d'attaque sur plus de 21 000, et la supervision déclenche des alertes pendant l'attaque. Les deux exécutions donnent le même ordre de grandeur : le résultat n'est pas un coup de chance. **La défense est donc améliorée**, mesure à l'appui.
+
+**Ce qui reste ouvert, constaté par ce même rejeu :**
+- **Déguisement par un point entre les lettres** : 6/18 (33 %) évasions. Cette variante ne figurait pas dans nos tests ; la normalisation ne la couvre pas.
+- **Sondes IA ratées** : un texte fait seulement d'emojis, une négation et une insulte citée en méta sont mal classés.
+- **JSON imbriqué sur 5 000 niveaux** : erreur 500.
+- **Pas de WAF** (XSS et injection SQL transmises à l'API, risque accepté) ; `X-Frame-Options` manque.
+- **Un client légitime partageant l'adresse d'un attaquant est bloqué** pendant la sanction.
+- **Une requête légitime sur 54 refusée (503)** pendant l'attaque depuis deux adresses (exécution 2) : le plafond de 3 calculs simultanés par pod protège le CPU mais peut refuser un utilisateur honnête quand plusieurs adresses attaquent en même temps. C'est la première erreur visible côté légitime ; le taux de succès reste de 98 %.
+- **Extraction un peu plus ouverte à la deuxième exécution** (15 réponses exploitables contre 7) : toujours 26 fois moins que les 400 d'une API sans limite, mais la limite n'est pas parfaitement déterministe.
+
+**Limites de la mesure.** Ce n'est pas l'outil du professeur : nos sondes sont fixes et ne peuvent pas improviser, un rejeu officiel peut donner autre chose. Deux exécutions seulement. L'évasion ne porte que sur 18 textes. Le tir à deux adresses part du même réseau de test, ce n'est pas une attaque distribuée. Les tirs destructeurs du professeur (`impact.crash`, `impact.destroy`) n'ont pas été rejoués.
+
+**Reproduire.** `RedTeamIA/orchestrer.py --impact` (ligne de commande) ou l'interface `RedTeamIA/interface/serveur.py` : tableau de bord en direct sur http://127.0.0.1:8060. L'adresse et la clé sont lues dans l'environnement et jamais écrites. Les vagues 7 et 8 font monter l'autoscaler jusqu'à 5 pods : prévenir l'équipe avant.
+
 ---
 
 ## 5. Conformité IA Act (étape 4)
@@ -264,7 +292,7 @@ Côté attaquant : 12 083 requêtes, dont **12 000 refusées en 429**, 19 en 503
 |---|---|
 | Identifier et justifier la catégorie de risque | § 5.1 (tableau des 4 niveaux) |
 | Créer une « model card » | § 5.2 ; `model_card.json` à la racine |
-| **Livrables** : fiche IA Act (tableau de risque et justification) ; `model_card.json` | § 5.1 à 5.8 ; fichier contrôlé par la pipeline |
+| **Livrables** : fiche IA Act (tableau de risque et justification) ; `model_card.json` | § 5.1 à 5.9 ; fichier contrôlé par la pipeline |
 
 
 ### 5.1 Tableau de risque
@@ -317,7 +345,7 @@ Test commun de 10 000 lignes, macro-moyenne sur les 6 labels, seuils par label r
 | BiLSTM | 0,30 | 0,48 | 0,36 | 0,916 |
 | LAYA (zéro-shot) | 0,37 | 0,74 | 0,48 | 0,969 |
 
-Seuils de décision (`models/seuils.json`) : `toxic` 0,88 ; `obscene` et `insult` 0,94 ; `threat` et `identity_hate` 0,96 ; `severe_toxic` 0,97. Ils sont élevés parce que la pondération des classes gonfle les probabilités : **le score n'est pas une probabilité calibrée**, c'est un indicateur arrondi à la dizaine. Les chiffres de 0,93 de précision cités aux étapes 2 et 3 viennent d'un échantillon équilibré (50 % de toxiques) et ne décrivent pas la production.
+Seuils de décision (`models/seuils.json`) : `toxic` 0,92 ; `obscene` et `insult` 0,94 ; `identity_hate` 0,96 ; `severe_toxic` et `threat` 0,97. Ils sont élevés parce que la pondération des classes gonfle les probabilités : **le score n'est pas une probabilité calibrée**, c'est un indicateur arrondi à la dizaine. Les chiffres de 0,93 de précision cités aux étapes 2 et 3 viennent d'un échantillon équilibré (50 % de toxiques) et ne décrivent pas la production.
 
 ### 5.5 Risques du modèle et mesures
 
@@ -350,12 +378,29 @@ Le choix de ne **pas** renvoyer les probabilités et les seuils est un arbitrage
 
 | Rubrique | Contenu |
 |---|---|
-| **Responsables** | L'équipe (NOUDEGBE Situ, OUEDRAOGO Eliana, CAKPOSSA Enzo), France |
+| **Responsables** | L'équipe (NOUDEGBE Situ, OUEDRAOGO Eliana, CAKPOSSA Jean-Philippe), France |
 | **Version en service** | `distilbert-2026-11-17`, lisible par `/version` (clé requise) et vérifiée après chaque déploiement |
 | **Contrôle continu** | La fiche est vérifiée à chaque push par la pipeline (étape 5) ; une fiche incomplète ou une affirmation sans preuve bloque le déploiement |
 | **Révision des seuils** | À recalibrer si les textes reçus changent (autre plateforme, dérive du vocabulaire) |
 | **Audit de sécurité** | Dernier : 16 novembre 2026 (attaque du professeur, étape 3) ; à refaire à chaque évolution du modèle ou de l'API |
 | **Retrait** | Sur décision de l'équipe ; modèle et données supprimés à la mise hors service |
+
+### 5.9 Registre RGPD : avenant au registre du TP1 (version 1.2)
+
+Le registre du TP1 (référence DSS-RGPD-2026-001, version 1.1 du 13 novembre) décrit l'API telle qu'elle était avant le TP2. Les corrections du TP2 changent plusieurs de ses rubriques. Le registre du TP1 n'est pas modifié ; cet avenant donne la version 1.2 pour ce qui change. Le reste (responsable, personnes concernées, traitement A, durées, droits) reste valable.
+
+| Rubrique du registre (§) | Version 1.1 (TP1) | Version 1.2 (TP2) |
+|---|---|---|
+| Traitement B, finalité (§ 3) | Restituer le score, **les probabilités par label** et un verdict | Restituer **le score arrondi à la dizaine et le verdict** seulement ; probabilités et seuils non communiqués (minimisation, et défense contre le vol de modèle) |
+| Données, « Réponse » (§ 3.2) | Score, 6 probabilités, seuils, verdict, **texte anonymisé et nettoyé** | `score` et `toxique` uniquement : plus aucun texte, même pseudonymisé, n'est renvoyé |
+| Données traitées en mémoire (§ 3.2) | Texte soumis | Texte soumis **et adresse IP du client**, lue en mémoire par le pod pour limiter le débit et sanctionner les abus ; **non écrite** dans les journaux de l'API |
+| Journaux (§ 3.2) | Une ligne par analyse | Inchangé. Les refus sont comptés par motif dans Prometheus (`dss_refus_total`), sans donnée personnelle |
+| Sous-traitants (§ 4) | GitHub : code et pipeline, « pas de donnée de production » | GitHub Actions déploie sur Google Cloud par **identité fédérée (OIDC), sans clé stockée** ; accès limité à ce dépôt et à la branche `ci`. Les poids du modèle sont dans un **bucket Cloud Storage privé** (lecture seule pour la pipeline) ; aucune donnée personnelle n'y figure |
+| Mesures de sécurité (§ 6) | Aucune limitation de débit ; `/docs` public ; clé non ASCII → 500 ; aucune alerte | Limitation de débit par adresse, blocage temporaire après clés fausses répétées, plafond de calculs simultanés ; `/docs` fermé ; bogue S2b corrigé ; 7 alertes Prometheus ; contrôle de provenance des poids ; pipeline de contrôles à chaque push |
+| Décision automatisée (§ 3, art. 22) | AIPD obligatoire si le score entre dans un processus décisionnel | Inchangé. Catégorie IA Act : risque limité, à condition que le score ne qualifie jamais une personne (§ 5.1) |
+| Risques résiduels (§ 8) | Jeu brut dans le dépôt public ; clé unique ; accès trop larges | Le jeu brut (`data/train.csv`, `data/test.csv`) est **toujours suivi par Git** : non traité ; clé unique : non traité ; limites par pod et non globales (§ 9) |
+
+**Mise à jour du registre du TP1.** Le registre (`LIVRABLES/REGISTRE_RGPD.md`, annexe C du TP1) garde le numéro de version 1.1 ; la version 1.2 est cet avenant.
 
 ---
 
@@ -369,7 +414,7 @@ Le choix de ne **pas** renvoyer les probabilités et les seuils est un arbitrage
 | **Livrables** : pipeline sécurisé + journaux d'exécution | `.github/workflows/securite.yml` ; numéros d'exécution et capture ci-dessous |
 
 
-Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request** sur le dépôt public. Elle comprend **sept jobs** : six contrôles, puis le déploiement, qui ne démarre que si les six sont verts.
+Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un script lancé à la main (`deploy_gke.sh`) et aucun contrôle ne s'exécutait avant lui. Nous avons ajouté une pipeline GitHub Actions (`.github/workflows/securite.yml`) qui s'exécute **à chaque push et pull request** sur le dépôt public. Elle comprend **sept jobs** : six contrôles (secrets, code, conformité IA Act, configuration, image Docker, tests), puis le déploiement, qui ne démarre que si les six sont verts. La vérification de provenance du modèle est une étape de ce dernier job.
 
 | Job | Outil | Pourquoi ce choix | Résultat |
 |---|---|---|---|
@@ -378,14 +423,14 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 | **Conformité IA Act** | `outils/verifier_model_card.py` | Le TP2 impose un `model_card.json` : on contrôle ses champs, que la catégorie de risque soit l'un des 4 niveaux du règlement et justifiée, et **qu'aucune affirmation ne soit faite sans preuve** (par exemple `bias_detected: false` sans évaluation décrite est refusé). | Vert. La fiche déclare `bias_detected: null` (non évalué) avec la raison. |
 | **Configuration Docker et Kubernetes** | `trivy`, échec dès la sévérité haute | Le Dockerfile et les manifestes de `api/k8s/` décident des protections réelles du conteneur : on les contrôle comme du code. | Vert, **sans aucune exception** (voir ci-dessous). |
 | **Image Docker** (ajouté le 16 nov.) | `trivy image`, échec dès la sévérité haute, failles avec correctif disponible | La configuration saine ne dit rien des paquets que l'image contient : on construit l'image et on l'analyse. | Rouge au premier essai (`zlib1g`, 2 failles hautes), vert après la mise à jour des paquets système dans le Dockerfile. |
-| **Tests et dépendances** | `pytest` ; `pip-audit` sur l'environnement installé | Rejoue la grille de sécurité (clé, validation d'entrée, anonymisation, CORS, réponse réduite) ; les versions sont libres (`fastapi>=0.115`), donc on audite ce que `pip` a réellement résolu. | 36 tests : 32 avec le modèle factice dans ce job (clé, validation, protections, prétraitement), et 4 sur le **vrai** modèle (dont le noyage) rejoués avant chaque construction ; « No known vulnerabilities found ». |
-| **Provenance du modèle** (ajouté le 17 nov.) | `sha256sum --check` dans le job de déploiement | Les poids viennent d'un bucket, hors de Git : un fichier modifié ou ajouté (empoisonnement, porte dérobée) passerait sinon inaperçu. Les empreintes de référence sont dans `api/model_empreintes.sha256`, modifiable seulement par pull request sur `ci`. | Vert à la première exécution (44093520661) : les 6 fichiers du bucket correspondent ; un octet modifié fait échouer le contrôle (testé en local). |
-| **Déploiement** | Cloud Build, Kubernetes | Voir ci-dessous. | Vert depuis le 16 novembre à 10:14 UTC. |
+| **Tests et dépendances** | `pytest` ; `pip-audit` sur l'environnement installé | Rejoue la grille de sécurité (clé, validation d'entrée, anonymisation, CORS, réponse réduite) ; les versions sont libres (`fastapi>=0.115`), donc on audite ce que `pip` a réellement résolu. | 41 tests : 37 avec le modèle factice dans ce job (clé, validation, protections, prétraitement), et 4 sur le **vrai** modèle (dont le noyage) rejoués avant chaque construction ; « No known vulnerabilities found ». |
+| **Provenance du modèle** (ajouté le 17 nov. ; étape du job de déploiement, pas un job à part) | `sha256sum --check` dans le job de déploiement | Les poids viennent d'un bucket, hors de Git : un fichier modifié ou ajouté (empoisonnement, porte dérobée) passerait sinon inaperçu. Les empreintes de référence sont dans `api/model_empreintes.sha256`, modifiable seulement par pull request sur `ci`. | Vert à la première exécution (44093520661) : les 6 fichiers du bucket correspondent ; un octet modifié fait échouer le contrôle (testé en local). |
+| **Déploiement** | Cloud Build, Kubernetes | Voir ci-dessous. | Vert depuis le 16 novembre (premier déploiement automatique : exécution lancée à 10:07 UTC, en service à 10:14). |
 
 **Ce que la pipeline a trouvé.**
 - `bandit` : (1) `torch.load` sans `weights_only=True` dans `api/scorer.py` et `api_locale/modeles.py` : un fichier de poids piégé pourrait exécuter du code au chargement. **Corrigé.** (2) et (3) `from_pretrained` « sans révision épinglée » : **faux positifs** justifiés (dossier local embarqué, rien n'est téléchargé), marqués `# nosec B615`.
 - `trivy` : le conteneur n'avait pas `readOnlyRootFilesystem: true` (KSV-0014, sévérité haute) : un attaquant maître du conteneur pouvait y déposer un exécutable. D'abord **accepté avec sa raison** dans `.trivyignore` (non testable sans remplacer les pods), puis **corrigé et déployé** le 16 novembre avec deux volumes temporaires en mémoire. Le fichier d'exceptions est maintenant vide.
-- **Les tests ont détecté une régression RGPD** au moment de réconcilier le code d'Enzo : sa normalisation anti-évasion « corrigeait » le leetspeak (3 en e, 1 en i, 0 en o…) **avant** l'anonymisation. Un numéro de téléphone ou une adresse IP collés à un mot (`me:0612345678`) devenait du texte illisible et **n'était plus reconnu : il traversait l'anonymisation**. Correctif : le dé-leet passe **après** l'anonymisation, quand les données personnelles sont déjà des balises ; la défense contre l'évasion fonctionne toujours.
+- **Les tests ont détecté une régression RGPD** au moment de réconcilier le code de Jean-Philippe : sa normalisation anti-évasion « corrigeait » le leetspeak (3 en e, 1 en i, 0 en o…) **avant** l'anonymisation. Un numéro de téléphone ou une adresse IP collés à un mot (`me:0612345678`) devenait du texte illisible et **n'était plus reconnu : il traversait l'anonymisation**. Correctif : le dé-leet passe **après** l'anonymisation, quand les données personnelles sont déjà des balises ; la défense contre l'évasion fonctionne toujours.
 - `trivy image` : **2 failles de sévérité haute dans `zlib1g`** (bibliothèque système de l'image de base Debian), avec correctif publié. La pipeline a refusé la pull request ; `apt-get upgrade` ajouté au Dockerfile, contrôle repassé au vert (exécutions 43858297183 puis 43858725549).
 - Un échec de la première exécution, gardé volontairement : les tests importaient `pandas`, absent des dépendances de test. Cela montre que la pipeline détecte ce qui passe inaperçu sur une machine de développement.
 
@@ -416,16 +461,17 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 
 **Journal d'exécution** (GitHub Actions, dépôt public `elSam22/depl_ai_cyber`, onglet Actions ; chaque numéro s'ouvre à `https://github.com/elSam22/depl_ai_cyber/actions/runs/<numéro>`, les journaux détaillés de chaque job y sont consultables) :
 
-| Numéro | Heure (UTC, 16 nov. sauf mention) | Branche et événement | Résultat | Ce qu'il montre |
-|---|---|---|---|---|
-| 43845955880 | 10:07 | `ci`, push | Succès | Premier déploiement entièrement automatique (contrôles verts, build, 11 vérifications) |
-| 43848111995 | 10:21 | `ci`, push | Succès | Déploiement de l'API réconciliée (réponse réduite, `/docs` fermé) |
-| 43858285417 et 43858297183 | 11:30 | `durcissement`, push et pull request | **Échec** | `trivy image` : 2 failles hautes dans `zlib1g` ; **le déploiement n'a pas démarré** (job ignoré) |
-| 43858717055 et 43858725549 | 11:32 | `durcissement`, push et pull request | Succès | Après correction, 6 contrôles verts, déploiement ignoré (pull request) |
-| 43859230303 | 11:36 | `ci`, fusion de la pull request | **Succès, 7 jobs** | 6 contrôles verts puis déploiement réel, vérifié en 11 points |
-| 44093520661 | 17 nov., 13:31 (en service à 13:46) | `ci`, fusion de la pull request n° 2 | **Succès, 7 jobs** | Défense anti-noyage, throttling progressif et contrôle de provenance déployés ; 11 vérifications vertes |
-| 44097581208 | 17 nov., 13:55 (en service à 14:07) | `ci`, pull request n° 3 | **Succès, 7 jobs** | Correctif du coût des textes longs (jetons selon la taille, fenêtres moins nombreuses, un fil PyTorch) |
-| 44101077403 | 17 nov., 14:15 (en service à 14:28) | `ci`, pull request n° 4 | **Succès, 7 jobs** | Bogue S2b corrigé : une clé non ASCII reçoit 401 au lieu de 500 (vérifié en production) |
+| Numéro | Date | Début (UTC) | Branche et événement | Résultat | Ce qu'il montre |
+|---|---|---|---|---|---|
+| 43845955880 | 16 nov. | 10:07 | `ci`, push | Succès, 7 jobs | Premier déploiement entièrement automatique (contrôles verts, build, 11 vérifications) ; en service à 10:14 |
+| 43848111995 | 16 nov. | 10:21 | `ci`, push | Succès, 7 jobs | Déploiement de l'API réconciliée (réponse réduite, `/docs` fermé) |
+| 43858285417 (push) et 43858297183 (pull request) | 16 nov. | 11:30 | `durcissement` | **Échec**, 6 jobs | `trivy image` : 2 failles hautes dans `zlib1g` ; **le déploiement n'a pas démarré** (job ignoré) |
+| 43858717055 (push) et 43858725549 (pull request) | 16 nov. | 11:32 | `durcissement` | Succès, 6 jobs | Après correction, 6 contrôles verts ; déploiement ignoré (pull request) |
+| 43859230303 | 16 nov. | 11:36 | `ci`, push (fusion de la pull request) | Succès, 7 jobs | 6 contrôles verts puis déploiement réel, vérifié en 11 points |
+| 44093520661 | 17 nov. | 13:31 | `ci`, push (fusion de la pull request n° 2) | Succès, 7 jobs | Défense anti-noyage, throttling progressif et contrôle de provenance ; 11 vérifications vertes ; en service à 13:46 |
+| 44097581208 | 17 nov. | 13:55 | `ci`, push (fusion de la pull request n° 3) | Succès, 7 jobs | Correctif du coût des textes longs (jetons selon la taille, fenêtres moins nombreuses, un fil PyTorch) ; en service à 14:07 |
+| 44101077403 | 17 nov. | 14:15 | `ci`, push (fusion de la pull request n° 4) | Succès, 7 jobs | Bogue S2b corrigé : une clé non ASCII reçoit 401 au lieu de 500 (vérifié en production) ; en service à 14:28 |
+
 - Chaque déploiement remplace les pods en service et consomme du crédit Google Cloud.
 
 ---
@@ -435,6 +481,7 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 ### 7.1 Ce qui a marché
 - **L'évasion est défaite sur l'API réelle** : 0 % pour les homoglyphes et les caractères invisibles, 6 à 10 % pour le leetspeak et les lettres espacées, contre 47 à 57 % sans défense, sans dégrader le texte normal.
 - **Les défenses contre le déni de service** ont été mesurées sur l'API réelle : sous 201 req/s sur `/score`, un utilisateur légitime (autre adresse) garde toutes ses requêtes, P95 ×2,3 au lieu de ×76 ; 12 000 requêtes de l'attaquant refusées en 429.
+- **Le rejeu de l'attaque du professeur confirme l'amélioration** (§ 4.4) : latence de l'utilisateur légitime ×76 → ×0,8 à ×1,1, 19 à 46 requêtes d'attaque acceptées sur plus de 21 000, 7 à 15 réponses exploitables sur 400 en extraction, alertes déclenchées. Restent ouverts : déguisement par point entre les lettres (33 %), pas de WAF, JSON très imbriqué.
 - **La pipeline a réellement bloqué** une image vulnérable et détecté une régression RGPD ; elle vérifie maintenant la provenance des poids.
 
 ### 7.2 Ce qui n'a pas marché, et ce qu'on en retient
@@ -442,15 +489,15 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 - **« Zéro erreur » ne veut pas dire « pas d'impact »** : pendant l'attaque, aucune erreur 5xx, et pourtant une latence ×76.
 - **Une défense qui n'est pas déployée n'existe pas** : la limitation de débit et la fermeture de `/docs` étaient écrites avant l'attaque, aucune n'était en service.
 - **Une défense peut créer une faille** : la lecture par fenêtres contre le noyage a multiplié par 50 le coût d'un texte long, ouvrant un déni de service à un seul client. Seule la mesure dans le pod l'a révélé ; corrigé le jour même. Toute défense doit être mesurée aussi sur son **coût**, pas seulement sur son efficacité.
-- **Une mesure trop optimiste** : le « 0 % d'évasion » du noyage venait d'un seuil de 0,5 au lieu des vrais seuils (0,88 à 0,97). Mesurer avec la chaîne réelle de bout en bout évite ce piège.
+- **Une mesure trop optimiste** : le « 0 % d'évasion » du noyage venait d'un seuil de 0,5 au lieu des vrais seuils (0,92 à 0,97). Mesurer avec la chaîne réelle de bout en bout évite ce piège.
 - **Personne ne regardait** : aucune alerte n'existait. Elles existent maintenant, mais sans Alertmanager : elles se lisent à l'écran, rien n'est envoyé.
 
 ## 8. Originalité et réflexion
 
-1. **Une attaque réelle, pas seulement simulée.** Le test du professeur du 16 novembre a été reconstitué dans nos journaux (livrable du TP1, § 7.4), puis confronté à son rapport consolidé : chaque faille relevée chez les 9 équipes a été vérifiée chez nous.
+1. **Une attaque réelle, pas seulement simulée.** Le test du professeur du 16 novembre a été reconstitué dans nos journaux (`supervision/INCIDENTS.md`, I-001), puis confronté à son rapport consolidé : chaque faille relevée chez les 9 équipes a été vérifiée chez nous.
 2. **Une défense qui crée une faille, trouvée par la mesure** (P2). La lecture par fenêtres contre le noyage multipliait par 50 le coût d'un texte long : mesurée dans le pod, corrigée le jour même (jetons proportionnels à la taille).
 3. **Un résultat négatif publié** (P3) : la quantification du score ne freine pas le vol de modèle (accord 0,94 identique), mesure à l'appui.
-4. **Une mesure trop optimiste corrigée** : le « 0 % d'évasion » du noyage venait d'un seuil de 0,5 au lieu des vrais seuils (0,88 à 0,97).
+4. **Une mesure trop optimiste corrigée** : le « 0 % d'évasion » du noyage venait d'un seuil de 0,5 au lieu des vrais seuils (0,92 à 0,97).
 5. **Des attaques menées contre d'autres équipes** (avec leur accord) : c'est ainsi que le noyage a été découvert, puis trouvé chez nous.
 6. **Une chaîne de livraison qui vérifie la provenance du modèle** : empreintes SHA-256 des poids, contrôlées avant chaque construction ; et une fiche IA Act qui ne peut pas mentir (contrôle automatique).
 
@@ -470,34 +517,9 @@ Jusqu'au 16 novembre, **rien n'était automatisé** : le déploiement était un 
 
 ## 10. Conclusion
 
-L'attaque choisie était simple et efficace : un toxique sur deux passait en changeant quelques caractères, sans aucun signal visible. La défense la ramène à 0-10 % sur l'API réelle, sans dégrader le texte normal. Les attaques réellement subies ont été plus instructives encore : elles ont montré qu'une défense non déployée n'existe pas, qu'« aucune erreur » ne veut pas dire « aucun impact », et qu'une défense mal mesurée peut ouvrir une nouvelle faille. La conformité IA Act tient à une règle de conception (le score qualifie un texte, jamais une personne) et la pipeline empêche désormais de déployer sans contrôles. Les limites qui restent (plusieurs adresses, absence de WAF, biais non mesuré) sont connues, chiffrées et classées.
+L'attaque choisie était simple et efficace : un toxique sur deux passait en changeant quelques caractères, sans aucun signal visible. La défense la ramène à 0-10 % sur l'API réelle, sans dégrader le texte normal. Les attaques réellement subies ont été plus instructives encore : elles ont montré qu'une défense non déployée n'existe pas, qu'« aucune erreur » ne veut pas dire « aucun impact », et qu'une défense mal mesurée peut ouvrir une nouvelle faille. La conformité IA Act tient à une règle de conception (le score qualifie un texte, jamais une personne) et la pipeline empêche désormais de déployer sans contrôles. Nous avons enfin **rejoué l'attaque du professeur** contre notre API corrigée : sa latence ×76 devient ×0,8 à ×1,1 pour l'utilisateur légitime, et l'attaque n'obtient plus que 19 à 46 réponses sur plus de 21 000 (§ 4.4). La défense est améliorée, et chiffrée. Les limites qui restent (plusieurs adresses, absence de WAF, biais non mesuré) sont connues, chiffrées et classées.
 
-## 11. Livrables et critères d'évaluation de l'énoncé
-
-### Livrables globaux
-
-| Livrable de l'énoncé | Où |
-|---|---|
-| Type d'attaque et démonstration | § 2 et 3 ; scripts dans `attack/` |
-| Défense et preuve d'efficacité | § 4 (tableaux et graphiques avant/après, vérification sur l'API déployée, attaques réellement reçues) |
-| Classification IA Act + Model Card | § 5 ; `model_card.json` à la racine |
-| Pipeline sécurisé + logs d'exécution | § 6 (jobs, blocages réels, numéros d'exécution) |
-| Analyse critique et recommandations | § 7 et 9 |
-
----
-
-### Critères d'évaluation
-
-| Compétence | Indicateurs | Preuve |
-|---|---|---|
-| Réalisme de l'attaque | Pertinence, complexité technique | Étapes 1-2 : 5 variantes sur 1 000 textes ; attaques reçues en réel (vol de modèle, déni de service du professeur) ; noyage découvert en attaquant d'autres équipes |
-| Efficacité de la défense | Mesure de l'impact | Étape 3 : précision, rappel, faux positifs et latence avant/après ; mesures sur l'API réelle |
-| Conformité IA Act | Document complet et cohérent | Étape 4 : tableau de risque, fiche contrôlée automatiquement, biais déclaré non évalué plutôt qu'affirmé absent |
-| Pipeline DevSecOps | Fonctionnel et automatisé | Étape 5 : 7 jobs à chaque push, déploiement automatique, blocages réels |
-| Rigueur et clarté | Documentation et structure | Structure calquée sur l'énoncé, limites dites à chaque étape |
-| Originalité et réflexion | Créativité, approche critique | Résultat négatif de la quantification assumé ; erreur de dé-leet trouvée par nos propres tests ; attaque du professeur analysée dans les journaux |
-
-## 12. Reproduire
+## 11. Reproduire
 
 ```bash
 # Depuis la racine, environnement du TP1 (.venv) ; les données Kaggle sont dans data/, les modèles dans models/

@@ -7,10 +7,10 @@
 
 Il y a un document par TP. Les images sont intégrées au PDF, et la version Markdown s'affiche aussi sur GitHub.
 
-Chaque livrable suit les étapes de son énoncé. Chaque étape commence par rappeler ce que l'énoncé demande, puis la fin du document reprend les livrables attendus et les critères d'évaluation.
+Chaque livrable suit les étapes de son énoncé, en précisant pour chaque étape le travail réalisé.
 
 Documents associés :
-- [REGISTRE_RGPD.md](REGISTRE_RGPD.md) : registre des traitements, version 1.1. Il est identique à l'annexe C du TP1.
+- [REGISTRE_RGPD.md](REGISTRE_RGPD.md) : registre des traitements, version 1.1. Il est identique à l'annexe C du TP1 (état avant le TP2) ; ce qui change au TP2 est dans l'avenant, TP2 § 5.9.
 - [model_card.json](../model_card.json) : fiche du modèle (TP2, IA Act). Elle est à la racine parce que la pipeline la contrôle.
 - [attack/RAPPORT.md](../attack/RAPPORT.md) : rapport technique détaillé de l'attaque et des défenses (TP2).
 - [loadtest/RAPPORT.md](../loadtest/RAPPORT.md) : rapport complet des tests de charge (TP1, étape 5, repris en annexe B).

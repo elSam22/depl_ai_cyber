@@ -78,7 +78,7 @@ boite(1, 29, 13, 10, "Client",
 
 # Load Balancer
 boite(19, 29, 18, 10, "Load Balancer HTTPS",
-      ["Ingress Google, IP fixe", "certificat géré, HTTP → HTTPS", "délai 15 s, journaux complets"],
+      ["Ingress Google, IP fixe", "certificat géré, HTTP → HTTPS", "journaux d'accès"],
       fc="#ffffff")
 
 # Service K8s
@@ -93,13 +93,12 @@ boite(63, 15, 33, 37, "Pods dss-api  (2 à 5)",
 
 # Étapes dans le pod
 etapes_pod = [
-    ("a", "Protection : 429 (débit/IP, clés fausses), 413 (> 40 Ko), 503",  ROUGE),
-    ("b", "Vérif. clé X-API-Key (temps constant)  →  401",  ROUGE),
-    ("c", "Validation entrée 1–5 000 car.  →  422",          ENCRE),
-    ("d", "Anonymisation : regex + spaCy NER  →  8 balises",  VERT),
-    ("e", "Nettoyage (+ normalisation anti-évasion, TP2)",     ENCRE),
-    ("f", "DistilBERT : 6 probabilités (multi-label)",         BLEU),
-    ("g", "Seuils par label → score 0-100 (≤ 3 calculs/pod)",  BLEU),
+    ("a", "Vérif. clé X-API-Key (temps constant)  →  401",  ROUGE),
+    ("b", "Validation entrée 1–5 000 car.  →  422",          ENCRE),
+    ("c", "Anonymisation : regex + spaCy NER  →  8 balises",  VERT),
+    ("d", "Nettoyage : minuscules, emojis, ponctuation",       ENCRE),
+    ("e", "DistilBERT : 6 probabilités (multi-label)",         BLEU),
+    ("f", "Seuils par label → score 0-100",                    BLEU),
 ]
 for i, (lettre, texte, coul) in enumerate(etapes_pod):
     yy = 44.2 - 3.3*i
@@ -110,7 +109,7 @@ for i, (lettre, texte, coul) in enumerate(etapes_pod):
 
 etiquette(66.5, 21.2, "Sondes /health : startupProbe · readinessProbe · livenessProbe",
           GRIS_TEXTE, ha="left", taille=7.3)
-etiquette(66.5, 19.4, "Métriques : port 9090 (non exposé) · système de fichiers en lecture seule",
+etiquette(66.5, 19.4, "Métriques : port 9090 (non exposé)",
           GRIS_TEXTE, ha="left", taille=7.3)
 
 # Secret Manager
@@ -119,8 +118,8 @@ boite(63, 3, 33, 8.5, "Secret Manager → Secret Kubernetes",
       fc="#ffffff", ec=VERT, ecw=1.4)
 
 # Artifact Registry + Cloud Build
-boite(18, 3, 10.5, 8, "Bucket GCS",
-      ["privé : poids", "+ seuils.json"], fc="#ffffff", ec=VERT, ecw=1.4)
+boite(18, 3, 10.5, 8, "Poste équipe",
+      ["poids copiés dans", "api/model/ (hors Git)"], fc="#ffffff", ec=VERT, ecw=1.4)
 boite(32, 3, 11, 8, "Cloud Build",
       ["construit l'image", "(code + modèle)"], fc="#ffffff")
 boite(46.5, 3, 12.5, 8, "Artifact Registry",
@@ -128,11 +127,11 @@ boite(46.5, 3, 12.5, 8, "Artifact Registry",
 
 # Cloud Logging
 boite(63, 57.3, 33, 6.4, "Cloud Logging (30 jours)",
-      ["API : score · longueur · durée — jamais le texte", "refus : empreinte HMAC de l'IP · load balancer : IP"], fc="#ffffff", ec=VERT)
+      ["API : score · longueur · durée — jamais le texte", "load balancer : adresse IP, chemin, code"], fc="#ffffff", ec=VERT)
 
 # Supervision (pointillés)
 boite(33, 46, 24, 10, "Supervision (étape 6, installée)",
-      ["Prometheus + Grafana + 7 alertes :", "req/s, refus, 5xx, P95, CPU, pods"],
+      ["Prometheus + Grafana :", "req/s, 5xx, CPU, mémoire, pods"],
       fc="#fff4e8", ec=ORANGE, ecw=1.6)
 
 # ── Flux numérotés (requête) ──────────────────────────────────────────────────
@@ -153,13 +152,13 @@ fleche(57, 34, 63, 34, couleur=ROUGE, lw=2)
 badge(60, 34, "3", BLEU)
 etiquette(62, 42.7, "HTTP ✗", ROUGE, ha="right", taille=7.5, gras=True)
 etiquette(62, 41.6, "réseau interne", ROUGE, ha="right", taille=7)
-etiquette(62, 40.5, "authentification en (b)", ROUGE, ha="right", taille=7)
+etiquette(62, 40.5, "authentification en (a)", ROUGE, ha="right", taille=7)
 
 # 4 Réponse JSON (HTTPS, retour)
 ax.plot([64, 15.4, 15.4], [16.5, 16.5, 31], color=VERT, lw=2, solid_capstyle="butt", zorder=4)
 fleche(15.4, 31, 14.2, 31, couleur=VERT, lw=2)
 badge(36, 16.5, "4", BLEU)
-etiquette(36, 14.9, 'réponse HTTPS : {"score": 0-100 arrondi à la dizaine, "toxique": true/false}',
+etiquette(36, 14.9, 'réponse HTTPS : {"score": 0-100, "labels": {…}, "seuils": {…}, "toxique": true/false}',
           VERT, taille=7.5)
 
 # ── Flux infrastructure (vert) ────────────────────────────────────────────────
@@ -200,7 +199,7 @@ ax.text(lx + lw2/2, ly + lh - 0.8, "Légende", ha="center", va="top",
 
 legende_items = [
     ("1–4", "Flux requête/réponse",        BLEU),
-    ("a–g", "Étapes dans le pod",           ENCRE),
+    ("a–f", "Étapes dans le pod",           ENCRE),
     ("A",   "Secret → pods",               VERT),
     ("B",   "Image → nœuds",              VERT),
     ("C",   "Journaux de l'API", VERT),
@@ -217,7 +216,7 @@ for i, (sym, desc, coul) in enumerate(legende_items):
             fontsize=7.8, color=ENCRE, zorder=3)
 
 # ── Titre ─────────────────────────────────────────────────────────────────────
-ax.text(1, 67.5, "Digital Social Score — Architecture cloud en service (17 novembre 2026)",
+ax.text(1, 67.5, "Digital Social Score — Architecture cloud en service (état du 13 novembre 2026)",
         fontsize=14, fontweight="bold", color=ENCRE, va="top")
 
 fig.savefig(SORTIE, dpi=140, facecolor=FOND, bbox_inches="tight")

@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RedTeamIA — simulation d'attaque</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --fond:#0b0f14; --panneau:#121821; --panneau2:#161e29; --bord:#243041; --texte:#e6edf3; --doux:#a3afbd; --faible:#8593a4;
+  --bleu:#3b8eea; --vert:#2fb67c; --rouge:#e5534b; --ambre:#e0a030; --gris:#6e7b8b; --violet:#a371f7;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--fond);color:var(--texte);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--bord);background:linear-gradient(180deg,#101722,#0b0f14)}
+.logo{font-weight:800;letter-spacing:.5px;font-size:20px}
+.logo span{color:var(--rouge)}
+.sous{color:var(--doux);font-size:13px}
+.espace{flex:1}
+.pastille{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;border:1px solid var(--bord);font-size:12.5px;color:var(--doux);background:var(--panneau)}
+.pastille i{width:8px;height:8px;border-radius:50%;background:var(--gris);display:inline-block}
+.pastille.actif i{background:var(--rouge);box-shadow:0 0 0 0 rgba(229,83,75,.6);animation:pouls 1.4s infinite}
+.pastille.ok i{background:var(--vert)}
+@keyframes pouls{0%{box-shadow:0 0 0 0 rgba(229,83,75,.6)}70%{box-shadow:0 0 0 8px rgba(229,83,75,0)}100%{box-shadow:0 0 0 0 rgba(229,83,75,0)}}
+.barre-outils{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 22px;border-bottom:1px solid var(--bord)}
+button,select{font:inherit;color:var(--texte);background:var(--panneau2);border:1px solid var(--bord);border-radius:8px;padding:8px 13px;cursor:pointer}
+button:hover:not(:disabled){border-color:#3a4b62;background:#1b2533}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primaire{background:#1d3a5f;border-color:#2c5687}
+button.danger{background:#4a1e1e;border-color:#7a2d2d;color:#ffd7d4;font-weight:600}
+.note{color:var(--faible);font-size:12.5px}
+main{padding:16px 22px 30px;display:grid;gap:14px;grid-template-columns:repeat(12,1fr)}
+.panneau{background:var(--panneau);border:1px solid var(--bord);border-radius:12px;padding:14px 16px;min-width:0}
+.panneau h2{margin:0 0 10px;font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.6px;color:var(--doux);display:flex;align-items:center;gap:8px}
+.panneau h2 small{text-transform:none;letter-spacing:0;font-weight:400;color:var(--faible)}
+.kpis{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{background:var(--panneau);border:1px solid var(--bord);border-radius:12px;padding:11px 13px}
+.kpi .lib{color:var(--doux);font-size:12px}
+.kpi .val{font:700 24px/1.2 var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}
+.kpi .det{color:var(--faible);font-size:12px;margin-top:2px;font-family:var(--mono)}
+.v-bleu{color:var(--bleu)}.v-vert{color:var(--vert)}.v-rouge{color:var(--rouge)}.v-ambre{color:var(--ambre)}.v-gris{color:#aab4c0}
+.col-g{grid-column:span 3}.col-c{grid-column:span 6}.col-d{grid-column:span 3}.col-plein{grid-column:1/-1}.col-moitie{grid-column:span 6}
+@media (max-width:1250px){.col-g,.col-d{grid-column:span 6}.col-c{grid-column:1/-1}}
+@media (max-width:760px){.col-g,.col-d,.col-moitie{grid-column:1/-1}}
+.vagues{display:flex;flex-direction:column;gap:8px}
+.vague{border:1px solid var(--bord);border-radius:10px;padding:9px 11px;background:var(--panneau2);transition:border-color .3s}
+.vague .tete{display:flex;align-items:center;gap:8px}
+.vague .num{font:700 12px var(--mono);color:var(--faible);width:22px}
+.vague .titre{font-weight:600;flex:1}
+.vague .desc{color:var(--faible);font-size:12px;margin:2px 0 0 30px}
+.vague .res{font-size:12px;margin:5px 0 0 30px;color:var(--doux);font-family:var(--mono);white-space:pre-wrap}
+.etat{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--bord);color:var(--faible);white-space:nowrap}
+.vague.encours{border-color:#7a2d2d}.vague.encours .etat{color:#ffd7d4;border-color:#7a2d2d;background:#3a1717}
+.vague.ok .etat{color:#bdf3d8;border-color:#1f6a4a;background:#103325}
+.vague.ecart .etat{color:#ffe3ad;border-color:#7a5a1d;background:#33270f}
+.vague.stop .etat{color:#ffd7d4;border-color:#7a2d2d}
+.graphe{position:relative;height:230px}
+.graphe.petit{height:150px}
+.phase{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:13px}
+.phase b{font-weight:650}
+.progression{flex:1;height:6px;border-radius:4px;background:#1f2a38;overflow:hidden}
+.progression div{height:100%;width:0;background:var(--rouge);transition:width 1s linear}
+.alertes{display:flex;flex-direction:column;gap:6px;min-height:40px}
+.alerte{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:6px 9px;border-radius:8px;border:1px solid var(--bord);background:var(--panneau2)}
+.alerte.firing{border-color:#7a2d2d;background:#2c1414}
+.alerte.pending{border-color:#7a5a1d;background:#2a210f}
+.vide{color:var(--faible);font-size:12.5px}
+.journal{height:300px;overflow:auto;font:12px/1.5 var(--mono);background:#0a0e13;border:1px solid var(--bord);border-radius:8px;padding:8px 10px;color:#b7c3d0}
+.journal .h{color:var(--faible)}
+.journal .err{color:#ff9b94}.journal .vert{color:#8ce0b8}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:6px 8px;border-bottom:1px solid #1d2733;text-align:left;vertical-align:top}
+th{color:var(--doux);font-weight:600;font-size:12px}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tests{max-height:300px;overflow:auto}
+.ok-x{font-weight:700}.ok-x.oui{color:var(--vert)}.ok-x.non{color:var(--ambre)}
+.grille-fb{display:grid;grid-template-columns:repeat(15,1fr);gap:4px;margin-top:6px}
+.grille-fb div{height:22px;border-radius:4px;background:#1f2a38;display:flex;align-items:center;justify-content:center;font:12px var(--mono);color:#0b0f14}
+.c401{background:var(--bleu)!important}.c429{background:var(--ambre)!important}.c200{background:var(--rouge)!important}.c5xx{background:#ff4d4d!important}
+.barres-ia{display:flex;flex-direction:column;gap:8px}
+.barre-ia .lib{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px}
+.barre-ia .piste{height:10px;border-radius:5px;background:#1f2a38;overflow:hidden;display:flex}
+.barre-ia .piste .d{background:var(--vert)}.barre-ia .piste .e{background:var(--rouge)}
+.legende{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--doux);margin-top:6px}
+.legende i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.mieux{color:var(--vert);font-weight:650}.pire{color:var(--rouge);font-weight:650}
+.bandeau{grid-column:1/-1;display:none;padding:10px 14px;border-radius:10px;border:1px solid #7a2d2d;background:#2c1414;color:#ffd7d4}
+.bandeau.vis{display:block}
+footer{color:var(--faible);font-size:12px;padding:0 22px 20px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="logo">RedTeam<span>IA</span></div>
+    <div class="sous">Simulation de l'attaque multi-agents du professeur contre notre API Digital Social Score</div>
+  </div>
+  <div class="espace"></div>
+  <span class="pastille" id="p-cible"><i></i><span>cible : …</span></span>
+  <span class="pastille" id="p-etat"><i></i><span>prêt</span></span>
+  <span class="pastille"><span id="chrono">00:00</span></span>
+</header>
+
+<div class="barre-outils">
+  <button class="primaire" id="b-sans">Vagues 1 à 6 (sans impact)</button>
+  <button class="primaire" id="b-complet">Campagne complète (1 à 8, déni de service)</button>
+  <select id="s-vague" aria-label="Vague seule">
+    <option value="v1">v1 Reconnaissance</option><option value="v2">v2 Sondes web</option>
+    <option value="v3">v3 Authentification</option><option value="v4">v4 Fuite d'information</option>
+    <option value="v5">v5 Vol de modèle</option><option value="v6">v6 Évasion et sondes IA</option>
+    <option value="v7">v7 Déni de service (1 adresse)</option><option value="v8">v8 Déni de service (2 adresses)</option>
+  </select>
+  <button id="b-vague">Lancer cette vague</button>
+  <button class="danger" id="b-stop" disabled>■ Arrêt d'urgence</button>
+  <span class="note" id="n-info">Cible : notre API seulement. Clé lue côté serveur, jamais envoyée au navigateur.</span>
+</div>
+
+<main>
+  <div class="bandeau" id="bandeau"></div>
+
+  <section class="kpis" aria-label="Indicateurs en direct">
+    <div class="kpi"><div class="lib">Requêtes d'attaque</div><div class="val v-gris" id="k-total">0</div><div class="det" id="k-debit">0 req/s</div></div>
+    <div class="kpi"><div class="lib">Acceptées (200)</div><div class="val v-bleu" id="k-200">0</div><div class="det" id="k-200p">—</div></div>
+    <div class="kpi"><div class="lib">Refusées (429)</div><div class="val v-ambre" id="k-429">0</div><div class="det">limite de débit, sanctions</div></div>
+    <div class="kpi"><div class="lib">Saturation (503)</div><div class="val v-ambre" id="k-503">0</div><div class="det">refus rapide, pod plein</div></div>
+    <div class="kpi"><div class="lib">Erreurs serveur</div><div class="val v-rouge" id="k-err">0</div><div class="det">5xx, coupures</div></div>
+    <div class="kpi"><div class="lib">Légitime : succès</div><div class="val v-vert" id="k-leg">—</div><div class="det" id="k-legn">0 requête</div></div>
+    <div class="kpi"><div class="lib">Légitime : P95</div><div class="val v-vert" id="k-p95">—</div><div class="det" id="k-p95r">référence —</div></div>
+    <div class="kpi"><div class="lib">Pods prêts</div><div class="val v-gris" id="k-pods">—</div><div class="det" id="k-podsd">autoscaler —</div></div>
+    <div class="kpi"><div class="lib">Alertes actives</div><div class="val v-gris" id="k-al">0</div><div class="det" id="k-ald">Prometheus</div></div>
+  </section>
+
+  <section class="panneau col-g" aria-label="Vagues">
+    <h2>Vagues <small>ordre de la campagne</small></h2>
+    <div class="vagues" id="vagues"></div>
+  </section>
+
+  <section class="col-c" style="display:flex;flex-direction:column;gap:14px;min-width:0">
+    <div class="panneau">
+      <h2>Déni de service <small id="g-titre">en attente des vagues 7 et 8</small></h2>
+      <div class="phase"><b id="ph-nom">—</b><div class="progression"><div id="ph-barre"></div></div><span class="note" id="ph-reste"></span></div>
+      <div class="graphe"><canvas id="c-charge"></canvas></div>
+      <div class="legende"><span><i style="background:#3b8eea"></i>acceptées 200</span><span><i style="background:#6e7b8b"></i>429</span><span><i style="background:#e0a030"></i>503</span><span><i style="background:#e5534b"></i>erreurs</span></div>
+    </div>
+    <div class="panneau">
+      <h2>Utilisateur légitime <small>pod du cluster, une requête toutes les 2 s, par l'adresse publique</small></h2>
+      <div class="graphe"><canvas id="c-sonde"></canvas></div>
+      <div class="legende"><span><i style="background:#2fb67c"></i>référence</span><span><i style="background:#e5534b"></i>pendant l'attaque</span><span><i style="background:#3b8eea"></i>récupération</span><span><i style="background:#ffffff"></i>échec</span></div>
+    </div>
+  </section>
+
+  <section class="col-d" style="display:flex;flex-direction:column;gap:14px;min-width:0">
+    <div class="panneau">
+      <h2>Alertes Prometheus <small>nos 7 règles</small></h2>
+      <div class="alertes" id="alertes"><div class="vide">Aucune alerte.</div></div>
+    </div>
+    <div class="panneau">
+      <h2>Pods de l'API</h2>
+      <div class="graphe petit"><canvas id="c-pods"></canvas></div>
+    </div>
+    <div class="panneau">
+      <h2>Journal <small>en direct</small></h2>
+      <div class="journal" id="journal" role="log" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="panneau col-moitie">
+    <h2>Sondes <small>reconnaissance, web, clé, fuite d'information</small></h2>
+    <div class="tests"><table><thead><tr><th>Vague</th><th>Sonde</th><th>Attendu</th><th>Obtenu</th><th></th></tr></thead><tbody id="tests"></tbody></table></div>
+  </section>
+
+  <section class="panneau col-moitie">
+    <h2>Force brute sur la clé <small>30 clés fausses, sans pause</small></h2>
+    <div class="grille-fb" id="fb"></div>
+    <div class="legende"><span><i style="background:#3b8eea"></i>401 refusée</span><span><i style="background:#e0a030"></i>429 adresse bloquée</span><span><i style="background:#e5534b"></i>200 acceptée (faille)</span></div>
+    <h2 style="margin-top:18px">Vol de modèle <small>400 requêtes rapides, 16 en parallèle</small></h2>
+    <div class="graphe petit"><canvas id="c-extraction"></canvas></div>
+    <div class="note" id="extr-res">—</div>
+  </section>
+
+  <section class="panneau col-moitie">
+    <h2>Évasion du modèle <small>insultes déguisées ou noyées : détectées / passées</small></h2>
+    <div class="barres-ia" id="ia"></div>
+    <div class="legende"><span><i style="background:#2fb67c"></i>détectées</span><span><i style="background:#e5534b"></i>passées (évasion)</span></div>
+  </section>
+
+  <section class="panneau col-moitie">
+    <h2>Comparaison avec le tir du professeur <small>16 novembre, avant nos défenses</small></h2>
+    <table>
+      <thead><tr><th>Indicateur</th><th>Professeur</th><th>v7 (1 adresse)</th><th>v8 (2 adresses)</th></tr></thead>
+      <tbody id="comparaison"></tbody>
+    </table>
+  </section>
+</main>
+<footer>RedTeamIA — exercice interne contre notre propre API, dans le cadre du TP. Tirs plafonnés (180 req/s, 128 requêtes simultanées, 120 s) avec arrêt automatique si le service casse.</footer>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const VAGUES = [
+  ["v1_reconnaissance","Reconnaissance","routes, fichiers sensibles, ports"],
+  ["v2_sondes_web","Sondes web","en-têtes, HTTPS, CORS, pare-feu"],
+  ["v3_authentification","Authentification","clés mal formées, force brute"],
+  ["v4_fuite_information","Fuite d'information","réponse minimale, JSON malformé"],
+  ["v5_extraction","Vol de modèle","400 requêtes rapides"],
+  ["v6_evasion_sondes_ia","Évasion et sondes IA","déguisements, noyage, injection"],
+  ["v7_deni_service","Déni de service","180 req/s, 1 adresse, 120 s"],
+  ["v8_multi_adresses","Déni de service distribué","2 adresses × 90 req/s"],
+];
+const COUL = {"200":"#3b8eea","429":"#6e7b8b","503":"#e0a030","err":"#e5534b"};
+let etat = {};
+let debutExec = null, minuteur = null;
+
+// ---------- Cartes des vagues
+function dessinerVagues(){
+  $("vagues").innerHTML = VAGUES.map(([id,t,d],i)=>`
+    <div class="vague" id="w-${id}"><div class="tete"><span class="num">v${i+1}</span><span class="titre">${t}</span><span class="etat">en attente</span></div>
+    <div class="desc">${d}</div><div class="res"></div></div>`).join("");
+}
+function majVague(id, classe, texteEtat, res){
+  const el = $("w-"+id); if(!el) return;
+  el.className = "vague " + classe;
+  el.querySelector(".etat").textContent = texteEtat;
+  if(res !== undefined) el.querySelector(".res").textContent = res;
+}
+function resumeTexte(id, r){
+  if(!r) return "";
+  const l = [];
+  if(r.date_utc) l.push(r.date_utc + " UTC");
+  if(r.verdict) l.push("verdict : " + r.verdict);
+  if(r.ecarts && r.ecarts.length) l.push(...r.ecarts.slice(0,4).map(e=>"• "+e));
+  if(r.force_brute) l.push(`force brute : ${r.force_brute.nb_401}×401, ${r.force_brute.nb_429}×429, blocage au ${r.force_brute.blocage_au_essai ?? "—"}e essai`);
+  if(r.reponses_exploitables !== undefined) l.push(`${r.reponses_exploitables}/400 exploitables, ${r.exploitables_par_min}/min, 1er 429 à ${r.premier_429_apres_s ?? "—"} s`);
+  if(r.evasion) l.push(Object.entries(r.evasion).filter(([k])=>k!=="sans attaque").map(([k,v])=>`${k} ${v.evasions}`).join(" · "));
+  if(r.sondes_ratees) l.push("sondes IA ratées : " + (r.sondes_ratees.join(", ") || "aucune"));
+  if(r.sonde_legitime){
+    const s = r.sonde_legitime;
+    l.push(`${r.total_acceptees_200}/${r.total_requetes_attaque} acceptées · légitime ${s.pendant_attaque.reussies}/${s.pendant_attaque.requetes}, P95 ×${s.multiplicateur_p95}`);
+  }
+  return l.join("\n");
+}
+function classeResume(r){ if(!r) return ""; if(r.verdict && /conforme|freiné/.test(r.verdict)) return "ok"; if(r.ecarts && r.ecarts.length) return "ecart"; return "ok"; }
+
+// ---------- Graphiques
+Chart.defaults.color = "#a3afbd"; Chart.defaults.borderColor = "#1d2733"; Chart.defaults.font.size = 12;
+const gCharge = new Chart($("c-charge"), {type:"bar", data:{labels:[], datasets:[
+  {label:"200",data:[],backgroundColor:COUL["200"],stack:"s"},{label:"429",data:[],backgroundColor:COUL["429"],stack:"s"},
+  {label:"503",data:[],backgroundColor:COUL["503"],stack:"s"},{label:"erreurs",data:[],backgroundColor:COUL.err,stack:"s"}]},
+  options:{animation:false,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{x:{stacked:true,title:{display:true,text:"secondes de tir"},ticks:{maxTicksLimit:12}},y:{stacked:true,beginAtZero:true,title:{display:true,text:"réponses / s"}}}}});
+const gSonde = new Chart($("c-sonde"), {type:"scatter", data:{datasets:[
+  {label:"référence",data:[],backgroundColor:"#2fb67c",pointRadius:3},{label:"attaque",data:[],backgroundColor:"#e5534b",pointRadius:3},
+  {label:"récupération",data:[],backgroundColor:"#3b8eea",pointRadius:3},{label:"échec",data:[],backgroundColor:"#ffffff",pointStyle:"crossRot",pointRadius:6,borderColor:"#fff"}]},
+  options:{animation:false,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{x:{type:"linear",title:{display:true,text:"secondes"}},y:{beginAtZero:true,title:{display:true,text:"latence (ms)"}}}}});
+const gPods = new Chart($("c-pods"), {type:"line", data:{labels:[], datasets:[
+  {label:"prêts",data:[],borderColor:"#2fb67c",backgroundColor:"rgba(47,182,124,.15)",fill:true,stepped:true,pointRadius:0},
+  {label:"voulus (autoscaler)",data:[],borderColor:"#a371f7",borderDash:[4,3],stepped:true,pointRadius:0}]},
+  options:{animation:false,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10}}},scales:{y:{beginAtZero:true,suggestedMax:5,ticks:{stepSize:1}},x:{ticks:{maxTicksLimit:6}}}}});
+const gExtr = new Chart($("c-extraction"), {type:"line", data:{datasets:[
+  {label:"exploitables (200)",data:[],borderColor:"#e5534b",pointRadius:0,tension:.2},{label:"refusées (429)",data:[],borderColor:"#6e7b8b",pointRadius:0,tension:.2}]},
+  options:{animation:false,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10}}},scales:{x:{type:"linear",title:{display:true,text:"secondes"}},y:{beginAtZero:true}}}});
+
+// ---------- État courant (réinitialisé à chaque campagne)
+function reinitialiser(){
+  etat = {total:0, c200:0, c429:0, c503:0, err:0, parSeconde:{}, tir:null, phase:null, phases:[], sonde:[], t0sonde:null,
+          ia:{}, fb:[], extr:{n:0, ok:0, r429:0, pts200:[], pts429:[]}, podsT0:null, debitDernier:0};
+  for(const ds of gCharge.data.datasets) ds.data = []; gCharge.data.labels = []; gCharge.update();
+  for(const ds of gSonde.data.datasets) ds.data = []; gSonde.update();
+  for(const ds of gPods.data.datasets) ds.data = []; gPods.data.labels = []; gPods.update();
+  for(const ds of gExtr.data.datasets) ds.data = []; gExtr.update();
+  $("tests").innerHTML = ""; $("ia").innerHTML = ""; $("fb").innerHTML = Array(30).fill("<div></div>").join("");
+  $("extr-res").textContent = "—"; $("journal").innerHTML = ""; $("bandeau").classList.remove("vis");
+  majKpis();
+}
+function fmt(n){ return n.toLocaleString("fr-FR"); }
+function majKpis(){
+  $("k-total").textContent = fmt(etat.total); $("k-debit").textContent = etat.debitDernier + " req/s (dernière seconde)";
+  $("k-200").textContent = fmt(etat.c200); $("k-429").textContent = fmt(etat.c429); $("k-503").textContent = fmt(etat.c503); $("k-err").textContent = fmt(etat.err);
+  $("k-200p").textContent = etat.total ? Math.round(100*etat.c200/etat.total) + " % des requêtes" : "—";
+  const pend = etat.sonde.filter(s=>s.phase==="tir"), ref = etat.sonde.filter(s=>s.phase==="référence");
+  const base = pend.length ? pend : etat.sonde;
+  if(base.length){
+    const ok = base.filter(s=>s.code===200);
+    $("k-leg").textContent = Math.round(100*ok.length/base.length) + " %";
+    $("k-legn").textContent = `${ok.length}/${base.length} ${pend.length ? "pendant l'attaque" : "depuis le début"}`;
+    const p = p95(ok.map(s=>s.ms)), pr = p95(ref.filter(s=>s.code===200).map(s=>s.ms));
+    $("k-p95").textContent = p ? p + " ms" : "—";
+    $("k-p95r").textContent = pr ? `référence ${pr} ms` + (p && pend.length ? ` · ×${(p/pr).toFixed(1)}` : "") : "référence —";
+    $("k-p95").className = "val " + (pr && p && p/pr > 3 ? "v-rouge" : "v-vert");
+    $("k-leg").className = "val " + (ok.length === base.length ? "v-vert" : "v-rouge");
+  }
+}
+function p95(v){ if(!v.length) return null; const s=[...v].sort((a,b)=>a-b); return Math.round(s[Math.min(s.length-1, Math.ceil(0.95*s.length)-1)]); }
+function heure(t){ return new Date(t*1000).toLocaleTimeString("fr-FR"); }
+function journal(texte, cls){
+  const j = $("journal"), bas = j.scrollTop + j.clientHeight >= j.scrollHeight - 30;
+  const d = document.createElement("div"); d.className = cls || ""; d.textContent = texte; j.appendChild(d);
+  while(j.childNodes.length > 800) j.removeChild(j.firstChild);
+  if(bas) j.scrollTop = j.scrollHeight;
+}
+
+// ---------- Traitement des événements
+function traiter(ev){
+  switch(ev.type){
+    case "debut_execution": reinitialiser(); debutExec = ev.t; enCours(true, ev.mode); journal(`${heure(ev.t)}  campagne « ${ev.mode} » lancée`, "vert"); break;
+    case "fin_execution": enCours(false); journal(`${heure(ev.t)}  campagne terminée (code ${ev.code})`, ev.code ? "err" : "vert"); majPhase(null); break;
+    case "log": journal(ev.texte, /Traceback|Error|erreur|ARRÊT/i.test(ev.texte) ? "err" : (ev.texte.startsWith("#") ? "h" : "")); break;
+    case "vague": {
+      if(ev.etat === "en cours"){
+        if(ev.module.startsWith("v7")){ majVague("v7_deni_service","encours","en cours"); majVague("v8_multi_adresses","encours","en attente"); }
+        else majVague(ev.module,"encours","en cours");
+      } else if(ev.etat === "terminée"){ majVague(ev.module, classeResume(ev.resume), "terminée", resumeTexte(ev.module, ev.resume)); comparer(ev.module, ev.resume); }
+      else { majVague(ev.module,"stop","arrêtée"); }
+      break;
+    }
+    case "test": {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${ev.vague}</td><td></td><td class="num"></td><td class="num"></td><td class="ok-x ${ev.ok?"oui":"non"}">${ev.ok?"✓":"✗"}</td>`;
+      tr.children[1].textContent = ev.nom; tr.children[2].textContent = ev.attendu; tr.children[3].textContent = ev.obtenu;
+      $("tests").prepend(tr); break;
+    }
+    case "force_brute": {
+      const c = $("fb").children[ev.essai-1]; if(c){ c.className = ev.code===401?"c401":ev.code===429?"c429":ev.code===200?"c200":"c5xx"; c.textContent = ev.code; }
+      break;
+    }
+    case "extraction": {
+      const x = etat.extr; x.n++; if(ev.code===200) x.ok++; if(ev.code===429) x.r429++;
+      x.pts200.push({x:ev.t_rel,y:x.ok}); x.pts429.push({x:ev.t_rel,y:x.r429});
+      if(x.n % 5 === 0 || x.n === 400){ gExtr.data.datasets[0].data = x.pts200; gExtr.data.datasets[1].data = x.pts429; gExtr.update("none"); }
+      $("extr-res").textContent = `${x.ok} réponses exploitables sur ${x.n} envoyées · ${x.r429} refusées (429). Professeur chez une équipe sans limite : 400 en 12 s, 0 refus.`;
+      break;
+    }
+    case "ia": {
+      if(!ev.attaque || ev.attaque.startsWith("sonde")){ if(ev.attaque) journal(`${ev.attaque} : ${ev.obtenu ? "toxique" : "non toxique"} (attendu ${ev.attendu ? "toxique" : "non toxique"})`, ev.obtenu===ev.attendu ? "" : "err"); break; }
+      if(ev.attaque === "sans attaque" && !ev.attendu) break;
+      const a = etat.ia[ev.attaque] = etat.ia[ev.attaque] || {d:0,e:0};
+      if(ev.obtenu) a.d++; else a.e++;
+      dessinerIa(); break;
+    }
+    case "phase": majPhase(ev); break;
+    case "charge": ajouterCharge(ev); break;
+    case "sonde": ajouterSonde(ev); break;
+    case "pods": {
+      if(etat.podsT0===null) etat.podsT0 = ev.t;
+      gPods.data.labels.push(Math.round(ev.t - etat.podsT0) + " s");
+      gPods.data.datasets[0].data.push(ev.prets); gPods.data.datasets[1].data.push(ev.hpa_voulu);
+      gPods.update("none");
+      $("k-pods").textContent = `${ev.prets}/${ev.pods}`; $("k-podsd").textContent = `autoscaler : ${ev.hpa_voulu ?? "—"} · redémarrages ${ev.redemarrages}`;
+      break;
+    }
+    case "alertes": dessinerAlertes(ev.liste); break;
+    case "kill_switch": $("bandeau").textContent = "KILL SWITCH : " + ev.raison + " — tir interrompu."; $("bandeau").classList.add("vis"); journal("KILL SWITCH : " + ev.raison, "err"); break;
+  }
+}
+
+function majPhase(ev){
+  if(!ev){ $("ph-nom").textContent = "—"; $("ph-barre").style.width = "0"; $("ph-reste").textContent = ""; clearInterval(etat.phMin); return; }
+  etat.phase = ev.phase;
+  if(ev.phase === "tir"){
+    etat.tir = ev.tir; etat.parSeconde = {};
+    for(const ds of gCharge.data.datasets) ds.data = []; gCharge.data.labels = []; gCharge.update("none");
+    $("g-titre").textContent = `${ev.tir} : ${ev.sources.length} source(s), ${Math.round(ev.debit)} req/s chacune`;
+  }
+  if(ev.phase === "référence" && ev.tir) etat.sonde.forEach(()=>{});
+  etat.phases.push({t:ev.t, phase:ev.phase, tir:ev.tir});
+  $("ph-nom").textContent = (ev.tir ? ev.tir + " · " : "") + ev.phase;
+  clearInterval(etat.phMin);
+  const barre = $("ph-barre");
+  barre.style.background = ev.phase === "tir" ? "var(--rouge)" : ev.phase === "référence" ? "var(--vert)" : "var(--bleu)";
+  if(ev.duree){
+    const fin = ev.t + ev.duree;
+    const maj = () => { const r = Math.max(0, fin - Date.now()/1000); barre.style.width = (100*(1 - r/ev.duree)) + "%"; $("ph-reste").textContent = Math.ceil(r) + " s"; };
+    maj(); etat.phMin = setInterval(maj, 1000);
+  } else { barre.style.width = "100%"; $("ph-reste").textContent = ""; }
+  journal(`${heure(ev.t)}  phase : ${$("ph-nom").textContent}`, "h");
+}
+
+function ajouterCharge(ev){
+  const s = etat.parSeconde[ev.seconde] = etat.parSeconde[ev.seconde] || {"200":0,"429":0,"503":0,"err":0};
+  let n = 0;
+  for(const [code,v] of Object.entries(ev.codes||{})){
+    n += v; const k = code==="200"||code==="429"||code==="503" ? code : "err"; s[k] += v;
+    if(code==="200") etat.c200 += v; else if(code==="429") etat.c429 += v; else if(code==="503") etat.c503 += v; else etat.err += v;
+  }
+  etat.total += n; etat.debitDernier = Object.values(s).reduce((a,b)=>a+b,0);
+  const secs = Object.keys(etat.parSeconde).map(Number).sort((a,b)=>a-b);
+  gCharge.data.labels = secs;
+  const cles = ["200","429","503","err"];
+  gCharge.data.datasets.forEach((ds,i)=> ds.data = secs.map(x=>etat.parSeconde[x][cles[i]]));
+  gCharge.update("none"); majKpis();
+}
+
+function phaseA(t){
+  let p = "référence";
+  for(const ph of etat.phases){ if(ph.t <= t && ["référence","tir","récupération"].includes(ph.phase)) p = ph.phase; }
+  return p;
+}
+function ajouterSonde(ev){
+  if(etat.t0sonde === null) etat.t0sonde = ev.t_sonde;
+  const phase = phaseA(ev.t_sonde), x = ev.t_sonde - etat.t0sonde;
+  etat.sonde.push({t:ev.t_sonde, code:ev.code, ms:ev.ms, phase});
+  if(ev.code !== 200) gSonde.data.datasets[3].data.push({x, y: Math.max(ev.ms, 50)});
+  else gSonde.data.datasets[phase==="tir"?1:phase==="récupération"?2:0].data.push({x, y:ev.ms});
+  gSonde.update("none"); majKpis();
+}
+
+function dessinerIa(){
+  const ordre = Object.keys(etat.ia);
+  $("ia").innerHTML = ordre.map(k=>{
+    const a = etat.ia[k], n = a.d + a.e, pd = n ? 100*a.d/n : 0;
+    // Sans attaque, un toxique manqué n'est pas une évasion : c'est la limite du modèle seul (son rappel)
+    const detail = !n ? "" : k === "sans attaque" ? ` · rappel du modèle ${Math.round(pd)} %` : ` · évasion ${Math.round(100*a.e/n)} %`;
+    return `<div class="barre-ia"><div class="lib"><span>${k === "sans attaque" ? "sans attaque (référence)" : k}</span><span class="num">${a.d}/${n} détectées${detail}</span></div>
+      <div class="piste"><div class="d" style="width:${pd}%"></div><div class="e" style="width:${100-pd}%"></div></div></div>`;
+  }).join("");
+}
+
+const NOMS_ALERTES = {DssDebitAnormal:"Débit anormal (> 30 req/s)",DssRefusEnHausse:"Refus en hausse",DssClesFausses:"Clés fausses",DssErreurs5xx:"Erreurs 5xx",DssLatenceP95:"Latence P95 élevée",DssPodsInsuffisants:"Pods insuffisants",DssRedemarrages:"Redémarrages"};
+function dessinerAlertes(liste){
+  const actives = (liste||[]);
+  $("k-al").textContent = actives.filter(a=>a.etat==="firing").length;
+  $("k-al").className = "val " + (actives.some(a=>a.etat==="firing") ? "v-rouge" : "v-gris");
+  $("k-ald").textContent = actives.length ? `${actives.filter(a=>a.etat==="pending").length} en attente` : "Prometheus";
+  $("alertes").innerHTML = actives.length ? actives.map(a=>`<div class="alerte ${a.etat}"><span>${NOMS_ALERTES[a.nom]||a.nom}${a.motif?` · ${a.motif}`:""}</span><span>${a.etat==="firing"?"DÉCLENCHÉE":"en attente"}</span></div>`).join("") : '<div class="vide">Aucune alerte.</div>';
+}
+
+function comparer(id, r){
+  if(!r || !r.sonde_legitime) return;
+  etat.comp = etat.comp || {}; etat.comp[id] = r; dessinerComparaison();
+}
+function dessinerComparaison(){
+  const c = etat.comp || {}, v7 = c.v7_deni_service, v8 = c.v8_multi_adresses;
+  const cell = (r, f) => r ? f(r) : "—";
+  const lignes = [
+    ["Requêtes acceptées (200)", "43 685 en 4 min", r=>`${fmt(r.total_acceptees_200)} sur ${fmt(r.total_requetes_attaque)} en 2 min`],
+    ["Part acceptée", "≈ 100 %", r=>`<span class="mieux">${Math.round(100*r.total_acceptees_200/Math.max(1,r.total_requetes_attaque))} %</span>`],
+    ["Légitime : succès", "non mesuré", r=>{const s=r.sonde_legitime.pendant_attaque; return `<span class="${s.reussies===s.requetes?"mieux":"pire"}">${s.reussies}/${s.requetes}</span>`;}],
+    ["Latence P95", "4 276 ms (×76)", r=>{const s=r.sonde_legitime; return `<span class="${s.multiplicateur_p95<=3?"mieux":"pire"}">${s.pendant_attaque.p95_ms} ms (×${s.multiplicateur_p95})</span>`;}],
+    ["Alertes déclenchées", "aucune vue par l'équipe", r=>Object.keys(r.alertes||{}).length ? Object.entries(r.alertes).map(([k,v])=>`${NOMS_ALERTES[k]||k} (+${v} s)`).join("<br>") : "aucune"],
+  ];
+  $("comparaison").innerHTML = lignes.map(([n,p,f])=>`<tr><td>${n}</td><td class="num">${p}</td><td class="num">${cell(v7,f)}</td><td class="num">${cell(v8,f)}</td></tr>`).join("");
+}
+
+// ---------- Commandes
+function enCours(oui, mode){
+  ["b-sans","b-complet","b-vague","s-vague"].forEach(id=>$(id).disabled = oui);
+  $("b-stop").disabled = !oui;
+  const p = $("p-etat"); p.className = "pastille " + (oui ? "actif" : "ok"); p.querySelector("span").textContent = oui ? `attaque en cours${mode?" : "+mode:""}` : "prêt";
+  clearInterval(minuteur);
+  if(oui){ const t0 = debutExec || Date.now()/1000; minuteur = setInterval(()=>{ const s = Math.floor(Date.now()/1000 - t0); $("chrono").textContent = String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); }, 1000); }
+}
+async function action(chemin, corps){
+  const r = await fetch(chemin, {method:"POST", headers:{"Content-Type":"application/json","X-RedTeam":"1"}, body: corps ? JSON.stringify(corps) : "{}"});
+  if(!r.ok){ const d = await r.json().catch(()=>({})); alert(d.detail || ("Erreur " + r.status)); }
+}
+$("b-sans").onclick = () => action("/lancer", {mode:"sans_impact"});
+$("b-complet").onclick = () => { if(confirm("Lancer la campagne complète ?\n\nLes vagues 7 et 8 envoient jusqu'à 180 requêtes/s pendant 2 × 120 s contre notre API en production, et créent deux pods temporaires dans le cluster.")) action("/lancer", {mode:"complet"}); };
+$("b-vague").onclick = () => { const v = $("s-vague").value; if((v==="v7"||v==="v8") && !confirm(`Lancer ${v} (déni de service contre notre API en production) ?`)) return; action("/lancer", {mode:"vague", vague:v}); };
+$("b-stop").onclick = () => action("/arreter");
+
+// ---------- Démarrage : derniers résultats connus, puis flux en direct
+async function demarrer(){
+  dessinerVagues(); reinitialiser();
+  const e = await (await fetch("/etat")).json();
+  const pc = $("p-cible"); pc.className = "pastille " + (e.cible_configuree && e.cle_configuree ? "ok" : "");
+  pc.querySelector("span").textContent = e.cible_configuree && e.cle_configuree ? "cible : notre API (adresse masquée)" : "cible non configurée";
+  for(const [id, r] of Object.entries(e.resultats||{})){ majVague(id, classeResume(r), "dernier résultat", resumeTexte(id, r)); comparer(id, r); }
+  dessinerComparaison();
+  if(e.en_cours){ debutExec = e.debut; enCours(true, e.mode); }
+  const src = new EventSource("/flux");
+  src.addEventListener("rejeu", m => { const evs = JSON.parse(m.data); if(evs.length){ reinitialiser(); for(const [id, r] of Object.entries(e.resultats||{})) comparer(id, r); } evs.forEach(traiter); dessinerComparaison(); });
+  src.onmessage = m => traiter(JSON.parse(m.data));
+  src.onerror = () => journal("connexion au serveur perdue, nouvelle tentative…", "err");
+}
+demarrer();
+</script>
+</body>
+</html>

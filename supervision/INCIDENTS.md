@@ -6,7 +6,7 @@ Un incident = une activité anormale repérée dans **Grafana** (quand, quelle r
 
 1. **Grafana**, tableau de bord `grafana_dashboard.json`, section « Détection d'attaque » : un pic de débit sur une route, une part de 4xx qui monte, des pages inconnues (route `none`), des erreurs 5xx, des pods qui tombent. Noter l'**heure** (le graphique est en heure du navigateur, les journaux en UTC : Paris = UTC + 1 en hiver).
 2. **Journaux** : `python supervision/analyser_journaux.py --projet <projet> --heures 6`. Il sépare les codes que Prometheus regroupe (401, 404, 422) et donne le client, son outil (user-agent) et ses chemins.
-3. **Écarter notre propre trafic** : nos tests de charge (Locust), le contrôle après déploiement (`Python-urllib`, qui provoque volontairement des 401), nos `curl`, les scripts d'attaque d'Enzo (`attack/`).
+3. **Écarter notre propre trafic** : nos tests de charge (Locust), le contrôle après déploiement (`Python-urllib`, qui provoque volontairement des 401), nos `curl`, les scripts d'attaque de Jean-Philippe (`attack/`).
 4. **Caractériser** : type d'attaque, cible, volume, durée, **impact mesuré** (latence de `/score`, erreurs 5xx, pods prêts), et ce qui n'est **pas** prouvé (qui est derrière).
 5. **Corriger** : proposition, justification, preuve avant/après, statut.
 
@@ -106,7 +106,7 @@ Entre le 15 novembre 21:39 et le 16 novembre 07:45, **181 requêtes** ont reçu 
 ## Trafic qui n'est pas une attaque (à ne pas confondre)
 
 - `Python-urllib/3.14` : le contrôle après déploiement (`verifier_deploiement.py`), qui envoie volontairement une requête sans clé et une avec une mauvaise clé (401 attendus).
-- `python-requests/2.33.1` : 72 requêtes `POST /score` toutes en 200, une seule minute : probablement un script de l'équipe (attaque d'évasion d'Enzo) ; **à confirmer avec lui**.
+- `python-requests/2.33.1` : 72 requêtes `POST /score` toutes en 200, une seule minute : probablement un script de l'équipe (attaque d'évasion de Jean-Philippe) ; **à confirmer avec lui**.
 - Les `curl` et les tests de charge Locust de l'équipe.
 
 

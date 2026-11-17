@@ -214,7 +214,7 @@ Lecture croisée de tout ce qui a été mesuré, pour décider quoi corriger en 
 
 **Constat :** une autre équipe a attaqué notre API déployée (cluster `dss-api`) par **extraction de modèle** — requêtes massives (jusqu'à 2000, sans limite de débit observée), pour entraîner un clone à partir de nos réponses. Impact qu'ils ont mesuré de leur côté : clone à 94,7 % d'accord avec notre API, notre latence qui double sous la charge (245 ms → 473-795 ms), quelques erreurs 502. Cette attaque est la plus pertinente pour notre défense : c'est celle qu'on a **réellement reçue**, pas une hypothèse.
 
-**Division du travail :** la limitation de débit (rate limiting) et la gestion de la clé API sont traitées par Enzo, côté déploiement. Notre contribution porte sur **ce que l'API révèle par requête** — une piste de défense indépendante du débit.
+**Division du travail :** la limitation de débit (rate limiting) et la gestion de la clé API sont traitées par Jean-Philippe, côté déploiement. Notre contribution porte sur **ce que l'API révèle par requête** — une piste de défense indépendante du débit.
 
 ### 6.1 Défense testée : quantifier le score renvoyé
 
@@ -287,4 +287,4 @@ Lecture croisée de tout ce qui a été mesuré, pour décider quoi corriger en 
 - **Sous 500 caractères**, les deux donnent le même résultat (0,90) : à ce niveau, le texte toxique tient encore dans la fenêtre de 128 tokens et aucune défense n'est nécessaire.
 - **Le comportement normal est préservé** : sur un texte sans rembourrage (0 car.), la proba reste exactement à 0,986 — la défense ne dégrade pas la détection habituelle.
 
-**Correction (17 novembre).** Ce tableau compare la probabilité au seuil 0,5. L'API, elle, décide avec les seuils par label de `models/seuils.json` (0,88 à 0,97 pour `toxic` et les labels voisins). Remesuré avec ces vrais seuils, sur 60 insultes réelles noyées dans 1 000 puis 3 000 caractères : 4 puis 2 détectées sans défense, **40 puis 48 avec** (fenêtres de 64 tokens qui se chevauchent), au prix de 11,7 % de fausses alertes sur des textes sains longs (contre 4,3 %). La défense réduit donc fortement le noyage sans l'éliminer ; c'est ce résultat qui figure dans le livrable TP2 (§ 4.3, graphique `results/noyage_seuils_reels.png`).
+**Correction (17 novembre).** Ce tableau compare la probabilité au seuil 0,5. L'API, elle, décide avec les seuils par label de `models/seuils.json` (0,92 à 0,97 pour `toxic` et les labels voisins). Remesuré avec ces vrais seuils, sur 60 insultes réelles noyées dans 1 000 puis 3 000 caractères : 4 puis 2 détectées sans défense, **40 puis 48 avec** (fenêtres de 64 tokens qui se chevauchent), au prix de 11,7 % de fausses alertes sur des textes sains longs (contre 4,3 %). La défense réduit donc fortement le noyage sans l'éliminer ; c'est ce résultat qui figure dans le livrable TP2 (§ 4.3, graphique `results/noyage_seuils_reels.png`).
