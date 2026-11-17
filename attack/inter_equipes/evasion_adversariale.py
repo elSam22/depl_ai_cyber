@@ -14,7 +14,7 @@ Ce qu'on mesure (métriques du TP) :
 
 Usage :
     export KEY="$(gcloud secrets versions access latest --secret=dss-api-key)"
-    URL=https://136-81-204-100.sslip.io python attack/inter_equipes/evasion_adversariale.py run \
+    URL=https://<adresse> python attack/inter_equipes/evasion_adversariale.py run \
         --data data/clean/test.csv --perturbation tous --sortie attack/inter_equipes/resultats/avant.json
 
     # après avoir déployé la défense (normalisation dans preprocessing.py) :
