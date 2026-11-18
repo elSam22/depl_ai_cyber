@@ -25,7 +25,7 @@ body{font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:11pt;line-he
 h1{font-size:22pt;border-bottom:2px solid #2a78d6;padding-bottom:6px} h2{font-size:16pt;margin-top:28px;border-bottom:1px solid #ccc;padding-bottom:3px}
 h3{font-size:13pt;margin-top:20px} h4{font-size:11.5pt}
 table{border-collapse:collapse;width:100%;margin:10px 0;font-size:9.5pt} th,td{border:1px solid #bbb;padding:4px 6px;vertical-align:top} th{background:#eef3fa}
-code{background:#f3f3f3;padding:1px 3px;border-radius:3px;font-size:9pt} pre{background:#f3f3f3;padding:8px;overflow-x:auto;font-size:8.5pt;white-space:pre-wrap}
+code{background:#f3f3f3;padding:1px 3px;border-radius:3px;font-size:9pt} pre{background:#f3f3f3;padding:8px;overflow-x:auto;font-size:8.5pt;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all}
 img{max-width:100%;height:auto;display:block;margin:10px auto;border:1px solid #ddd} em{color:#444}
 h1,h2,h3,h4{page-break-after:avoid;break-after:avoid;break-inside:avoid}
 /* Un titre ne reste jamais seul en bas de page : chaque titre « réserve » la place de quelques lignes sous lui ;
