@@ -11,7 +11,7 @@ Chaque livrable suit les étapes de son énoncé, en précisant pour chaque éta
 
 Documents associés :
 - [REGISTRE_RGPD.md](REGISTRE_RGPD.md) : registre des traitements, version 1.2 (état après le TP2). Il est identique à l'annexe C du TP1 ; ce qui a changé depuis la version 1.1 est résumé au TP2 § 5.9.
-- [model_card.json](../model_card.json) : fiche du modèle (TP2, IA Act). Elle est à la racine parce que la pipeline la contrôle.
+- [model_card.json](model_card.json) : fiche du modèle (TP2, IA Act). L'original est à la racine du projet, comme l'exige l'énoncé ; cette copie doit rester identique (la pipeline le vérifie).
 - [attack/RAPPORT.md](../attack/RAPPORT.md) : rapport technique détaillé de l'attaque et des défenses (TP2).
 - [loadtest/RAPPORT.md](../loadtest/RAPPORT.md) : rapport complet des tests de charge (TP1, étape 5, repris en annexe B).
 - [supervision/INCIDENTS.md](../supervision/INCIDENTS.md) : registre des incidents (TP1, étape 6).

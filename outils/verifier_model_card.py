@@ -45,6 +45,11 @@ elif biais is None and not str(carte.get("bias_note", "")).strip():
 elif biais is False and not carte.get("bias_evaluation"):
     erreurs.append("« bias_detected » vaut false sans « bias_evaluation » : une absence de biais doit être démontrée")
 
+# Copie dans LIVRABLES/ (remise au professeur) : elle doit rester identique à l'original de la racine.
+COPIE = Path(__file__).resolve().parent.parent / "LIVRABLES" / "model_card.json"
+if len(sys.argv) == 1 and COPIE.exists() and COPIE.read_bytes() != CHEMIN.read_bytes():
+    erreurs.append("LIVRABLES/model_card.json diffère de model_card.json : recopier l'original de la racine")
+
 if erreurs:
     print(f"ECHEC : {CHEMIN}")
     for e in erreurs:
