@@ -302,7 +302,9 @@ Le fichier `model_card.json` est à la racine du projet. Il est contrôlé à ch
 | `limitations` | Précision faible (0,49) ; contournable par texte déguisé ; anglais seulement |
 | `version` / `last_update` | `distilbert-2026-11-17` / 2026-11-17 (mêmes poids que la version du 16, empreintes SHA-256 identiques : seule la chaîne de traitement a changé) |
 
-**Écart avec le modèle de l'énoncé** : l'exemple donne `"bias_detected": false`. Nous n'avons pas mesuré le biais : écrire `false` serait une affirmation sans preuve. Nous écrivons `null` et l'expliquons.
+**Rapport au modèle de l'énoncé.** Les 8 champs de l'exemple sont tous présents, avec les mêmes noms et les mêmes types (`model_name`, `description`, `risk_level`, `data_source`, `privacy_measures`, `bias_detected`, `version`, `last_update`) : un outil qui lit le format de l'énoncé lit notre fiche. Les champs ajoutés (`risk_justification`, `intended_use`, `out_of_scope`, `architecture`, `metrics_test`, `bias_note`, `limitations`, `version_note`) portent ce que l'IA Act demande de documenter et que l'exemple ne prévoit pas : justification de la catégorie de risque, usage prévu et usages exclus, performances, limites.
+
+**Un seul écart : `bias_detected` vaut `null`, et non `false`.** Dans l'exemple, `false` signifie « aucun biais détecté ». Pour l'affirmer, il faudrait avoir cherché : comparer, par exemple, le taux de faux positifs sur des commentaires sains qui citent un groupe (religion, origine, orientation) à celui des autres commentaires. Nous ne l'avons pas fait. Écrire `false` laisserait croire à une vérification qui n'a pas eu lieu, alors que le jeu Jigsaw est connu pour ce biais. `null` est la valeur JSON de « non renseigné » : elle dit que la question reste ouverte, et `bias_note` explique pourquoi et ce qu'il faudrait mesurer. La pipeline applique la même règle : elle refuse `false` sans `bias_evaluation` décrivant la mesure.
 
 ### 5.3 Données d'entraînement
 
