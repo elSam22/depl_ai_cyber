@@ -364,22 +364,22 @@ Le choix de ne pas renvoyer les probabilités et les seuils est un arbitrage ent
 | Audit de sécurité | Dernier : 16 novembre 2026 (attaque du professeur, étape 3) ; à refaire à chaque évolution du modèle ou de l'API |
 | Retrait | Sur décision de l'équipe ; modèle et données supprimés à la mise hors service |
 
-### 5.9 Registre RGPD : avenant au registre du TP1 (version 1.2)
+### 5.9 Registre RGPD : de la version 1.1 à la version 1.2
 
-Le registre du TP1 (référence DSS-RGPD-2026-001, version 1.1 du 13 novembre) décrit l'API telle qu'elle était avant le TP2. Les corrections du TP2 changent plusieurs de ses rubriques. Le registre du TP1 n'est pas modifié ; cet avenant donne la version 1.2 pour ce qui change. Le reste (responsable, personnes concernées, traitement A, durées, droits) reste valable.
+La version 1.1 du registre (référence DSS-RGPD-2026-001, 13 novembre) décrit l'API telle qu'elle était avant le TP2. Les corrections du TP2 changent plusieurs de ses rubriques : le registre est passé à la version 1.2 (17 novembre), et ce tableau résume ce qui change. Le reste (responsable, personnes concernées, traitement A, durées, droits) reste valable.
 
-| Rubrique du registre (§) | Version 1.1 (TP1) | Version 1.2 (TP2) |
+| Rubrique du registre (§) | Version 1.1 (13/11, avant TP2) | Version 1.2 (17/11, après TP2) |
 |---|---|---|
 | Traitement B, finalité (§ 3) | Restituer le score, les probabilités par label et un verdict | Restituer le score arrondi à la dizaine et le verdict seulement ; probabilités et seuils non communiqués (minimisation, et défense contre le vol de modèle) |
 | Données, « Réponse » (§ 3.2) | Score, 6 probabilités, seuils, verdict, texte anonymisé et nettoyé | `score` et `toxique` uniquement : plus aucun texte, même pseudonymisé, n'est renvoyé |
-| Données traitées en mémoire (§ 3.2) | Texte soumis | Texte soumis et adresse IP du client, lue en mémoire par le pod pour limiter le débit et sanctionner les abus ; non écrite dans les journaux de l'API |
-| Journaux (§ 3.2) | Une ligne par analyse | Inchangé. Les refus sont comptés par motif dans Prometheus (`dss_refus_total`), sans donnée personnelle |
+| Données traitées en mémoire (§ 3.2) | Texte soumis | Texte soumis et adresse IP du client, lue en mémoire par le pod pour limiter le débit et sanctionner les abus ; jamais écrite en clair dans les journaux de l'API : seule une empreinte HMAC de 10 caractères y figure (journal des refus) |
+| Journaux (§ 3.2) | Une ligne par analyse | Ligne par analyse inchangée. **Nouveau : journal des refus** (401, 429, 503, 413) : motif, route et empreinte HMAC de l'adresse IP (donnée pseudonymisée), au plus une ligne par minute, client et motif (`api/protection.py`). Les refus sont aussi comptés par motif dans Prometheus (`dss_refus_total`), sans donnée personnelle |
 | Sous-traitants (§ 4) | GitHub : code et pipeline, « pas de donnée de production » | GitHub Actions déploie sur Google Cloud par identité fédérée (OIDC), sans clé stockée ; accès limité à ce dépôt et à la branche `ci`. Les poids du modèle sont dans un bucket Cloud Storage privé (lecture seule pour la pipeline) ; aucune donnée personnelle n'y figure |
 | Mesures de sécurité (§ 6) | Aucune limitation de débit ; `/docs` public ; clé non ASCII → 500 ; aucune alerte | Limitation de débit par adresse, blocage temporaire après clés fausses répétées, plafond de calculs simultanés ; `/docs` fermé ; bogue S2b corrigé ; 7 alertes Prometheus ; contrôle de provenance des poids ; pipeline de contrôles à chaque push |
 | Décision automatisée (§ 3, art. 22) | AIPD obligatoire si le score entre dans un processus décisionnel | Inchangé. Catégorie IA Act : risque limité, à condition que le score ne qualifie jamais une personne (§ 5.1) |
 | Risques résiduels (§ 8) | Jeu brut dans le dépôt public ; clé unique ; accès trop larges | Le jeu brut (`data/train.csv`, `data/test.csv`) est toujours suivi par Git : non traité ; clé unique : non traité ; limites par pod et non globales (§ 9) |
 
-**Mise à jour du registre du TP1.** Le registre (`LIVRABLES/REGISTRE_RGPD.md`, annexe C du TP1) garde le numéro de version 1.1 ; la version 1.2 est cet avenant.
+**Mise à jour du registre.** Le registre (`LIVRABLES/REGISTRE_RGPD.md`, identique à l'annexe C du TP1) est en version 1.2 : il intègre déjà ces changements. Le corps du TP1 décrit l'état du 13 novembre (version 1.1).
 
 ---
 

@@ -1,10 +1,12 @@
-<!-- Copie du registre en Annexe C de TP1_LIVRABLE.md (version 1.1) : modifier les deux ensemble. -->
+<!-- Copie du registre en Annexe C de TP1_LIVRABLE.md (version 1.2) : modifier les deux ensemble. -->
 # Registre des activités de traitement — article 30 RGPD
 
 **Référence** : DSS-RGPD-2026-001
-**Version** : 1.1 (relue contre le code en service, branche `ci`)
-**Date** : 17 novembre 2026
+**Version** : 1.2 (relue contre le code en service, branche `ci`)
+**Date** : 17 novembre 2026 (ajouts du 19 novembre : voir § 9)
 **Statut** : En vigueur
+
+> **État au 17 novembre, après les corrections du TP2.** Le corps de ce livrable décrit l'API telle qu'elle était le 13 novembre (version 1.1 du registre). Les écarts avec les § 4 à 7 (limitation de débit, `/docs` fermé, alertes, réponse réduite au score et au verdict) sont les corrections du TP2, résumées dans le TP2 § 5.9.
 
 ---
 
@@ -25,7 +27,7 @@
 |---|---|
 | Finalité | Réduire la présence de données personnelles dans les commentaires avant l'entraînement des modèles (cadre pédagogique) |
 | Base légale | Art. 6.1.f — intérêt légitime : commentaires publics publiés sous licence libre, utilisés pour un exercice de détection de toxicité ; données pseudonymisées avant tout usage |
-| Source | Toxic Comment Classification Dataset (Jigsaw / Google, 2017) : 159 571 commentaires d'entraînement, 153 164 de test ; texte CC-BY-SA 3.0 (Wikipédia), labels CC0 |
+| Source | Toxic Comment Classification Dataset (Jigsaw / Google, 2017) : 159 571 commentaires d'entraînement, 153 164 de test ; texte CC-BY-SA 3.0 (Wikipédia), labels CC0 ; annotation binaire par vote majoritaire d'évaluateurs humains ; **biais** : corpus uniquement anglophone, issu de Wikipédia, biais culturels possibles sur `identity_hate` |
 | Données | Texte libre pouvant contenir noms, pseudos, adresses IP, e-mails, téléphones, URL, adresses postales. Les labels (notamment `identity_hate`) peuvent révéler des attaques visant des groupes : données potentiellement sensibles (art. 9) |
 | Personnes concernées | Auteurs et personnes citées dans les commentaires Wikipédia |
 | Minimisation | Identifiants directs remplacés par 8 balises typées (regex + spaCy NER) avant l'entraînement. **Pseudonymisation, pas anonymisation** : le texte d'origine reste public sur Wikipédia |
@@ -59,7 +61,7 @@
 |---|---|---|---|
 | Commentaire soumis | Données personnelles potentielles, y compris sensibles (art. 9 : opinions, santé, origine…) | Anonymisé (regex + spaCy NER) puis nettoyé, en mémoire, avant le modèle | **Aucun** — ni disque, ni journal, ni réponse |
 | Réponse | Score arrondi à la dizaine + verdict | Renvoyée à l'appelant | Non conservée côté serveur |
-| Journal de l'API | Score, longueur du texte, durée de calcul, horodatage : non personnel | Une ligne par analyse | Cloud Logging, 30 jours |
+| Journal de l'API | Score, longueur du texte, durée de calcul, horodatage : non personnel | Une ligne par analyse, par exemple `score=87 longueur=142 duree_ms=14.2` | Cloud Logging, 30 jours |
 | Journal des refus (401, 429, 503, 413) | Motif, route, **empreinte HMAC de 10 caractères de l'adresse IP** (clé secrète du serveur) : donnée pseudonymisée | Au plus une ligne par minute et par client | Cloud Logging, 30 jours |
 | **Journaux du load balancer** | **Adresse IP du client, chemin, code de réponse, user-agent, horodatage : données personnelles** | Activés volontairement (`sampleRate: 1.0`) pour pouvoir reconstituer une attaque | Cloud Logging, 30 jours |
 | Métriques Prometheus | Compteurs par route, code, motif de refus ; CPU, mémoire : non personnel | Dans le cluster, port non exposé | Durée de rétention de Prometheus |
@@ -98,13 +100,13 @@ Le calcul du score et les journaux de production restent dans l'UE. Il existe tr
 
 | Mesure | Mise en œuvre | Statut |
 |---|---|---|
-| Authentification | Clé `X-API-Key`, comparaison à temps constant ; 429 après 10 clés fausses par minute et par adresse | En service — défaut : une clé non ASCII donne 500 au lieu de 401 |
-| Chiffrement en transit | HTTPS forcé (certificat géré, redirection) ; pas de TLS entre le load balancer et les pods | En service |
-| Minimisation | Anonymisation avant le modèle ; texte jamais journalisé (prouvé par un canari) ; réponse réduite | En service |
-| Secrets | Secret Manager → Secret Kubernetes ; jamais dans le code, l'image ou Git ; poids du modèle dans un bucket privé | En service |
-| Durcissement | Non-root, `drop ALL`, pas d'élévation, système de fichiers en lecture seule, aucun rôle Google Cloud pour les pods | En service |
-| Protection en entrée | Limites par adresse (429), corps ≤ 40 Ko (413), au plus 3 calculs par pod (503), `/docs` fermé | En service depuis le 16 novembre |
-| Disponibilité | 2 à 5 pods, sondes de santé | En service |
+| Authentification | Clé `X-API-Key`, comparaison à temps constant (`secrets.compare_digest`, `api/main.py`) ; 429 après 10 clés fausses par minute et par adresse | En service — défaut : une clé non ASCII donne 500 au lieu de 401 |
+| Chiffrement en transit | HTTPS forcé (certificat géré, redirection : `api/k8s/ingress.yaml`, `backendconfig.yaml`) ; pas de TLS entre le load balancer et les pods | En service |
+| Minimisation | Anonymisation avant le modèle (`api/preprocessing.py`) ; texte jamais journalisé (`api/main.py`, `--no-access-log` dans `api/Dockerfile`) (prouvé par un canari) ; réponse réduite | En service |
+| Secrets | Secret Manager → Secret Kubernetes (`secretKeyRef` dans `api/k8s/deployment.yaml`) ; jamais dans le code, l'image ou Git ; poids du modèle dans un bucket privé | En service |
+| Durcissement | Non-root, `drop ALL`, pas d'élévation (`api/Dockerfile`, `api/k8s/deployment.yaml`), système de fichiers en lecture seule, aucun rôle Google Cloud pour les pods | En service |
+| Protection en entrée | Texte de 1 à 5 000 caractères (422, `api/main.py`) ; limites par adresse (429, `api/limiteur_debit.py`), corps ≤ 40 Ko (413), au plus 3 calculs par pod (503), `/docs` fermé | En service depuis le 16 novembre |
+| Disponibilité | 2 à 5 pods, sondes de santé (`api/k8s/deployment.yaml`, `hpa.yaml`) | En service |
 | Supervision | Prometheus, Grafana, 7 règles d'alerte (sans notification) | En service |
 | Droits d'accès | 3 comptes `Owner` | **À réduire** |
 
@@ -143,6 +145,7 @@ Les journaux ne contiennent **aucun identifiant de clé** et aucun texte. Les dr
 | Version | Date | Modifications |
 |---|---|---|
 | 1.0 | 12/11/2026 | Création initiale |
-| 1.1 | 17/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) et des refus (empreinte HMAC) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; réponse réduite ; droits reformulés selon ce qui est réellement possible |
+| 1.1 | 13/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; droits reformulés selon ce qui est réellement possible |
+| 1.2 | 17/11/2026 | Corrections du TP2 : journal des refus (empreinte HMAC), protection en entrée (limites, plafond de calculs, `/docs` fermé), réponse réduite, 7 alertes, poids du modèle en bucket privé. Ajouts du 19/11 : annotation et biais du jeu de données, ligne type du journal, fichiers sources des mesures de sécurité (repris du registre d'Eliana) |
 
 *Établi en application de l'article 30 du règlement (UE) 2016/679 (RGPD).*
