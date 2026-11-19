@@ -15,7 +15,7 @@ Ils sont tous dans [`LIVRABLES/`](LIVRABLES/). Il y a un document par TP, en PDF
 | [**TP1_LIVRABLE.pdf**](LIVRABLES/TP1_LIVRABLE.pdf) ([source Markdown](LIVRABLES/TP1_LIVRABLE.md)) | Étapes 1 à 7 : anonymisation, 3 modèles comparés, API, déploiement GKE, tests de charge, sécurité et supervision, architecture. En annexe : la grille de tests, le rapport de charge et le registre RGPD |
 | [**TP2_LIVRABLE.pdf**](LIVRABLES/TP2_LIVRABLE.pdf) ([source Markdown](LIVRABLES/TP2_LIVRABLE.md)) | Étapes 1 à 5 : attaque par évasion, défense mesurée (en local et sur l'API déployée), conformité IA Act, pipeline DevSecOps, analyse critique |
 | [REGISTRE_RGPD.md](LIVRABLES/REGISTRE_RGPD.md) | Registre des traitements, version 1.2 (également reproduit dans l'annexe C du TP1) |
-| [model_card.json](model_card.json) | Fiche du modèle (IA Act). Elle reste à la racine parce que la pipeline la contrôle à chaque modification |
+| [model_card.json](model_card.json) | Fiche du modèle (IA Act), à la racine comme l'exige l'énoncé ; copie identique dans `LIVRABLES/` (la pipeline vérifie qu'elles ne divergent pas) |
 
 ## Résultats principaux
 
