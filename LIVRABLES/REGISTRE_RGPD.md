@@ -1,9 +1,9 @@
-<!-- Copie du registre en Annexe C de TP1_LIVRABLE.md (version 1.2) : modifier les deux ensemble. -->
+<!-- Copie du registre en Annexe C de TP1_LIVRABLE.md (version 1.1) : modifier les deux ensemble. -->
 # Registre des activités de traitement — article 30 RGPD
 
 **Référence** : DSS-RGPD-2026-001
-**Version** : 1.2 (relue contre le code en service, branche `ci`)
-**Date** : 19 novembre 2026
+**Version** : 1.1 (relue contre le code en service, branche `ci`)
+**Date** : 19 novembre 2026 (ajouts du 19/11 : annotation et biais du jeu, ligne type du journal, fichiers sources des mesures, repris du registre d'Eliana)
 **Statut** : En vigueur
 
 ---
@@ -144,6 +144,5 @@ Les journaux ne contiennent **aucun identifiant de clé** et aucun texte. Les dr
 |---|---|---|
 | 1.0 | 12/11/2026 | Création initiale |
 | 1.1 | 17/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) et des refus (empreinte HMAC) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; réponse réduite ; droits reformulés selon ce qui est réellement possible |
-| 1.2 | 19/11/2026 | Reprise des apports du registre d'Eliana : annotation et biais du jeu de données, ligne type du journal, fichiers sources des mesures de sécurité |
 
 *Établi en application de l'article 30 du règlement (UE) 2016/679 (RGPD).*

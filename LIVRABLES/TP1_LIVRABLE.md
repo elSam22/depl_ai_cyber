@@ -416,7 +416,7 @@ Le registre complet est en Annexe C. Il distingue deux traitements.
 | Conservation       | Fichiers anonymisés supprimés après la notation                                                    | Texte : aucune ; journaux : 30 jours                                                                   |
 | Hors UE            | Le dépôt GitHub (États-Unis) contient le jeu brut public                                 | Calcul et journaux en UE ; la police du front de démonstration vient de Google Fonts                  |
 
-Le registre a été relu contre le code en service (version 1.2, historique en annexe C § 9). Cette relecture a fait déclarer le jeu brut présent dans le dépôt public, les adresses IP des journaux du load balancer, la réplication automatique du secret et la police Google Fonts du front.
+Le registre a été relu contre le code en service (version 1.1, historique en annexe C § 9). Cette relecture a fait déclarer le jeu brut présent dans le dépôt public, les adresses IP des journaux du load balancer, la réplication automatique du secret et la police Google Fonts du front.
 
 **Décision automatisée (art. 22).** Le score ne doit jamais être la seule base d'une décision à effet juridique. S'il servait à modérer ou à refuser un accès, une analyse d'impact (AIPD, art. 35) serait obligatoire.
 
@@ -867,8 +867,8 @@ LOG_REQUETES=loadtest/results/montee_requetes.csv .venv/bin/locust -f loadtest/l
 ## Annexe C : registre des activités de traitement (article 30 RGPD)
 
 **Référence** : DSS-RGPD-2026-001
-**Version** : 1.2 (relue contre le code en service, branche `ci`)
-**Date** : 19 novembre 2026
+**Version** : 1.1 (relue contre le code en service, branche `ci`)
+**Date** : 19 novembre 2026 (ajouts du 19/11 : annotation et biais du jeu, ligne type du journal, fichiers sources des mesures, repris du registre d'Eliana)
 **Statut** : En vigueur
 
 ---
@@ -1009,6 +1009,5 @@ Les journaux ne contiennent **aucun identifiant de clé** et aucun texte. Les dr
 |---|---|---|
 | 1.0 | 12/11/2026 | Création initiale |
 | 1.1 | 17/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) et des refus (empreinte HMAC) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; réponse réduite ; droits reformulés selon ce qui est réellement possible |
-| 1.2 | 19/11/2026 | Reprise des apports du registre d'Eliana : annotation et biais du jeu de données, ligne type du journal, fichiers sources des mesures de sécurité |
 
 *Établi en application de l'article 30 du règlement (UE) 2016/679 (RGPD).*
