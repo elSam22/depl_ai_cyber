@@ -364,11 +364,11 @@ Le choix de ne pas renvoyer les probabilités et les seuils est un arbitrage ent
 | Audit de sécurité | Dernier : 16 novembre 2026 (attaque du professeur, étape 3) ; à refaire à chaque évolution du modèle ou de l'API |
 | Retrait | Sur décision de l'équipe ; modèle et données supprimés à la mise hors service |
 
-### 5.9 Registre RGPD : avenant au registre du TP1 (version 1.2)
+### 5.9 Registre RGPD : de la version 1.1 à la version 1.2
 
-Le registre du TP1 (référence DSS-RGPD-2026-001, version 1.1 du 13 novembre) décrit l'API telle qu'elle était avant le TP2. Les corrections du TP2 changent plusieurs de ses rubriques. Le registre du TP1 n'est pas modifié ; cet avenant donne la version 1.2 pour ce qui change. Le reste (responsable, personnes concernées, traitement A, durées, droits) reste valable.
+La version 1.1 du registre (référence DSS-RGPD-2026-001, 13 novembre) décrit l'API telle qu'elle était avant le TP2. Les corrections du TP2 changent plusieurs de ses rubriques : le registre est passé à la version 1.2 (17 novembre), et ce tableau résume ce qui change. Le reste (responsable, personnes concernées, traitement A, durées, droits) reste valable.
 
-| Rubrique du registre (§) | Version 1.1 (TP1) | Version 1.2 (TP2) |
+| Rubrique du registre (§) | Version 1.1 (13/11, avant TP2) | Version 1.2 (17/11, après TP2) |
 |---|---|---|
 | Traitement B, finalité (§ 3) | Restituer le score, les probabilités par label et un verdict | Restituer le score arrondi à la dizaine et le verdict seulement ; probabilités et seuils non communiqués (minimisation, et défense contre le vol de modèle) |
 | Données, « Réponse » (§ 3.2) | Score, 6 probabilités, seuils, verdict, texte anonymisé et nettoyé | `score` et `toxique` uniquement : plus aucun texte, même pseudonymisé, n'est renvoyé |
@@ -379,7 +379,7 @@ Le registre du TP1 (référence DSS-RGPD-2026-001, version 1.1 du 13 novembre) d
 | Décision automatisée (§ 3, art. 22) | AIPD obligatoire si le score entre dans un processus décisionnel | Inchangé. Catégorie IA Act : risque limité, à condition que le score ne qualifie jamais une personne (§ 5.1) |
 | Risques résiduels (§ 8) | Jeu brut dans le dépôt public ; clé unique ; accès trop larges | Le jeu brut (`data/train.csv`, `data/test.csv`) est toujours suivi par Git : non traité ; clé unique : non traité ; limites par pod et non globales (§ 9) |
 
-**Mise à jour du registre du TP1.** Le registre (`LIVRABLES/REGISTRE_RGPD.md`, annexe C du TP1) garde le numéro de version 1.1 ; la version 1.2 est cet avenant.
+**Mise à jour du registre.** Le registre (`LIVRABLES/REGISTRE_RGPD.md`, identique à l'annexe C du TP1) est en version 1.2 : il intègre déjà ces changements. Le corps du TP1 décrit l'état du 13 novembre (version 1.1).
 
 ---
 

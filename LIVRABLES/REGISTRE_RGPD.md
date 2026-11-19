@@ -1,10 +1,12 @@
-<!-- Copie du registre en Annexe C de TP1_LIVRABLE.md (version 1.1) : modifier les deux ensemble. -->
+<!-- Copie du registre en Annexe C de TP1_LIVRABLE.md (version 1.2) : modifier les deux ensemble. -->
 # Registre des activités de traitement — article 30 RGPD
 
 **Référence** : DSS-RGPD-2026-001
-**Version** : 1.1 (relue contre le code en service, branche `ci`)
-**Date** : 19 novembre 2026 (ajouts du 19/11 : annotation et biais du jeu, ligne type du journal, fichiers sources des mesures, repris du registre d'Eliana)
+**Version** : 1.2 (relue contre le code en service, branche `ci`)
+**Date** : 17 novembre 2026 (ajouts du 19 novembre : voir § 9)
 **Statut** : En vigueur
+
+> **État au 17 novembre, après les corrections du TP2.** Le corps de ce livrable décrit l'API telle qu'elle était le 13 novembre (version 1.1 du registre). Les écarts avec les § 4 à 7 (limitation de débit, `/docs` fermé, alertes, réponse réduite au score et au verdict) sont les corrections du TP2, résumées dans le TP2 § 5.9.
 
 ---
 
@@ -143,6 +145,7 @@ Les journaux ne contiennent **aucun identifiant de clé** et aucun texte. Les dr
 | Version | Date | Modifications |
 |---|---|---|
 | 1.0 | 12/11/2026 | Création initiale |
-| 1.1 | 17/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) et des refus (empreinte HMAC) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; réponse réduite ; droits reformulés selon ce qui est réellement possible |
+| 1.1 | 13/11/2026 | Relecture contre le code en service : deux traitements distingués ; journaux du load balancer (IP) ajoutés ; rétention unifiée à 30 jours ; réplication du secret, Google Fonts et jeu brut public déclarés ; droits reformulés selon ce qui est réellement possible |
+| 1.2 | 17/11/2026 | Corrections du TP2 : journal des refus (empreinte HMAC), protection en entrée (limites, plafond de calculs, `/docs` fermé), réponse réduite, 7 alertes, poids du modèle en bucket privé. Ajouts du 19/11 : annotation et biais du jeu de données, ligne type du journal, fichiers sources des mesures de sécurité (repris du registre d'Eliana) |
 
 *Établi en application de l'article 30 du règlement (UE) 2016/679 (RGPD).*
